@@ -290,10 +290,10 @@ async function scanCrypto(
       }
 
       const last =
-        klines[klines.length - 1];
+        klines[klines.length - 1]!;
 
       const previous =
-        klines[klines.length - 5];
+        klines[klines.length - 5]!;
 
       const close = Number(last[4]);
       const high = Number(last[2]);
@@ -486,10 +486,10 @@ async function scanStocks(
       }
 
       const last =
-        candles[candles.length - 1];
+        candles[candles.length - 1]!;
 
       const previous =
-        candles[candles.length - 5];
+        candles[candles.length - 5]!;
 
       const close =
         Number(last.close);
@@ -677,7 +677,7 @@ export default async function handler(
       let firsatSayaci = 0;
 
       const extraParam =
-        request.query?.extra;
+        request.query?.["extra"];
 
       const aktifUserListesi = [
         ...DINAMIK_USER_LISTESI,
