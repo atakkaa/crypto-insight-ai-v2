@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789453924972,
+      "tag": "0000_create_profiles_and_favorites",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789496202360,
+      "tag": "0001_create_alerts",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789542018194,
+      "tag": "0002_schedule_ai_scan",
+      "breakpoints": true
+    }
+  ]
+}
