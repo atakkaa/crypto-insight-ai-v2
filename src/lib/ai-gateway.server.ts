@@ -172,7 +172,7 @@ export async function callAiJson<T>(
   }
 
   // ========================================================
-  // 2 — OPENROUTER
+  // 2 — OPENROUTER ÜCRETSİZ ROUTER
   // ========================================================
 
   for (const apiKey of OPENROUTER_KEYS) {
@@ -191,8 +191,9 @@ export async function callAiJson<T>(
           },
 
           body: JSON.stringify({
-            // Güncel ücretsiz OpenRouter modeli
-            model: "google/gemma-4-31b-it:free",
+            // OpenRouter'ın ücretsiz model router'ı.
+            // Uygun ücretsiz modeller arasından seçim yapar.
+            model: "openrouter/free",
 
             messages: [
               ...(systemMessage
@@ -201,7 +202,8 @@ export async function callAiJson<T>(
                       role: "system",
                       content:
                         systemMessage +
-                        "\n\nLÜTFEN SADECE GEÇERLİ JSON DÖNDÜR.",
+                        "\n\n" +
+                        "LÜTFEN SADECE GEÇERLİ JSON DÖNDÜR.",
                     },
                   ]
                 : []),
@@ -212,7 +214,7 @@ export async function callAiJson<T>(
               },
             ],
 
-            // AI'dan JSON istemeye yardımcı olur.
+            // Formasyon analizimizin beklediği JSON cevabını ister.
             response_format: {
               type: "json_object",
             },
@@ -318,4 +320,3 @@ export async function handleAiRequest(
 ): Promise<unknown> {
   return callAiJson<unknown>(messages);
 }
-
