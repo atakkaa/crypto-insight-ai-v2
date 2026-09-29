@@ -1,3 +1,4 @@
+
 // src/lib/ai-gateway.server.ts
 
 import { GoogleGenAI } from "@google/genai";
@@ -180,6 +181,7 @@ export async function callAiJson<T>(
         "https://openrouter.ai/api/v1/chat/completions",
         {
           method: "POST",
+
           headers: {
             Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
@@ -187,8 +189,10 @@ export async function callAiJson<T>(
               "https://crypto-insight-ai-v2.vercel.app",
             "X-Title": "Crypto Insight AI",
           },
+
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash:free",
+            // Güncel ücretsiz OpenRouter modeli
+            model: "google/gemma-4-31b-it:free",
 
             messages: [
               ...(systemMessage
@@ -207,15 +211,25 @@ export async function callAiJson<T>(
                 content: userMessage,
               },
             ],
+
+            // AI'dan JSON istemeye yardımcı olur.
+            response_format: {
+              type: "json_object",
+            },
           }),
         },
       );
+
+      // ------------------------------------------------------
+      // OPENROUTER HATA KONTROLÜ
+      // ------------------------------------------------------
 
       if (!response.ok) {
         let errorDetail = "";
 
         try {
-          const errorData = await response.json();
+          const errorData =
+            await response.json();
 
           errorDetail =
             errorData?.error?.message ??
@@ -227,12 +241,18 @@ export async function callAiJson<T>(
 
         lastError = new Error(
           `OpenRouter HTTP ${response.status}${
-            errorDetail ? `: ${errorDetail}` : ""
+            errorDetail
+              ? `: ${errorDetail}`
+              : ""
           }`,
         );
 
         continue;
       }
+
+      // ------------------------------------------------------
+      // BAŞARILI CEVAP
+      // ------------------------------------------------------
 
       const data =
         (await response.json()) as {
@@ -298,3 +318,4 @@ export async function handleAiRequest(
 ): Promise<unknown> {
   return callAiJson<unknown>(messages);
 }
+
