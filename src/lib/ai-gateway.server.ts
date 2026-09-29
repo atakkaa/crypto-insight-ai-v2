@@ -183,10 +183,12 @@ export async function callAiJson<T>(
           headers: {
             Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
+            "HTTP-Referer":
+              "https://crypto-insight-ai-v2.vercel.app",
+            "X-Title": "Crypto Insight AI",
           },
           body: JSON.stringify({
-            model:
-              "google/gemini-2.5-flash:free",
+            model: "google/gemini-2.5-flash:free",
 
             messages: [
               ...(systemMessage
@@ -210,8 +212,23 @@ export async function callAiJson<T>(
       );
 
       if (!response.ok) {
+        let errorDetail = "";
+
+        try {
+          const errorData = await response.json();
+
+          errorDetail =
+            errorData?.error?.message ??
+            errorData?.message ??
+            "";
+        } catch {
+          // JSON hata cevabı yoksa devam et.
+        }
+
         lastError = new Error(
-          `OpenRouter HTTP ${response.status}`,
+          `OpenRouter HTTP ${response.status}${
+            errorDetail ? `: ${errorDetail}` : ""
+          }`,
         );
 
         continue;
