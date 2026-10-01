@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CoinsRouteImport } from './routes/coins'
-import { Route as ApiPublicBinanceProxyRouteImport } from './routes/api/public/binance-proxy'
 import { Route as ApiPublicScanRouteImport } from './routes/api/public/scan'
 
 const IndexRoute = IndexRouteImport.update({
@@ -30,11 +29,6 @@ const CoinsRoute = CoinsRouteImport.update({
   path: '/coins',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicBinanceProxyRoute = ApiPublicBinanceProxyRouteImport.update({
-  id: '/api/public/binance-proxy',
-  path: '/api/public/binance-proxy',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiPublicScanRoute = ApiPublicScanRouteImport.update({
   id: '/api/public/scan',
   path: '/api/public/scan',
@@ -45,14 +39,12 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/coins': typeof CoinsRoute
-  '/api/public/binance-proxy': typeof ApiPublicBinanceProxyRoute
   '/api/public/scan': typeof ApiPublicScanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/coins': typeof CoinsRoute
-  '/api/public/binance-proxy': typeof ApiPublicBinanceProxyRoute
   '/api/public/scan': typeof ApiPublicScanRoute
 }
 export interface FileRoutesById {
@@ -60,30 +52,20 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/coins': typeof CoinsRoute
-  '/api/public/binance-proxy': typeof ApiPublicBinanceProxyRoute
   '/api/public/scan': typeof ApiPublicScanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    '/' | '/auth' | '/coins' | '/api/public/binance-proxy' | '/api/public/scan'
+  fullPaths: '/' | '/auth' | '/coins' | '/api/public/scan'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    '/' | '/auth' | '/coins' | '/api/public/binance-proxy' | '/api/public/scan'
-  id:
-    | '__root__'
-    | '/'
-    | '/auth'
-    | '/coins'
-    | '/api/public/binance-proxy'
-    | '/api/public/scan'
+  to: '/' | '/auth' | '/coins' | '/api/public/scan'
+  id: '__root__' | '/' | '/auth' | '/coins' | '/api/public/scan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   CoinsRoute: typeof CoinsRoute
-  ApiPublicBinanceProxyRoute: typeof ApiPublicBinanceProxyRoute
   ApiPublicScanRoute: typeof ApiPublicScanRoute
 }
 
@@ -110,13 +92,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CoinsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/binance-proxy': {
-      id: '/api/public/binance-proxy'
-      path: '/api/public/binance-proxy'
-      fullPath: '/api/public/binance-proxy'
-      preLoaderRoute: typeof ApiPublicBinanceProxyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/public/scan': {
       id: '/api/public/scan'
       path: '/api/public/scan'
@@ -131,7 +106,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   CoinsRoute: CoinsRoute,
-  ApiPublicBinanceProxyRoute: ApiPublicBinanceProxyRoute,
   ApiPublicScanRoute: ApiPublicScanRoute,
 }
 export const routeTree = rootRouteImport
