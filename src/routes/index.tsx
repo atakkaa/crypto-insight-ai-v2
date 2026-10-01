@@ -14,7 +14,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { analyzeChart, type ChartAnalysis } from "@/lib/analysis.functions";
 import { getAssetInfo, getStockCandles, type AssetInfo, type Candle } from "@/lib/market.functions";
 import { getMarketNews, type NewsImpact } from "@/lib/news.functions";
-import { evaluateFormationNewsImpact } from "@/lib/news-impact";
 import type { FormationEngineResult } from "@/lib/analysis-types";
 
 export const Route = createFileRoute("/")({
@@ -1183,6 +1182,58 @@ function Dashboard() {
     }
   }, [priorityAssets]);
 
+  // Supabase'den favorileri çek (sayfa açıldığında)
+  useEffect(() => {
+    if (!user) return;
+    const userId = user.id;
+
+    void (supabase as any)
+      .from("favorites")
+      .select("market, symbol")
+      .eq("user_id", userId)
+      .then((response: { data: Array<{ market: string; symbol: string }> | null; error: { message: string } | null }) => {
+        if (response.error) {
+          console.error("Favoriler çekilemedi:", response.error);
+          return;
+        }
+        if (response.data && response.data.length > 0) {
+          setFavorites(
+            response.data.map((item) => ({
+              market: item.market,
+              symbol: item.symbol,
+            })),
+          );
+          console.log(`✅ ${response.data.length} favori Supabase'den çekildi.`);
+        }
+      });
+  }, [user]);
+
+  // Supabase'den öncelikli varlıkları çek (sayfa açıldığında)
+  useEffect(() => {
+    if (!user) return;
+    const userId = user.id;
+
+    void (supabase as any)
+      .from("priority_assets")
+      .select("market, symbol")
+      .eq("user_id", userId)
+      .then((response: { data: Array<{ market: string; symbol: string }> | null; error: { message: string } | null }) => {
+        if (response.error) {
+          console.error("Priority assets çekilemedi:", response.error);
+          return;
+        }
+        if (response.data && response.data.length > 0) {
+          setPriorityAssets(
+            response.data.map((item) => ({
+              market: item.market as Market,
+              symbol: item.symbol,
+            })),
+          );
+          console.log(`✅ ${response.data.length} öncelikli varlık Supabase'den çekildi.`);
+        }
+      });
+  }, [user]);
+
   const isFavoriteAsset = (assetMarket: Market, assetSymbol: string) =>
     favorites.some(
       (f) =>
@@ -1221,17 +1272,53 @@ function Dashboard() {
     });
   }
 
-  function toggleFavoriteAsset(assetMarket: Market, assetSymbol: string) {
+  async function toggleFavoriteAsset(assetMarket: Market, assetSymbol: string) {
     const currentlyFavorite = isFavoriteAsset(assetMarket, assetSymbol);
 
     if (currentlyFavorite) {
-      removePriorityAsset(assetMarket, assetSymbol);
+      await removePriorityAsset(assetMarket, assetSymbol);
     }
 
+    // Local state'i güncelle
     setFavoriteAsset(assetMarket, assetSymbol);
+
+    // Supabase'e kaydet/sil
+    if (user) {
+      if (currentlyFavorite) {
+        const { error } = await (supabase as any)
+          .from("favorites")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("market", assetMarket)
+          .eq("symbol", assetSymbol);
+
+        if (error) {
+          console.error("Favori silinemedi:", error);
+        } else {
+          console.log("✅ Favori Supabase'den silindi:", assetSymbol);
+        }
+      } else {
+        const { error } = await (supabase as any)
+          .from("favorites")
+          .upsert(
+            {
+              user_id: user.id,
+              market: assetMarket,
+              symbol: assetSymbol,
+            },
+            { onConflict: "user_id,market,symbol" },
+          );
+
+        if (error) {
+          console.error("Favori kaydedilemedi:", error);
+        } else {
+          console.log("✅ Favori Supabase'e kaydedildi:", assetSymbol);
+        }
+      }
+    }
   }
 
-  function removePriorityAsset(
+  async function removePriorityAsset(
     assetMarket: Market,
     assetSymbol: string,
   ) {
@@ -1244,6 +1331,19 @@ function Dashboard() {
           ),
       ),
     );
+
+    if (user) {
+      const { error } = await (supabase as any)
+        .from("priority_assets")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("market", assetMarket)
+        .eq("symbol", assetSymbol);
+
+      if (error) {
+        console.error("Priority asset silinemedi:", error);
+      }
+    }
   }
 
   function togglePriorityAsset(
@@ -1251,7 +1351,7 @@ function Dashboard() {
     assetSymbol: string,
   ) {
     if (isPriorityAsset(assetMarket, assetSymbol)) {
-      removePriorityAsset(
+      void removePriorityAsset(
         assetMarket,
         assetSymbol,
       );
@@ -1290,6 +1390,25 @@ function Dashboard() {
           ? prev
           : [...prev, asset],
       );
+
+      if (user) {
+        const { error } = await (supabase as any)
+          .from("priority_assets")
+          .upsert(
+            {
+              user_id: user.id,
+              market: asset.market,
+              symbol: asset.symbol,
+            },
+            { onConflict: "user_id,market,symbol" },
+          );
+
+        if (error) {
+          console.error("Priority asset kaydedilemedi:", error);
+        } else {
+          console.log("✅ Öncelikli varlık Supabase'e kaydedildi:", asset.symbol);
+        }
+      }
     }
 
     setPriorityPromptAsset(null);
@@ -1313,7 +1432,7 @@ function Dashboard() {
   );
 
   function toggleFavorite() {
-    toggleFavoriteAsset(market, activeSymbol);
+    void toggleFavoriteAsset(market, activeSymbol);
   }
 
   function setCurrentUserDrawingLines(lines: import("@/components/CandleChart").TradingViewLine[]) {
@@ -1701,7 +1820,7 @@ function Dashboard() {
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
-                            toggleFavoriteAsset(favoriteMarket, f.symbol);
+                            void toggleFavoriteAsset(favoriteMarket, f.symbol);
                           }}
                           className="rounded px-1.5 py-1 text-base leading-none text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           title="Favoriden kaldır"
