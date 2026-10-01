@@ -250,7 +250,7 @@ type MarketAssetRef = {
 type Ticker = { symbol: string; lastPrice: string; priceChangePercent: string; quoteVolume: string };
 
 async function fetchTickers(): Promise<Ticker[]> {
-  const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
+  const res = await fetch("/api/binance-proxy?path=/api/v3/ticker/24hr");
   if (!res.ok) throw new Error("Binance verisi alınamadı");
   const data = (await res.json()) as Ticker[];
   return data
@@ -259,8 +259,9 @@ async function fetchTickers(): Promise<Ticker[]> {
 }
 
 async function fetchKlines(symbol: string, interval: Interval): Promise<Candle[]> {
+  const proxyPath = `/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=150`;
   const res = await fetch(
-    `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=150`,
+    `/api/binance-proxy?path=${encodeURIComponent(proxyPath)}`,
   );
   if (!res.ok) throw new Error("Mum verisi alınamadı");
   const raw = (await res.json()) as unknown[][];
@@ -341,7 +342,8 @@ function stockListForMarket(market: Market): StockListItem[] {
   if (market === "us") return US_TOP_50;
   if (market === "asia") return ASIA_TOP_50;
   return EUROPE_TOP_50;
-}function IndicatorPanel({
+}
+function IndicatorPanel({
   analysis,
   loading,
 }: {
@@ -910,7 +912,6 @@ function FormationAlertPanel({
 
 const EMPTY_USER_DRAWING_LINES: import("@/components/CandleChart").TradingViewLine[] = [];
 const EMPTY_FORMATION_MESSAGES: FormationChatMessage[] = [];
-
 function Dashboard() {
   const { user, signOut } = useAuth();
   const routeSearch = Route.useSearch();
@@ -1279,10 +1280,8 @@ function Dashboard() {
       await removePriorityAsset(assetMarket, assetSymbol);
     }
 
-    // Local state'i güncelle
     setFavoriteAsset(assetMarket, assetSymbol);
 
-    // Supabase'e kaydet/sil
     if (user) {
       if (currentlyFavorite) {
         const { error } = await (supabase as any)
@@ -1646,7 +1645,7 @@ function Dashboard() {
                   }
                 }}
               />
-              
+
               {user ? (
                 <>
                   <span className="hidden text-xs text-muted-foreground sm:inline">{user.email}</span>
@@ -1872,7 +1871,7 @@ function Dashboard() {
                   <span className="text-[10px] text-muted-foreground">Kalıcı</span>
                 </div>
                 <ul className="mt-2 space-y-1">
-                  {customItems.filter((item) => item.market === market).map((item) => (
+                                   {customItems.filter((item) => item.market === market).map((item) => (
                     <li key={item.id} className="flex items-center gap-1">
                       <button
                         onClick={() => openCustomAsset(item)}
