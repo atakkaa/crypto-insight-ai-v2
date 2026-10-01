@@ -324,9 +324,9 @@ async function scanCrypto(symbols: string[]) {
 
       let durum = "";
 
-      if (close > previousClose * 1.04) {
+      if (close > previousClose * 1.001) {
         durum = "🚀 Güçlü yükseliş hareketi / kırılım ihtimali";
-      } else if (close < previousClose * 0.96) {
+      } else if (close < previousClose * 0.999) {
         durum = "⚠️ Sert satış baskısı";
       } else if (high - close > (close - low) * 2.5) {
         durum = "🔨 Ters çekiç benzeri mum yapısı";
@@ -431,9 +431,9 @@ async function scanStocks(stocks: string[]) {
 
       let durum = "";
 
-      if (close > previousClose * 1.03) {
+      if (close > previousClose * 1.001) {
         durum = "🚀 Teknik yükseliş hareketi";
-      } else if (close < previousClose * 0.97) {
+      } else if (close < previousClose * 0.999) {
         durum = "⚠️ Satış baskısı / düşüş hareketi";
       }
 
