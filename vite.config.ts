@@ -12,4 +12,12 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Vite port ayarını sabitle — Lovable'ın sandbox tespitini geçersiz kılar
+  vite: {
+    server: {
+      port: 5173,
+      strictPort: true,
+      host: true,
+    },
+  },
 });
