@@ -24,7 +24,7 @@ type Profile = {
 };
 
 function AdminPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,16 +32,14 @@ function AdminPage() {
   const [search, setSearch] = useState("");
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
-  // 1. Kullanıcı yoksa ana sayfaya git
+  // Admin kontrolü ve kullanıcı listesi
   useEffect(() => {
+    if (authLoading) return;
     if (!user) {
-      window.location.href = "/";
+      setLoading(false);
+      setIsAdmin(false);
+      return;
     }
-  }, [user]);
-
-  // 2. Admin kontrolü ve kullanıcı listesi
-  useEffect(() => {
-    if (!user) return;
 
     void (async () => {
       // Admin mi?
@@ -79,14 +77,7 @@ function AdminPage() {
       }
       setLoading(false);
     })();
-  }, [user]);
-
-  // 3. Admin değilse ana sayfaya git
-  useEffect(() => {
-    if (isAdmin === false) {
-      window.location.href = "/";
-    }
-  }, [isAdmin]);
+  }, [user, authLoading]);
 
   async function togglePremium(userId: string, current: string) {
     setBusyUserId(userId);
@@ -173,8 +164,10 @@ function AdminPage() {
     setBusyUserId(null);
   }
 
-  // Yükleniyor
-  if (loading || isAdmin === null) {
+  // =========================================================
+  // YÜKLENİYOR
+  // =========================================================
+  if (authLoading || loading || isAdmin === null) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p className="text-sm text-muted-foreground">Yükleniyor...</p>
@@ -182,10 +175,64 @@ function AdminPage() {
     );
   }
 
-  if (!isAdmin) {
-    return null;
+  // =========================================================
+  // KULLANICI YOKSA → GİRİŞ SAYFASINA YÖNLENDİR
+  // =========================================================
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="panel max-w-md p-6 text-center">
+          <p className="text-3xl">🔒</p>
+          <h1 className="mt-3 text-lg font-bold">Giriş Yapmanız Gerekiyor</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Bu sayfaya erişmek için lütfen giriş yapın.
+          </p>
+          <Link
+            to="/auth"
+            className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+          >
+            Giriş Yap / Kayıt Ol
+          </Link>
+          <Link
+            to="/"
+            className="mt-2 block text-xs text-muted-foreground hover:text-foreground"
+          >
+            Ana Sayfaya Dön
+          </Link>
+        </div>
+      </div>
+    );
   }
 
+  // =========================================================
+  // ADMIN DEĞİLSE → "YETKİNİZ YOK" EKRANI
+  // =========================================================
+  if (!isAdmin) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="panel max-w-md p-6 text-center">
+          <p className="text-3xl">🚫</p>
+          <h1 className="mt-3 text-lg font-bold">Yetkiniz Yok</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Bu sayfaya sadece admin kullanıcılar erişebilir.
+          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Giriş yaptığınız hesap: {user.email ?? user.id.slice(0, 8)}
+          </p>
+          <Link
+            to="/"
+            className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+          >
+            Ana Sayfaya Dön
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================
+  // ADMIN PANELİ
+  // =========================================================
   const filtered = users.filter((u) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
@@ -203,21 +250,32 @@ function AdminPage() {
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
-          <Link to="/" className="num text-sm font-bold uppercase tracking-[0.2em] text-primary">
+          <Link
+            to="/"
+            className="num text-sm font-bold uppercase tracking-[0.2em] text-primary"
+          >
             Formasyon AI
           </Link>
           <nav className="flex gap-2 text-xs">
-            <Link to="/" className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary">
+            <Link
+              to="/"
+              className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
+            >
               Grafik
             </Link>
-            <Link to="/coins" className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary">
+            <Link
+              to="/coins"
+              className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
+            >
               Liste
             </Link>
             <span className="rounded-md bg-primary/15 px-3 py-1.5 font-bold text-primary">
               👑 Admin
             </span>
           </nav>
-          <div className="ml-auto text-xs text-muted-foreground">{user?.email}</div>
+          <div className="ml-auto text-xs text-muted-foreground">
+            {user?.email}
+          </div>
         </div>
       </header>
 
@@ -235,11 +293,15 @@ function AdminPage() {
             </div>
             <div className="rounded-lg border border-border bg-card p-3">
               <p className="text-xs text-muted-foreground">Premium Üye</p>
-              <p className="num mt-1 text-2xl font-bold text-primary">{premiumUsers}</p>
+              <p className="num mt-1 text-2xl font-bold text-primary">
+                {premiumUsers}
+              </p>
             </div>
             <div className="rounded-lg border border-border bg-card p-3">
               <p className="text-xs text-muted-foreground">Banlı</p>
-              <p className="num mt-1 text-2xl font-bold text-bear">{bannedUsers}</p>
+              <p className="num mt-1 text-2xl font-bold text-bear">
+                {bannedUsers}
+              </p>
             </div>
           </div>
 
@@ -257,7 +319,9 @@ function AdminPage() {
                 void (async () => {
                   const { data } = await (supabase as any)
                     .from("profiles")
-                    .select("id, email, role, membership, is_banned, created_at")
+                    .select(
+                      "id, email, role, membership, is_banned, created_at",
+                    )
                     .order("created_at", { ascending: false });
                   setUsers((data ?? []) as Profile[]);
                   setLoading(false);
@@ -307,10 +371,14 @@ function AdminPage() {
                           isMe ? "bg-primary/5" : ""
                         }`}
                       >
-                        <td className="num px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
+                        <td className="num px-3 py-2 text-xs text-muted-foreground">
+                          {idx + 1}
+                        </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs">{u.email ?? "—"}</span>
+                            <span className="text-xs">
+                              {u.email ?? "—"}
+                            </span>
                             {isMe && (
                               <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold text-primary">
                                 SEN
