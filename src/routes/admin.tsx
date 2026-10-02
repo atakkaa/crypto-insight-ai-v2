@@ -1,6 +1,6 @@
-// src/routes/admin.tsx — Admin Paneli (Basitleştirilmiş)
+// src/routes/admin.tsx — Admin Paneli
 
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -25,7 +25,6 @@ type Profile = {
 
 function AdminPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,15 +35,16 @@ function AdminPage() {
   // 1. Kullanıcı yoksa ana sayfaya git
   useEffect(() => {
     if (!user) {
-      void navigate({ to: "/" });
+      window.location.href = "/";
     }
-  }, [user, navigate]);
+  }, [user]);
 
-  // 2. Admin kontrolü
+  // 2. Admin kontrolü ve kullanıcı listesi
   useEffect(() => {
     if (!user) return;
 
     void (async () => {
+      // Admin mi?
       const { data, error } = await (supabase as any)
         .from("profiles")
         .select("role")
@@ -84,9 +84,9 @@ function AdminPage() {
   // 3. Admin değilse ana sayfaya git
   useEffect(() => {
     if (isAdmin === false) {
-      void navigate({ to: "/" });
+      window.location.href = "/";
     }
-  }, [isAdmin, navigate]);
+  }, [isAdmin]);
 
   async function togglePremium(userId: string, current: string) {
     setBusyUserId(userId);
