@@ -15,6 +15,7 @@ import { analyzeChart, type ChartAnalysis } from "@/lib/analysis.functions";
 import { getAssetInfo, getStockCandles, type AssetInfo, type Candle } from "@/lib/market.functions";
 import { getMarketNews, type NewsImpact } from "@/lib/news.functions";
 import type { FormationEngineResult } from "@/lib/analysis-types";
+import { subscribeToPush, requestPushPermission } from "@/lib/push";
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>): { m?: Market; s?: string } => {
@@ -1031,6 +1032,52 @@ function Dashboard() {
       ? list.filter((item) => `${item.symbol} ${item.name}`.toUpperCase().includes(q))
       : list;
   }, [market, search]);
+    // Service Worker kaydı (PWA + Push için)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator)) {
+      console.warn("Service Worker desteklenmiyor");
+      return;
+    }
+
+    void navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        console.log("✅ Service Worker kaydedildi:", registration.scope);
+      })
+      .catch((error) => {
+        console.error("❌ Service Worker kaydedilemedi:", error);
+      });
+  }, []);
+    // Service Worker kaydı (PWA + Push için)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator)) {
+      console.warn("Service Worker desteklenmiyor");
+      return;
+    }
+
+    void navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        console.log("✅ Service Worker kaydedildi:", registration.scope);
+      })
+      .catch((error) => {
+        console.error("❌ Service Worker kaydedilemedi:", error);
+      });
+  }, []);
+
+  // Kullanıcı giriş yapınca push aboneliği oluştur
+  useEffect(() => {
+    if (!user) return;
+
+    void (async () => {
+      const granted = await requestPushPermission();
+      if (granted) {
+        await subscribeToPush(user.id);
+      }
+    })();
+  }, [user]);
 
   useEffect(() => {
     if (!routeSearch.s) return;

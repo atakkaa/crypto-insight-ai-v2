@@ -1,0 +1,12 @@
+{
+  "name": "Formasyon AI — Kripto ve Borsa Analizi",
+  "short_name": "Formasyon AI",
+  "description": "Yapay zeka destekli kripto ve borsa analizi. Formasyon, indikatör ve haber bildirimleri.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1621",
+  "theme_color": "#f5a623",
+  "orientation": "portrait",
+  "scope": "/",
+  "lang": "tr"
+}

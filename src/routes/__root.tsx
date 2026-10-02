@@ -77,6 +77,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "theme-color", content: "#f5a623" },
+{ name: "apple-mobile-web-app-capable", content: "yes" },
+{ name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+{ name: "apple-mobile-web-app-title", content: "Formasyon AI" },
+{ name: "mobile-web-app-capable", content: "yes" },
       { title: "Lovable App" },
       { name: "description", content: "Lovable Generated Project" },
       { name: "author", content: "Lovable" },
@@ -87,12 +92,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
-    ],
+  {
+    rel: "stylesheet",
+    href: appCss,
+  },
+  { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+  { rel: "manifest", href: "/manifest.json" },
+  { rel: "apple-touch-icon", href: "/favicon.ico" },
+],
   }),
   shellComponent: RootShell,
   component: RootComponent,
