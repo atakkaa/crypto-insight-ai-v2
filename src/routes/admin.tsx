@@ -1,23 +1,15 @@
-// src/routes/admin.tsx — Admin Paneli
+// src/routes/admin.tsx — Admin Paneli (Basitleştirilmiş)
 
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/hooks/useAuth";
-import {
-  useAdmin,
-  fetchAllUsers,
-  updateUser,
-  deleteProfile,
-} from "@/hooks/useAdmin";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
-    meta: [
-      { title: "Admin Paneli — Formasyon AI" },
-      { name: "robots", content: "noindex, nofollow" },
-    ],
+    meta: [{ title: "Admin Paneli — Formasyon AI" }],
   }),
   component: AdminPage,
 });
@@ -33,122 +25,156 @@ type Profile = {
 
 function AdminPage() {
   const { user } = useAuth();
-  const { isAdmin, loading: adminLoading } = useAdmin();
   const navigate = useNavigate();
 
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [search, setSearch] = useState("");
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
-  // Admin değilse ana sayfaya yönlendir
+  // 1. Kullanıcı yoksa ana sayfaya git
   useEffect(() => {
-    if (!adminLoading && !isAdmin) {
+    if (!user) {
       void navigate({ to: "/" });
     }
-  }, [adminLoading, isAdmin, navigate]);
+  }, [user, navigate]);
 
-  // Kullanıcıları çek
+  // 2. Admin kontrolü
   useEffect(() => {
-    if (!isAdmin) return;
-    setLoading(true);
-    void fetchAllUsers().then((data) => {
-      setUsers(data);
+    if (!user) return;
+
+    void (async () => {
+      const { data, error } = await (supabase as any)
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (error) {
+        console.error("Admin kontrolü hatası:", error);
+        setIsAdmin(false);
+        setLoading(false);
+        return;
+      }
+
+      const admin = data?.role === "admin";
+      setIsAdmin(admin);
+
+      if (!admin) {
+        setLoading(false);
+        return;
+      }
+
+      // Admin ise tüm kullanıcıları çek
+      const { data: allUsers, error: usersError } = await (supabase as any)
+        .from("profiles")
+        .select("id, email, role, membership, is_banned, created_at")
+        .order("created_at", { ascending: false });
+
+      if (usersError) {
+        console.error("Kullanıcılar çekilemedi:", usersError);
+      } else {
+        setUsers((allUsers ?? []) as Profile[]);
+      }
       setLoading(false);
-    });
-  }, [isAdmin]);
+    })();
+  }, [user]);
 
-  async function handleTogglePremium(userId: string, currentMembership: string) {
-    const newMembership = currentMembership === "premium" ? "free" : "premium";
+  // 3. Admin değilse ana sayfaya git
+  useEffect(() => {
+    if (isAdmin === false) {
+      void navigate({ to: "/" });
+    }
+  }, [isAdmin, navigate]);
+
+  async function togglePremium(userId: string, current: string) {
     setBusyUserId(userId);
+    const newVal = current === "premium" ? "free" : "premium";
+    const { error } = await (supabase as any)
+      .from("profiles")
+      .update({ membership: newVal })
+      .eq("id", userId);
 
-    const ok = await updateUser(userId, { membership: newMembership });
-    if (ok) {
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === userId ? { ...u, membership: newMembership } : u,
-        ),
-      );
-      toast.success(
-        newMembership === "premium"
-          ? "Kullanıcı premium yapıldı ⭐"
-          : "Kullanıcı ücretsiz yapıldı",
-      );
+    if (error) {
+      toast.error("Güncellenemedi");
     } else {
-      toast.error("İşlem başarısız");
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, membership: newVal } : u)),
+      );
+      toast.success(newVal === "premium" ? "⭐ Premium yapıldı" : "Free yapıldı");
     }
     setBusyUserId(null);
   }
 
-  async function handleToggleBan(userId: string, currentBanned: boolean) {
-    const newBanned = !currentBanned;
+  async function toggleBan(userId: string, current: boolean) {
     setBusyUserId(userId);
+    const newVal = !current;
+    const { error } = await (supabase as any)
+      .from("profiles")
+      .update({ is_banned: newVal })
+      .eq("id", userId);
 
-    const ok = await updateUser(userId, { is_banned: newBanned });
-    if (ok) {
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === userId ? { ...u, is_banned: newBanned } : u,
-        ),
-      );
-      toast.success(newBanned ? "Kullanıcı banlandı 🚫" : "Ban kaldırıldı");
+    if (error) {
+      toast.error("Güncellenemedi");
     } else {
-      toast.error("İşlem başarısız");
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, is_banned: newVal } : u)),
+      );
+      toast.success(newVal ? "🚫 Banlandı" : "✅ Ban kaldırıldı");
     }
     setBusyUserId(null);
   }
 
-  async function handleToggleAdmin(userId: string, currentRole: string) {
+  async function toggleAdminRole(userId: string, current: string) {
     if (userId === user?.id) {
       toast.error("Kendi rolünüzü değiştiremezsiniz");
       return;
     }
-    const newRole = currentRole === "admin" ? "user" : "admin";
-
-    const confirmed = window.confirm(
-      newRole === "admin"
-        ? "Bu kullanıcıyı admin yapmak istediğinize emin misiniz?"
-        : "Bu kullanıcının admin yetkisini kaldırmak istediğinize emin misiniz?",
-    );
-    if (!confirmed) return;
-
+    if (!window.confirm("Bu kullanıcının rolünü değiştirmek istiyor musunuz?")) {
+      return;
+    }
     setBusyUserId(userId);
-    const ok = await updateUser(userId, { role: newRole });
-    if (ok) {
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)),
-      );
-      toast.success(
-        newRole === "admin" ? "Kullanıcı admin yapıldı 👑" : "Admin yetkisi kaldırıldı",
-      );
+    const newVal = current === "admin" ? "user" : "admin";
+    const { error } = await (supabase as any)
+      .from("profiles")
+      .update({ role: newVal })
+      .eq("id", userId);
+
+    if (error) {
+      toast.error("Güncellenemedi");
     } else {
-      toast.error("İşlem başarısız");
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, role: newVal } : u)),
+      );
+      toast.success(newVal === "admin" ? "👑 Admin yapıldı" : "User yapıldı");
     }
     setBusyUserId(null);
   }
 
-  async function handleDelete(userId: string, email: string | null) {
+  async function deleteUser(userId: string, email: string | null) {
     if (userId === user?.id) {
       toast.error("Kendi hesabınızı silemezsiniz");
       return;
     }
-    const confirmed = window.confirm(
-      `${email ?? userId} kullanıcısını silmek istediğinize emin misiniz? (Bu işlem geri alınamaz)`,
-    );
-    if (!confirmed) return;
-
+    if (!window.confirm(`${email ?? userId} silinsin mi?`)) return;
     setBusyUserId(userId);
-    const ok = await deleteProfile(userId);
-    if (ok) {
+    const { error } = await (supabase as any)
+      .from("profiles")
+      .delete()
+      .eq("id", userId);
+
+    if (error) {
+      toast.error("Silinemedi");
+    } else {
       setUsers((prev) => prev.filter((u) => u.id !== userId));
       toast.success("Kullanıcı silindi");
-    } else {
-      toast.error("Silme başarısız");
     }
     setBusyUserId(null);
   }
 
-  if (adminLoading || !isAdmin) {
+  // Yükleniyor
+  if (loading || isAdmin === null) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p className="text-sm text-muted-foreground">Yükleniyor...</p>
@@ -156,7 +182,11 @@ function AdminPage() {
     );
   }
 
-  const filteredUsers = users.filter((u) => {
+  if (!isAdmin) {
+    return null;
+  }
+
+  const filtered = users.filter((u) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
@@ -172,32 +202,22 @@ function AdminPage() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
-          <span className="num text-sm font-bold uppercase tracking-[0.2em] text-primary">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
+          <Link to="/" className="num text-sm font-bold uppercase tracking-[0.2em] text-primary">
             Formasyon AI
-          </span>
+          </Link>
           <nav className="flex gap-2 text-xs">
-            <Link
-              to="/"
-              className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
-            >
+            <Link to="/" className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary">
               Grafik
             </Link>
-            <Link
-              to="/coins"
-              className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
-            >
+            <Link to="/coins" className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary">
               Liste
             </Link>
             <span className="rounded-md bg-primary/15 px-3 py-1.5 font-bold text-primary">
               👑 Admin
             </span>
           </nav>
-          <div className="ml-auto flex items-center gap-2 text-sm">
-            <span className="hidden text-xs text-muted-foreground sm:inline">
-              {user?.email}
-            </span>
-          </div>
+          <div className="ml-auto text-xs text-muted-foreground">{user?.email}</div>
         </div>
       </header>
 
@@ -205,7 +225,7 @@ function AdminPage() {
         <section className="panel p-5">
           <h1 className="text-xl font-bold">👑 Admin Paneli</h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            Kullanıcıları yönetin, üyelik durumlarını değiştirin, erişimleri kontrol edin.
+            Kullanıcıları yönetin, üyelik ve erişim durumlarını kontrol edin.
           </p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -215,15 +235,11 @@ function AdminPage() {
             </div>
             <div className="rounded-lg border border-border bg-card p-3">
               <p className="text-xs text-muted-foreground">Premium Üye</p>
-              <p className="num mt-1 text-2xl font-bold text-primary">
-                {premiumUsers}
-              </p>
+              <p className="num mt-1 text-2xl font-bold text-primary">{premiumUsers}</p>
             </div>
             <div className="rounded-lg border border-border bg-card p-3">
               <p className="text-xs text-muted-foreground">Banlı</p>
-              <p className="num mt-1 text-2xl font-bold text-bear">
-                {bannedUsers}
-              </p>
+              <p className="num mt-1 text-2xl font-bold text-bear">{bannedUsers}</p>
             </div>
           </div>
 
@@ -238,11 +254,14 @@ function AdminPage() {
               type="button"
               onClick={() => {
                 setLoading(true);
-                void fetchAllUsers().then((data) => {
-                  setUsers(data);
+                void (async () => {
+                  const { data } = await (supabase as any)
+                    .from("profiles")
+                    .select("id, email, role, membership, is_banned, created_at")
+                    .order("created_at", { ascending: false });
+                  setUsers((data ?? []) as Profile[]);
                   setLoading(false);
-                  toast.success("Liste güncellendi");
-                });
+                })();
               }}
               className="rounded-md border border-border px-3 py-2 text-xs font-bold hover:bg-secondary"
             >
@@ -254,15 +273,11 @@ function AdminPage() {
         <section className="panel overflow-hidden">
           <div className="border-b border-border px-4 py-3">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Kullanıcılar ({filteredUsers.length})
+              Kullanıcılar ({filtered.length})
             </p>
           </div>
 
-          {loading ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">
-              Yükleniyor...
-            </p>
-          ) : filteredUsers.length === 0 ? (
+          {filtered.length === 0 ? (
             <p className="p-6 text-center text-sm text-muted-foreground">
               Kullanıcı bulunamadı.
             </p>
@@ -281,7 +296,7 @@ function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((u, idx) => {
+                  {filtered.map((u, idx) => {
                     const isMe = u.id === user?.id;
                     const busy = busyUserId === u.id;
 
@@ -292,23 +307,16 @@ function AdminPage() {
                           isMe ? "bg-primary/5" : ""
                         }`}
                       >
-                        <td className="num px-3 py-2 text-xs text-muted-foreground">
-                          {idx + 1}
-                        </td>
+                        <td className="num px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs">
-                              {u.email ?? "—"}
-                            </span>
+                            <span className="text-xs">{u.email ?? "—"}</span>
                             {isMe && (
                               <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold text-primary">
                                 SEN
                               </span>
                             )}
                           </div>
-                          <span className="num block text-[9px] text-muted-foreground">
-                            {u.id.slice(0, 8)}...
-                          </span>
                         </td>
                         <td className="px-3 py-2">
                           {u.role === "admin" ? (
@@ -351,40 +359,32 @@ function AdminPage() {
                             <button
                               type="button"
                               disabled={busy}
-                              onClick={() =>
-                                void handleTogglePremium(u.id, u.membership)
-                              }
+                              onClick={() => void togglePremium(u.id, u.membership)}
                               className="rounded border border-border px-2 py-1 text-[10px] font-bold hover:bg-primary/10 disabled:opacity-50"
-                              title="Premium durumunu değiştir"
                             >
                               {u.membership === "premium" ? "↩️ Free" : "⭐ Premium"}
                             </button>
                             <button
                               type="button"
                               disabled={busy || isMe}
-                              onClick={() =>
-                                void handleToggleAdmin(u.id, u.role)
-                              }
+                              onClick={() => void toggleAdminRole(u.id, u.role)}
                               className="rounded border border-border px-2 py-1 text-[10px] font-bold hover:bg-amber-500/10 disabled:opacity-50"
-                              title="Admin rolünü değiştir"
                             >
                               {u.role === "admin" ? "↓ User" : "👑 Admin"}
                             </button>
                             <button
                               type="button"
                               disabled={busy || isMe}
-                              onClick={() => void handleToggleBan(u.id, u.is_banned)}
+                              onClick={() => void toggleBan(u.id, u.is_banned)}
                               className="rounded border border-border px-2 py-1 text-[10px] font-bold hover:bg-warn/10 disabled:opacity-50"
-                              title="Ban durumunu değiştir"
                             >
                               {u.is_banned ? "✅ Aç" : "🚫 Ban"}
                             </button>
                             <button
                               type="button"
                               disabled={busy || isMe}
-                              onClick={() => void handleDelete(u.id, u.email)}
+                              onClick={() => void deleteUser(u.id, u.email)}
                               className="rounded border border-destructive/30 px-2 py-1 text-[10px] font-bold text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                              title="Kullanıcıyı sil"
                             >
                               🗑️
                             </button>
