@@ -255,7 +255,7 @@ const BIST_TOP_50 = [
   "YATAS", "ZOREN", "BIEN", "BRSAN", "DGNMO", "IEYHO", "KRVGD", "SDTTR",
 ].map((s) => `${s}.IS`);
 
-const US_TOP_50 = [
+const US_TOP_25 = [
   "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AVGO", "TSLA",
   "BRK-B", "JPM", "WMT", "ORCL", "LLY", "V", "MA", "XOM", "COST",
   "NFLX", "AMD", "CRM", "QCOM", "CSCO", "IBM", "NOW", "PLTR", "MU",
@@ -944,7 +944,7 @@ export default async function handler(
         }
       }
       if (regionParam === "all" || regionParam === "us") {
-        for (const s of US_TOP_50) {
+        for (const s of US_TOP_25) {
           assets.push({ symbol: s, market: "us" });
         }
       }
