@@ -4,5 +4,10 @@
       "path": "/api/scan-firsat",
       "schedule": "0 12 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/**/*.ts": {
+      "regions": ["fra1"]
+    }
+  }
 }
