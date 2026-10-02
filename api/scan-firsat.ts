@@ -239,7 +239,7 @@ async function getTopCryptoSymbols(limit = 100): Promise<string[]> {
 // HİSSE LİSTELERİ
 // ==========================================================
 
-const BIST_TOP_100 = [
+const BIST_TOP_50 = [
   "THYAO", "ASELS", "TUPRS", "BIMAS", "GARAN", "AKBNK", "ISCTR", "YKBNK",
   "KCHOL", "SAHOL", "SISE", "EREGL", "PETKM", "FROTO", "TOASO", "TAVHL",
   "TCELL", "MGROS", "ENKAI", "HEKTS", "SASA", "PGSUS", "AEFES", "ULKER",
@@ -939,7 +939,7 @@ export default async function handler(
     // 2. HİSSELER
     if (typeParam === "all" || typeParam === "stocks") {
       if (regionParam === "all" || regionParam === "bist") {
-        for (const s of BIST_TOP_100) {
+        for (const s of BIST_TOP_50) {
           assets.push({ symbol: s, market: "bist" });
         }
       }
