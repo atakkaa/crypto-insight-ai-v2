@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CoinsRouteImport } from './routes/coins'
 import { Route as ApiPublicScanRouteImport } from './routes/api/public/scan'
@@ -17,6 +18,11 @@ import { Route as ApiPublicScanRouteImport } from './routes/api/public/scan'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -37,12 +43,14 @@ const ApiPublicScanRoute = ApiPublicScanRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/coins': typeof CoinsRoute
   '/api/public/scan': typeof ApiPublicScanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/coins': typeof CoinsRoute
   '/api/public/scan': typeof ApiPublicScanRoute
@@ -50,20 +58,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/coins': typeof CoinsRoute
   '/api/public/scan': typeof ApiPublicScanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/coins' | '/api/public/scan'
+  fullPaths: '/' | '/admin' | '/auth' | '/coins' | '/api/public/scan'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/coins' | '/api/public/scan'
-  id: '__root__' | '/' | '/auth' | '/coins' | '/api/public/scan'
+  to: '/' | '/admin' | '/auth' | '/coins' | '/api/public/scan'
+  id: '__root__' | '/' | '/admin' | '/auth' | '/coins' | '/api/public/scan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRoute
   CoinsRoute: typeof CoinsRoute
   ApiPublicScanRoute: typeof ApiPublicScanRoute
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -104,6 +121,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   AuthRoute: AuthRoute,
   CoinsRoute: CoinsRoute,
   ApiPublicScanRoute: ApiPublicScanRoute,

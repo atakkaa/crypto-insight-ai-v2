@@ -10,6 +10,7 @@ import { NewsPanel, PredictionPanel, ReasoningPanel } from "@/components/Analysi
 import { NotificationBell } from "@/components/NotificationBell";
 import { WelcomeGate } from "@/components/WelcomeGate";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdmin } from "@/hooks/useAdmin";
 import { supabase } from "@/integrations/supabase/client";
 import { analyzeChart, type ChartAnalysis } from "@/lib/analysis.functions";
 import { getAssetInfo, getStockCandles, type AssetInfo, type Candle } from "@/lib/market.functions";
@@ -915,6 +916,7 @@ const EMPTY_USER_DRAWING_LINES: import("@/components/CandleChart").TradingViewLi
 const EMPTY_FORMATION_MESSAGES: FormationChatMessage[] = [];
 function Dashboard() {
   const { user, signOut } = useAuth();
+  const { isAdmin } = useAdmin();
   const routeSearch = Route.useSearch();
   const [market, setMarket] = useState<Market>(routeSearch.m ?? "crypto");
   const [symbol, setSymbol] = useState(
@@ -1681,6 +1683,15 @@ function Dashboard() {
               </Link>
             </nav>
             <div className="ml-auto flex items-center gap-2 text-sm">
+              {isAdmin && (
+  <Link
+    to="/admin"
+    className="rounded-md border border-amber-500/40 px-2.5 py-1.5 text-xs font-bold text-amber-500 hover:bg-amber-500/10"
+    title="Admin Paneli"
+  >
+    👑
+  </Link>
+)}
               <NotificationBell
                 onOpenSymbol={(m, s) => {
                   setMarket(m as Market);
