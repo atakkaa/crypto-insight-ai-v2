@@ -71,6 +71,20 @@ type AiCommentary = {
   sentiment: string;
   confidence: number;
   source: string;
+  // YENİ ALANLAR
+  entryZone?: string;
+  target?: string;
+  stopLoss?: string;
+  riskReward?: string;
+  support?: string;
+  resistance?: string;
+  fearGreed?: number;
+  timeframe?: {
+    h1: "bullish" | "bearish" | "neutral";
+    h4: "bullish" | "bearish" | "neutral";
+    d1: "bullish" | "bearish" | "neutral";
+    aligned: boolean;
+  };
 };
 
 type SignalScoreResult = {
@@ -98,6 +112,7 @@ type AnalysisResult = {
   overallStrength: number;
   isImportant: boolean;
   news?: NewsItem[];
+  candles?: Candle[];         // ⬅️ YENİ EKLENEN SATIR
   signalScore?: SignalScoreResult;
   ai?: AiCommentary;
 };
@@ -402,12 +417,109 @@ async function getNewsForSymbol(market: string, symbol: string, isPriority = fal
 // ==========================================================
 // AI YORUM
 // ==========================================================
+// ==========================================================
+// YARDIMCILAR: S/R + POZİSYON
+// ==========================================================
 
+// Destek/Direnç seviyelerini bul (son 100 mumdan)
+function findSupportResistance(candles: Candle[], currentPrice: number): {
+  support: number;
+  resistance: number;
+} {
+  if (candles.length < 30) {
+    return {
+      support: currentPrice * 0.97,
+      resistance: currentPrice * 1.03,
+    };
+  }
+
+  const recent = candles.slice(-100);
+  const lows = recent.map((c) => c.low);
+  const highs = recent.map((c) => c.high);
+
+  // Destek: son 100 mumun en düşükleri (currentPrice altındakiler)
+  const belowPrice = lows.filter((l) => l < currentPrice * 0.995);
+  const support = belowPrice.length > 0
+    ? belowPrice.reduce((a, b) => a + b, 0) / belowPrice.length
+    : currentPrice * 0.97;
+
+  // Direnç: son 100 mumun en yüksekleri (currentPrice üstündekiler)
+  const abovePrice = highs.filter((h) => h > currentPrice * 1.005);
+  const resistance = abovePrice.length > 0
+    ? abovePrice.reduce((a, b) => a + b, 0) / abovePrice.length
+    : currentPrice * 1.03;
+
+  return { support, resistance };
+}
+
+// Giriş/hedef/stop-loss hesapla
+function calculatePosition(
+  currentPrice: number,
+  direction: "bullish" | "bearish" | "neutral",
+  strength: number,
+  support: number,
+  resistance: number,
+): {
+  entryZone: string;
+  target: string;
+  stopLoss: string;
+  riskReward: string;
+} {
+  const fmt = (n: number) => n.toFixed(n > 100 ? 2 : 4);
+
+  if (direction === "bullish") {
+    // Giriş: mevcut fiyat civarı
+    const entryMin = currentPrice * 0.995;
+    const entryMax = currentPrice * 1.005;
+
+    // Hedef: direnç veya +%5 (hangisi daha yakınsa)
+    const targetPrice = Math.min(resistance, currentPrice * 1.05);
+    // Stop: destek veya -%3 (hangisi daha yakınsa)
+    const stopPrice = Math.max(support, currentPrice * 0.97);
+
+    const reward = targetPrice - currentPrice;
+    const risk = currentPrice - stopPrice;
+    const rr = risk > 0 ? (reward / risk).toFixed(1) : "1.0";
+
+    return {
+      entryZone: `$${fmt(entryMin)} - $${fmt(entryMax)}`,
+      target: `$${fmt(targetPrice)} (+${((targetPrice / currentPrice - 1) * 100).toFixed(1)}%)`,
+      stopLoss: `$${fmt(stopPrice)} (-${((1 - stopPrice / currentPrice) * 100).toFixed(1)}%)`,
+      riskReward: `1:${rr}`,
+    };
+  } else if (direction === "bearish") {
+    // SAT için giriş yukarıdan, hedef aşağıdan
+    const entryMin = currentPrice * 0.995;
+    const entryMax = currentPrice * 1.005;
+    const targetPrice = Math.max(support, currentPrice * 0.95);
+    const stopPrice = Math.min(resistance, currentPrice * 1.03);
+    const reward = currentPrice - targetPrice;
+    const risk = stopPrice - currentPrice;
+    const rr = risk > 0 ? (reward / risk).toFixed(1) : "1.0";
+
+    return {
+      entryZone: `$${fmt(entryMin)} - $${fmt(entryMax)}`,
+      target: `$${fmt(targetPrice)} (-${((1 - targetPrice / currentPrice) * 100).toFixed(1)}%)`,
+      stopLoss: `$${fmt(stopPrice)} (+${((stopPrice / currentPrice - 1) * 100).toFixed(1)}%)`,
+      riskReward: `1:${rr}`,
+    };
+  }
+
+  // Neutral: sadece izleme
+  return {
+    entryZone: "Bekle",
+    target: "Belirsiz",
+    stopLoss: "Belirsiz",
+    riskReward: "—",
+  };
+}
 function generateRuleBasedCommentary(input: {
   symbol: string; direction: "bullish" | "bearish" | "neutral"; strength: number;
   patterns: PatternSignal[]; indicators: IndicatorSignal[]; news: NewsItem[]; changePercent: number;
+  candles?: Candle[];
+  price?: number;
 }): AiCommentary {
-  const { direction, strength, patterns, indicators, news, symbol, changePercent } = input;
+  const { direction, strength, patterns, indicators, news, symbol, changePercent, candles, price } = input;
   const displaySymbol = symbol.replace("USDT", "").replace(/\.(IS|US|T|KS|HK|NS|DE|PA|L|MI|MC|AS|ST|OL|HE|SW|CO|V)$/, "");
   const avgNewsSentiment = news.length > 0 ? news.reduce((a, b) => a + b.sentimentScore, 0) / news.length : 0;
   let sentiment = "nötr";
@@ -427,12 +539,41 @@ function generateRuleBasedCommentary(input: {
   const indText = indicators.length > 0 ? `${indicators.slice(0, 2).map((i) => `${i.name} ${i.value}`).join(" + ")}` : "indikatörler";
   const newsText = news.length > 0 ? `${news.length} haber (${avgNewsSentiment > 10 ? "olumlu" : avgNewsSentiment < -10 ? "olumsuz" : "nötr"})` : "haber yok";
 
-  return {
+    // S/R ve pozisyon hesapla (candles varsa)
+  let entryZone: string | undefined;
+  let target: string | undefined;
+  let stopLoss: string | undefined;
+  let riskReward: string | undefined;
+  let support: string | undefined;
+  let resistance: string | undefined;
+
+  if (candles && candles.length >= 30 && price !== undefined && price > 0) {
+    const sr = findSupportResistance(candles, price);
+    const pos = calculatePosition(price, direction, strength, sr.support, sr.resistance);
+
+    support = `$${sr.support.toFixed(sr.support > 100 ? 2 : 4)}`;
+    resistance = `$${sr.resistance.toFixed(sr.resistance > 100 ? 2 : 4)}`;
+    entryZone = pos.entryZone;
+    target = pos.target;
+    stopLoss = pos.stopLoss;
+    riskReward = pos.riskReward;
+  }
+
+  const result: AiCommentary = {
     summary: `${displaySymbol} için ${patternText} + ${indText} uyumlu. ${newsText}. Fiyat ${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(2)}%.`,
     impact, action, sentiment,
     confidence: Math.min(100, Math.round(strength * 0.9 + Math.abs(avgNewsSentiment) * 0.1)),
     source: "motor:rule-based",
   };
+
+  if (entryZone) result.entryZone = entryZone;
+  if (target) result.target = target;
+  if (stopLoss) result.stopLoss = stopLoss;
+  if (riskReward) result.riskReward = riskReward;
+  if (support) result.support = support;
+  if (resistance) result.resistance = resistance;
+
+  return result;
 }
 
 async function generateWithOpenRouter(input: {
@@ -502,12 +643,21 @@ async function generateCommentary(input: {
   symbol: string; market: string; price: number; changePercent: number;
   direction: "bullish" | "bearish" | "neutral"; strength: number;
   indicators: IndicatorSignal[]; patterns: PatternSignal[]; news: NewsItem[];
+  candles?: Candle[];
 }): Promise<AiCommentary> {
+  // 1. Önce AI dene (kota varsa)
   let result = await generateWithOpenRouter(input);
+
+  // 2. AI başarısız → motor
   if (!result) {
     console.log("⚠️ AI başarısız → rule-based motor");
-    result = generateRuleBasedCommentary(input);
+    result = generateRuleBasedCommentary({
+      ...input,
+      price: input.price,
+      candles: input.candles,
+    });
   }
+
   return result;
 }
 // ==========================================================
@@ -970,7 +1120,7 @@ async function getUsersForSymbol(market: string, symbol: string): Promise<Array<
 
 async function isOnCooldown(userId: string, symbol: string, market: string, type: "global" | "favorite" | "priority"): Promise<boolean> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return false;
-  const cooldownHours = type === "global" ? 1 : type === "priority" ? 2 : 4;
+  const cooldownHours = type === "global" ? 2 : type === "priority" ? 1 : 4;
   const since = new Date(Date.now() - cooldownHours * 3600_000).toISOString();
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/notifications?select=id&user_id=eq.${userId}&symbol=eq.${encodeURIComponent(symbol)}&market=eq.${market}&created_at=gt.${since}&limit=1`, {
@@ -1060,7 +1210,7 @@ async function analyzeSymbol(symbol: string, market: string): Promise<AnalysisRe
       news = await getNewsForSymbol(market, symbol, isPriorityTracked);
     }
 
-    return { ...baseResult, news };
+    return { ...baseResult, news, candles };
   } catch (error) {
     console.error(`Analiz hatası (${symbol}):`, error);
     return null;
@@ -1159,17 +1309,18 @@ export default async function handler(request: RequestLike, response: ResponseLi
           continue;
         }
 
-        const ai = await generateCommentary({
+                const ai = await generateCommentary({
           symbol: result.symbol, market: result.market, price: result.price,
           changePercent: result.changePercent, direction: result.overallDirection,
           strength: result.overallStrength, indicators: result.indicators,
           patterns: result.patterns, news: result.news ?? [],
+          candles: result.candles,        // ⬅️ YENİ EKLENEN SATIR
         });
         result.ai = ai;
         console.log(`🤖 AI (${ai.source}): ${result.symbol} → ${ai.action}`);
 
         for (const user of users) {
-          // if (await isOnCooldown(user.user_id, result.symbol, result.market, user.type)) continue;
+         if (await isOnCooldown(user.user_id, result.symbol, result.market, user.type)) continue;
           await sendNotification({ userId: user.user_id, market: result.market, symbol: result.symbol, type: user.type, analysis: result, isGlobal: false });
           totalNotifications++;
         }
@@ -1187,7 +1338,7 @@ export default async function handler(request: RequestLike, response: ResponseLi
             const alreadyNotified = new Set(users.map((u) => u.user_id));
             for (const u of allUsers) {
               if (alreadyNotified.has(u.id)) continue;
-              // if (await isOnCooldown(u.id, result.symbol, result.market, "global")) continue;
+              if (await isOnCooldown(u.id, result.symbol, result.market, "global")) continue;
               await sendNotification({ userId: u.id, market: result.market, symbol: result.symbol, type: "favorite", analysis: result, isGlobal: true });
               totalNotifications++;
             }
