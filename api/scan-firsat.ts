@@ -592,8 +592,8 @@ function computeSignalScore(input: {
 
   // EŞİKLER
   const thresholdCritical = 85;
-  const thresholdImportant = isPriority ? 65 : 70;
-  const thresholdWatch = isPriority ? 55 : 60;
+    const thresholdImportant = isPriority ? 55 : 60;
+    const thresholdWatch = isPriority ? 45 : 50;
 
   let tier: SignalScoreResult["tier"] = "silent";
   if (finalScore >= thresholdCritical) tier = "critical";
