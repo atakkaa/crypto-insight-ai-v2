@@ -763,9 +763,9 @@ async function analyzeMultiTimeframe(
   symbol: string,
   market: string,
 ): Promise<{
-  h1?: { direction: TimeframeDir; strength: number };
-  h4?: { direction: TimeframeDir; strength: number };
-  d1?: { direction: TimeframeDir; strength: number };
+  h1?: { direction: TimeframeDir; strength: number } | undefined;
+  h4?: { direction: TimeframeDir; strength: number } | undefined;
+  d1?: { direction: TimeframeDir; strength: number } | undefined;
   aligned: boolean;
   alignedCount: number;
   dominantDir: TimeframeDir;
