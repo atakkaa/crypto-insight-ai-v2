@@ -1,4 +1,4 @@
-// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v4 (Formation-first)
+// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v5 (Formation-first + Chunked)
 // Tek dosya, tüm bağımlılıklar inline
 
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
@@ -521,7 +521,6 @@ function computeSignalScore(input: {
 }): SignalScoreResult {
   const { direction, indicators, patterns, news, changePercent, isPriority = false } = input;
 
-  // ZORUNLU 1: Aynı yönde formasyon (min %60 güven)
   const sameDirPatterns = patterns.filter((p) => p.direction === direction);
   const bestFormation = sameDirPatterns.reduce((max, p) => Math.max(max, p.confidence), 0);
 
@@ -535,7 +534,6 @@ function computeSignalScore(input: {
     };
   }
 
-  // ZORUNLU 2: Aynı yönde min 2 indikatör
   const sameDirIndicators = indicators.filter((i) => i.direction === direction);
   const indicatorCount = sameDirIndicators.length;
 
@@ -553,7 +551,6 @@ function computeSignalScore(input: {
   const avgIndicatorStrength = sameDirIndicators.reduce((a, b) => a + b.strength, 0) / indicatorCount;
   const indicatorScore = clamp(avgIndicatorStrength * 0.7 + Math.min(indicatorCount - 2, 2) * 15);
 
-  // HABER katmanı
   const avgNewsSentiment = news.length > 0 ? news.reduce((a, b) => a + b.sentimentScore, 0) / news.length : 0;
   const newsSupports =
     (direction === "bullish" && avgNewsSentiment > 15) ||
@@ -567,15 +564,12 @@ function computeSignalScore(input: {
   if (newsContradicts) newsScore = 20;
   if (news.length === 0) newsScore = 40;
 
-  // HACİM
   const volumeIndicator = indicators.find((i) => i.name === "Hacim");
   const volumeScore = volumeIndicator ? clamp(volumeIndicator.strength) : 40;
 
-  // TREND (ADX)
   const adxIndicator = indicators.find((i) => i.name === "ADX");
   const trendScore = adxIndicator ? clamp(Number(adxIndicator.value) * 1.5) : 40;
 
-  // AĞIRLIKLI TOPLAM
   let finalScore =
     formationScore * 0.4 +
     indicatorScore * 0.25 +
@@ -583,17 +577,15 @@ function computeSignalScore(input: {
     volumeScore * 0.1 +
     trendScore * 0.05;
 
-  // BONUS
   if (bestFormation >= 85) finalScore += 5;
   if ((direction === "bullish" && changePercent >= 3) || (direction === "bearish" && changePercent <= -3)) finalScore += 3;
   if (Math.abs(avgNewsSentiment) >= 40 && newsSupports) finalScore += 5;
 
   finalScore = clamp(Math.round(finalScore));
 
-  // EŞİKLER
   const thresholdCritical = 85;
-    const thresholdImportant = isPriority ? 55 : 60;
-    const thresholdWatch = isPriority ? 45 : 50;
+  const thresholdImportant = isPriority ? 55 : 60;
+  const thresholdWatch = isPriority ? 45 : 50;
 
   let tier: SignalScoreResult["tier"] = "silent";
   if (finalScore >= thresholdCritical) tier = "critical";
@@ -876,7 +868,7 @@ function analyzePatterns(candles: Candle[]): PatternSignal[] {
 }
 
 // ==========================================================
-// ANALİZ BİRLEŞTİR (Formation-first direction)
+// ANALİZ BİRLEŞTİR (Formation-first)
 // ==========================================================
 
 function combineAnalysis(symbol: string, market: string, candles: Candle[], indicators: IndicatorSignal[], patterns: PatternSignal[]): AnalysisResult {
@@ -1096,7 +1088,10 @@ export default async function handler(request: RequestLike, response: ResponseLi
 
     const typeParam = String(request.query?.["type"] ?? "all");
     const regionParam = String(request.query?.["region"] ?? "all");
-    console.log(`🔍 Tarama başladı: type=${typeParam}, region=${regionParam}`);
+    const limitParam = Number(request.query?.["limit"] ?? 0);
+    const offsetParam = Number(request.query?.["offset"] ?? 0);
+
+    console.log(`🔍 Tarama başladı: type=${typeParam}, region=${regionParam}, limit=${limitParam}, offset=${offsetParam}`);
 
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/rpc/cleanup_expired_cache`, {
@@ -1124,8 +1119,15 @@ export default async function handler(request: RequestLike, response: ResponseLi
       if (!assets.some((a) => a.symbol === c.symbol && a.market === c.market)) assets.push({ symbol: c.symbol, market: c.market });
     }
 
-    console.log(`📊 ${assets.length} varlık taranacak.`);
-    const results = await scanSymbolsParallel(assets, 10);
+    // LIMIT / OFFSET uygula (parçalama için)
+    let finalAssets = assets;
+    if (limitParam > 0) {
+      finalAssets = assets.slice(offsetParam, offsetParam + limitParam);
+      console.log(`🔢 Limit uygulandı: offset=${offsetParam}, limit=${limitParam}, sonuç=${finalAssets.length}`);
+    }
+
+    console.log(`📊 ${finalAssets.length} varlık taranacak.`);
+    const results = await scanSymbolsParallel(finalAssets, 10);
     const importantResults = results.filter((r) => r.isImportant);
     console.log(`✅ ${results.length} varlık analiz edildi, ${importantResults.length} önemli.`);
 
@@ -1193,7 +1195,7 @@ export default async function handler(request: RequestLike, response: ResponseLi
     return response.status(200).json({
       success: true, message: "Tarama tamamlandı.",
       scanned: results.length, important: importantResults.length,
-      notificationsSent: totalNotifications, totalAssets: assets.length,
+      notificationsSent: totalNotifications, totalAssets: finalAssets.length,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
