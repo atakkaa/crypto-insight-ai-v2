@@ -241,16 +241,71 @@ export function NotificationBell({ onOpenSymbol }: Props) {
                       )}
                     </span>
                   </div>
+
                   <p className="mt-2 text-xs font-bold">{n.title}</p>
                   <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
                     {n.message.slice(0, 200)}
                     {n.message.length > 200 ? "..." : ""}
                   </p>
+
                   {n.reason && (
                     <p className="mt-1 text-[10px] italic leading-4 text-muted-foreground/80">
                       {n.reason.slice(0, 150)}
                       {n.reason.length > 150 ? "..." : ""}
                     </p>
+                  )}
+
+                  {/* 🆕 Giriş / Hedef / Stop / R/R */}
+                  {(n.ai_entry_zone || n.ai_target || n.ai_stop_loss || n.ai_risk_reward) && (
+                    <div className="mt-2 grid grid-cols-2 gap-1 rounded-md border border-border/60 bg-secondary/30 p-2 text-[10px]">
+                      {n.ai_entry_zone && (
+                        <div className="flex items-center gap-1">
+                          <span>💰</span>
+                          <span className="text-muted-foreground">Giriş:</span>
+                          <span className="num font-bold">{n.ai_entry_zone}</span>
+                        </div>
+                      )}
+                      {n.ai_target && (
+                        <div className="flex items-center gap-1">
+                          <span>🎯</span>
+                          <span className="text-muted-foreground">Hedef:</span>
+                          <span className="num font-bold text-bull">{n.ai_target}</span>
+                        </div>
+                      )}
+                      {n.ai_stop_loss && (
+                        <div className="flex items-center gap-1">
+                          <span>🛑</span>
+                          <span className="text-muted-foreground">Stop:</span>
+                          <span className="num font-bold text-bear">{n.ai_stop_loss}</span>
+                        </div>
+                      )}
+                      {n.ai_risk_reward && (
+                        <div className="flex items-center gap-1">
+                          <span>⚖️</span>
+                          <span className="text-muted-foreground">R/R:</span>
+                          <span className="num font-bold">{n.ai_risk_reward}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 🆕 Destek / Direnç */}
+                  {(n.ai_support || n.ai_resistance) && (
+                    <div className="mt-1 flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-secondary/20 px-2 py-1 text-[10px]">
+                      <span>📊</span>
+                      {n.ai_resistance && (
+                        <span className="text-bear">
+                          Direnç:{" "}
+                          <span className="num font-bold">{n.ai_resistance}</span>
+                        </span>
+                      )}
+                      {n.ai_support && (
+                        <span className="text-bull">
+                          Destek:{" "}
+                          <span className="num font-bold">{n.ai_support}</span>
+                        </span>
+                      )}
+                    </div>
                   )}
                 </button>
               ))

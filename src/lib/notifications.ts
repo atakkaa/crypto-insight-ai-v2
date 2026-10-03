@@ -21,6 +21,29 @@ export type Notification = {
   data: Record<string, unknown>;
   read: boolean;
   created_at: string;
+  // === AI + Signal Score ALANLARI ===
+  signal_score?: number | null;
+  signal_breakdown?: Record<string, number> | null;
+  ai_summary?: string | null;
+  ai_impact?: string | null;
+  ai_action?: string | null;
+  ai_sentiment?: string | null;
+  ai_confidence?: number | null;
+  ai_source?: string | null;
+  ai_generated_at?: string | null;
+  // === YENİ: GİRİŞ/HEDEF/STOP/RR/S/R ===
+  ai_entry_zone?: string | null;
+  ai_target?: string | null;
+  ai_stop_loss?: string | null;
+  ai_risk_reward?: string | null;
+  ai_support?: string | null;
+  ai_resistance?: string | null;
+  // === DİĞER ===
+  is_global?: boolean | null;
+  notification_type?: string | null;
+  confidence?: number | null;
+  news_items?: unknown[] | null;
+  premium_only?: boolean | null;
 };
 
 // =====================================================
