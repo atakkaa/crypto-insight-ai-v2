@@ -1,5 +1,4 @@
-// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v5 (Formation-first + Chunked)
-// Tek dosya, tüm bağımlılıklar inline
+// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v6 (Multi-Timeframe)
 
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
 
@@ -64,6 +63,8 @@ type NewsItem = {
   sentimentScore: number;
 };
 
+type TimeframeDir = "bullish" | "bearish" | "neutral";
+
 type AiCommentary = {
   summary: string;
   impact: "pozitif" | "negatif" | "nötr";
@@ -71,18 +72,16 @@ type AiCommentary = {
   sentiment: string;
   confidence: number;
   source: string;
-  // YENİ ALANLAR
   entryZone?: string;
   target?: string;
   stopLoss?: string;
   riskReward?: string;
   support?: string;
   resistance?: string;
-  fearGreed?: number;
   timeframe?: {
-    h1: "bullish" | "bearish" | "neutral";
-    h4: "bullish" | "bearish" | "neutral";
-    d1: "bullish" | "bearish" | "neutral";
+    h1: TimeframeDir;
+    h4: TimeframeDir;
+    d1: TimeframeDir;
     aligned: boolean;
   };
 };
@@ -112,7 +111,13 @@ type AnalysisResult = {
   overallStrength: number;
   isImportant: boolean;
   news?: NewsItem[];
-  candles?: Candle[] | undefined;         // ⬅️ YENİ EKLENEN SATIR
+  candles?: Candle[] | undefined;
+  timeframeData?: {
+    h1: TimeframeDir;
+    h4: TimeframeDir;
+    d1: TimeframeDir;
+    aligned: boolean;
+  };
   signalScore?: SignalScoreResult;
   ai?: AiCommentary;
 };
@@ -251,7 +256,7 @@ const CRYPTO_RSS_FEEDS = [
   { url: "https://bitcoinist.com/feed/", source: "Bitcoinist" },
 ];
 
-async function fetchCryptoRss(symbol: string): Promise<NewsItem[]> {
+async function fetchCryptoRss(symbol: string, limit = 10): Promise<NewsItem[]> {
   const coinName = getCoinName(symbol);
   const coinBase = symbol.replace("USDT", "").replace("USDC", "");
   const items: NewsItem[] = [];
@@ -284,7 +289,7 @@ async function fetchCryptoRss(symbol: string): Promise<NewsItem[]> {
   );
   for (const r of results) if (r.status === "fulfilled") items.push(...r.value);
   items.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-  return items.slice(0, 10);
+  return items.slice(0, limit);
 }
 
 const BIST_RSS_FEEDS = [
@@ -292,7 +297,7 @@ const BIST_RSS_FEEDS = [
   { url: "https://www.dunya.com/rss?list=piyasa", source: "Dünya" },
 ];
 
-async function fetchBistRss(symbol: string): Promise<NewsItem[]> {
+async function fetchBistRss(symbol: string, limit = 10): Promise<NewsItem[]> {
   const ticker = symbol.replace(".IS", "");
   const items: NewsItem[] = [];
   const results = await Promise.allSettled(
@@ -321,10 +326,10 @@ async function fetchBistRss(symbol: string): Promise<NewsItem[]> {
   );
   for (const r of results) if (r.status === "fulfilled") items.push(...r.value);
   items.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-  return items.slice(0, 10);
+  return items.slice(0, limit);
 }
 
-async function fetchFinnhub(symbol: string): Promise<NewsItem[]> {
+async function fetchFinnhub(symbol: string, limit = 10): Promise<NewsItem[]> {
   if (!FINNHUB_KEY) return [];
   const ticker = symbol.replace(".US", "");
   const to = new Date().toISOString().slice(0, 10);
@@ -333,7 +338,7 @@ async function fetchFinnhub(symbol: string): Promise<NewsItem[]> {
     const res = await fetch(`https://finnhub.io/api/v1/company-news?symbol=${ticker}&from=${from}&to=${to}&token=${FINNHUB_KEY}`);
     if (!res.ok) return [];
     const data = (await res.json()) as Array<{ headline: string; url: string; datetime: number; source: string; summary: string }>;
-    return data.slice(0, 10).map((n): NewsItem => {
+    return data.slice(0, limit).map((n): NewsItem => {
       const lex = lexiconSentiment(`${n.headline} ${n.summary ?? ""}`);
       const item: NewsItem = {
         title: n.headline,
@@ -382,14 +387,11 @@ async function getNewsForSymbol(market: string, symbol: string, isPriority = fal
   } catch {}
 
   let fresh: NewsItem[] = [];
-  if (market === "crypto") fresh = await fetchCryptoRss(symbol);
-  else if (market === "us" || market === "asia" || market === "europe") fresh = await fetchFinnhub(symbol);
-  else if (market === "bist") fresh = await fetchBistRss(symbol);
+  if (market === "crypto") fresh = await fetchCryptoRss(symbol, limit);
+  else if (market === "us" || market === "asia" || market === "europe") fresh = await fetchFinnhub(symbol, limit);
+  else if (market === "bist") fresh = await fetchBistRss(symbol, limit);
 
-  // Priority için daha fazla haber sakla
-  const freshLimited = fresh.slice(0, limit);
-
-  if (freshLimited.length > 0 && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+  if (fresh.length > 0 && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/news_cache`, {
         method: "POST",
@@ -399,7 +401,7 @@ async function getNewsForSymbol(market: string, symbol: string, isPriority = fal
           Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
           Prefer: "resolution=ignore-duplicates",
         },
-        body: JSON.stringify(freshLimited.map((n) => ({
+        body: JSON.stringify(fresh.map((n) => ({
           market, symbol,
           title: n.title,
           url: n.url ?? null,
@@ -412,383 +414,32 @@ async function getNewsForSymbol(market: string, symbol: string, isPriority = fal
       });
     } catch {}
   }
-  return freshLimited;
-}
-// ==========================================================
-// AI YORUM
-// ==========================================================
-// ==========================================================
-// YARDIMCILAR: S/R + POZİSYON
-// ==========================================================
-
-// Destek/Direnç seviyelerini bul (son 100 mumdan)
-function findSupportResistance(candles: Candle[], currentPrice: number): {
-  support: number;
-  resistance: number;
-} {
-  if (candles.length < 30) {
-    return {
-      support: currentPrice * 0.97,
-      resistance: currentPrice * 1.03,
-    };
-  }
-
-  const recent = candles.slice(-100);
-  const lows = recent.map((c) => c.low);
-  const highs = recent.map((c) => c.high);
-
-  // Destek: son 100 mumun en düşükleri (currentPrice altındakiler)
-  const belowPrice = lows.filter((l) => l < currentPrice * 0.995);
-  const support = belowPrice.length > 0
-    ? belowPrice.reduce((a, b) => a + b, 0) / belowPrice.length
-    : currentPrice * 0.97;
-
-  // Direnç: son 100 mumun en yüksekleri (currentPrice üstündekiler)
-  const abovePrice = highs.filter((h) => h > currentPrice * 1.005);
-  const resistance = abovePrice.length > 0
-    ? abovePrice.reduce((a, b) => a + b, 0) / abovePrice.length
-    : currentPrice * 1.03;
-
-  return { support, resistance };
-}
-
-// Giriş/hedef/stop-loss hesapla
-function calculatePosition(
-  currentPrice: number,
-  direction: "bullish" | "bearish" | "neutral",
-  strength: number,
-  support: number,
-  resistance: number,
-): {
-  entryZone: string;
-  target: string;
-  stopLoss: string;
-  riskReward: string;
-} {
-  const fmt = (n: number) => n.toFixed(n > 100 ? 2 : 4);
-
-  if (direction === "bullish") {
-    // Giriş: mevcut fiyat civarı
-    const entryMin = currentPrice * 0.995;
-    const entryMax = currentPrice * 1.005;
-
-    // Hedef: direnç veya +%5 (hangisi daha yakınsa)
-    const targetPrice = Math.min(resistance, currentPrice * 1.05);
-    // Stop: destek veya -%3 (hangisi daha yakınsa)
-    const stopPrice = Math.max(support, currentPrice * 0.97);
-
-    const reward = targetPrice - currentPrice;
-    const risk = currentPrice - stopPrice;
-    const rr = risk > 0 ? (reward / risk).toFixed(1) : "1.0";
-
-    return {
-      entryZone: `$${fmt(entryMin)} - $${fmt(entryMax)}`,
-      target: `$${fmt(targetPrice)} (+${((targetPrice / currentPrice - 1) * 100).toFixed(1)}%)`,
-      stopLoss: `$${fmt(stopPrice)} (-${((1 - stopPrice / currentPrice) * 100).toFixed(1)}%)`,
-      riskReward: `1:${rr}`,
-    };
-  } else if (direction === "bearish") {
-    // SAT için giriş yukarıdan, hedef aşağıdan
-    const entryMin = currentPrice * 0.995;
-    const entryMax = currentPrice * 1.005;
-    const targetPrice = Math.max(support, currentPrice * 0.95);
-    const stopPrice = Math.min(resistance, currentPrice * 1.03);
-    const reward = currentPrice - targetPrice;
-    const risk = stopPrice - currentPrice;
-    const rr = risk > 0 ? (reward / risk).toFixed(1) : "1.0";
-
-    return {
-      entryZone: `$${fmt(entryMin)} - $${fmt(entryMax)}`,
-      target: `$${fmt(targetPrice)} (-${((1 - targetPrice / currentPrice) * 100).toFixed(1)}%)`,
-      stopLoss: `$${fmt(stopPrice)} (+${((stopPrice / currentPrice - 1) * 100).toFixed(1)}%)`,
-      riskReward: `1:${rr}`,
-    };
-  }
-
-  // Neutral: sadece izleme
-  return {
-    entryZone: "Bekle",
-    target: "Belirsiz",
-    stopLoss: "Belirsiz",
-    riskReward: "—",
-  };
-}
-function generateRuleBasedCommentary(input: {
-  symbol: string; direction: "bullish" | "bearish" | "neutral"; strength: number;
-  patterns: PatternSignal[]; indicators: IndicatorSignal[]; news: NewsItem[]; changePercent: number;
-  candles?: Candle[] | undefined;
-  price?: number | undefined;
-}): AiCommentary {
-  const { direction, strength, patterns, indicators, news, symbol, changePercent, candles, price } = input;
-  const displaySymbol = symbol.replace("USDT", "").replace(/\.(IS|US|T|KS|HK|NS|DE|PA|L|MI|MC|AS|ST|OL|HE|SW|CO|V)$/, "");
-  const avgNewsSentiment = news.length > 0 ? news.reduce((a, b) => a + b.sentimentScore, 0) / news.length : 0;
-  let sentiment = "nötr";
-  if (changePercent <= -8) sentiment = "panik";
-  else if (changePercent <= -5 || avgNewsSentiment <= -30) sentiment = "korku";
-  else if (changePercent >= 8) sentiment = "coşku";
-  else if (changePercent >= 5 || avgNewsSentiment >= 30) sentiment = "açgözlülük";
-
-  const impact: AiCommentary["impact"] = direction === "bullish" && strength >= 60 ? "pozitif" : direction === "bearish" && strength >= 60 ? "negatif" : "nötr";
-  let action: AiCommentary["action"] = "İZLE";
-  if (direction === "bullish" && strength >= 75) action = "AL";
-  else if (direction === "bullish" && strength >= 55) action = "BEKLE";
-  else if (direction === "bearish" && strength >= 75) action = "SAT";
-  else if (direction === "bearish" && strength >= 55) action = "BEKLE";
-
-  const patternText = patterns.length > 0 ? `${patterns.map((p) => p.name).join(", ")} formasyonu` : "Formasyon";
-  const indText = indicators.length > 0 ? `${indicators.slice(0, 2).map((i) => `${i.name} ${i.value}`).join(" + ")}` : "indikatörler";
-  const newsText = news.length > 0 ? `${news.length} haber (${avgNewsSentiment > 10 ? "olumlu" : avgNewsSentiment < -10 ? "olumsuz" : "nötr"})` : "haber yok";
-
-    // S/R ve pozisyon hesapla (candles varsa)
-  let entryZone: string | undefined;
-  let target: string | undefined;
-  let stopLoss: string | undefined;
-  let riskReward: string | undefined;
-  let support: string | undefined;
-  let resistance: string | undefined;
-
-  if (candles && candles.length >= 30 && price !== undefined && price > 0) {
-    const sr = findSupportResistance(candles, price);
-    const pos = calculatePosition(price, direction, strength, sr.support, sr.resistance);
-
-    support = `$${sr.support.toFixed(sr.support > 100 ? 2 : 4)}`;
-    resistance = `$${sr.resistance.toFixed(sr.resistance > 100 ? 2 : 4)}`;
-    entryZone = pos.entryZone;
-    target = pos.target;
-    stopLoss = pos.stopLoss;
-    riskReward = pos.riskReward;
-  }
-
-  const result: AiCommentary = {
-    summary: `${displaySymbol} için ${patternText} + ${indText} uyumlu. ${newsText}. Fiyat ${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(2)}%.`,
-    impact, action, sentiment,
-    confidence: Math.min(100, Math.round(strength * 0.9 + Math.abs(avgNewsSentiment) * 0.1)),
-    source: "motor:rule-based",
-  };
-
-  if (entryZone) result.entryZone = entryZone;
-  if (target) result.target = target;
-  if (stopLoss) result.stopLoss = stopLoss;
-  if (riskReward) result.riskReward = riskReward;
-  if (support) result.support = support;
-  if (resistance) result.resistance = resistance;
-
-  return result;
-}
-
-async function generateWithOpenRouter(input: {
-  symbol: string; market: string; price: number; changePercent: number;
-  direction: "bullish" | "bearish" | "neutral"; strength: number;
-  indicators: IndicatorSignal[]; patterns: PatternSignal[]; news: NewsItem[];
-}): Promise<AiCommentary | null> {
-  if (!OPENROUTER_KEY) return null;
-  const newsText = input.news.length > 0
-    ? input.news.slice(0, 5).map((n, i) => `${i + 1}. [${n.source}] ${n.title}`).join("\n")
-    : "Haber bulunamadı.";
-
-  const prompt = `Finansal analist olarak bildirim metni hazırla.
-
-VARLIK: ${input.symbol} (${input.market})
-FİYAT: ${input.price.toFixed(4)} (${input.changePercent >= 0 ? "+" : ""}${input.changePercent.toFixed(2)}%)
-YÖN: ${input.direction} (güç: ${input.strength}/100)
-İndikatörler: ${input.indicators.map((i) => `${i.name}=${i.value}(${i.direction})`).join(", ")}
-Formasyonlar: ${input.patterns.map((p) => `${p.name}(${p.direction},${p.confidence}%)`).join(", ") || "yok"}
-HABERLER:
-${newsText}
-
-SADECE JSON döndür:
-{
-  "summary": "1-2 cümle Türkçe özet",
-  "impact": "pozitif" | "negatif" | "nötr",
-  "action": "AL" | "SAT" | "BEKLE" | "İZLE",
-  "sentiment": "korku" | "panik" | "nötr" | "açgözlülük" | "coşku",
-  "confidence": 0-100
-}`;
-
-  try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENROUTER_KEY}`,
-        "HTTP-Referer": "https://formasyon.ai",
-        "X-Title": "Formasyon AI",
-      },
-      body: JSON.stringify({
-        model: OPENROUTER_MODEL,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-        max_tokens: 300,
-      }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) return null;
-    const cleaned = content.replace(/```json\s*/g, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(cleaned) as Partial<AiCommentary>;
-    if (typeof parsed.summary !== "string" || !["pozitif", "negatif", "nötr"].includes(parsed.impact ?? "") || !["AL", "SAT", "BEKLE", "İZLE"].includes(parsed.action ?? "")) return null;
-    return {
-      summary: parsed.summary,
-      impact: parsed.impact as AiCommentary["impact"],
-      action: parsed.action as AiCommentary["action"],
-      sentiment: parsed.sentiment ?? "nötr",
-      confidence: Math.max(0, Math.min(100, Number(parsed.confidence ?? 70))),
-      source: `openrouter:${OPENROUTER_MODEL}`,
-    };
-  } catch { return null; }
-}
-
-async function generateCommentary(input: {
-  symbol: string; market: string; price: number; changePercent: number;
-  direction: "bullish" | "bearish" | "neutral"; strength: number;
-  indicators: IndicatorSignal[]; patterns: PatternSignal[]; news: NewsItem[];
-  candles?: Candle[] | undefined;
-}): Promise<AiCommentary> {
-  // 1. Önce AI dene (kota varsa)
-  let result = await generateWithOpenRouter(input);
-
-  // 2. AI başarısız → motor
-  if (!result) {
-    console.log("⚠️ AI başarısız → rule-based motor");
-    result = generateRuleBasedCommentary({
-      ...input,
-      price: input.price,
-      candles: input.candles,
-    });
-  }
-
-  return result;
-}
-// ==========================================================
-// SİNYAL SKORU (Formation-first)
-// ==========================================================
-
-function computeSignalScore(input: {
-  direction: "bullish" | "bearish" | "neutral";
-  changePercent: number;
-  indicators: IndicatorSignal[];
-  patterns: PatternSignal[];
-  news: NewsItem[];
-  isPriority?: boolean;
-}): SignalScoreResult {
-  const { direction, indicators, patterns, news, changePercent, isPriority = false } = input;
-
-  const sameDirPatterns = patterns.filter((p) => p.direction === direction);
-  const bestFormation = sameDirPatterns.reduce((max, p) => Math.max(max, p.confidence), 0);
-
-  if (sameDirPatterns.length === 0 || bestFormation < 60) {
-    return {
-      score: 0,
-      breakdown: { formation: 0, indicator: 0, news: 0, volume: 0, trend: 0 },
-      shouldNotify: false,
-      reason: "Net formasyon yok veya zayıf (<60)",
-      tier: "silent",
-    };
-  }
-
-  const sameDirIndicators = indicators.filter((i) => i.direction === direction);
-  const indicatorCount = sameDirIndicators.length;
-
-  if (indicatorCount < 2) {
-    return {
-      score: 0,
-      breakdown: { formation: bestFormation, indicator: indicatorCount * 20, news: 0, volume: 0, trend: 0 },
-      shouldNotify: false,
-      reason: `Yetersiz indikatör (${indicatorCount}/2)`,
-      tier: "silent",
-    };
-  }
-
-  const formationScore = clamp(bestFormation);
-  const avgIndicatorStrength = sameDirIndicators.reduce((a, b) => a + b.strength, 0) / indicatorCount;
-  const indicatorScore = clamp(avgIndicatorStrength * 0.7 + Math.min(indicatorCount - 2, 2) * 15);
-
-  const avgNewsSentiment = news.length > 0 ? news.reduce((a, b) => a + b.sentimentScore, 0) / news.length : 0;
-  const newsSupports =
-    (direction === "bullish" && avgNewsSentiment > 15) ||
-    (direction === "bearish" && avgNewsSentiment < -15);
-  const newsContradicts =
-    (direction === "bullish" && avgNewsSentiment < -40) ||
-    (direction === "bearish" && avgNewsSentiment > 40);
-
-  let newsScore = 50;
-  if (newsSupports) newsScore = clamp(50 + Math.abs(avgNewsSentiment) * 0.5);
-  if (newsContradicts) newsScore = 20;
-  if (news.length === 0) newsScore = 40;
-
-  const volumeIndicator = indicators.find((i) => i.name === "Hacim");
-  const volumeScore = volumeIndicator ? clamp(volumeIndicator.strength) : 40;
-
-  const adxIndicator = indicators.find((i) => i.name === "ADX");
-  const trendScore = adxIndicator ? clamp(Number(adxIndicator.value) * 1.5) : 40;
-
-  let finalScore =
-    formationScore * 0.4 +
-    indicatorScore * 0.25 +
-    newsScore * 0.2 +
-    volumeScore * 0.1 +
-    trendScore * 0.05;
-
-  if (bestFormation >= 85) finalScore += 5;
-  if ((direction === "bullish" && changePercent >= 3) || (direction === "bearish" && changePercent <= -3)) finalScore += 3;
-  if (Math.abs(avgNewsSentiment) >= 40 && newsSupports) finalScore += 5;
-
-  finalScore = clamp(Math.round(finalScore));
-
-  const thresholdCritical = 85;
-  const thresholdImportant = isPriority ? 55 : 60;
-  const thresholdWatch = isPriority ? 45 : 50;
-
-  let tier: SignalScoreResult["tier"] = "silent";
-  if (finalScore >= thresholdCritical) tier = "critical";
-  else if (finalScore >= thresholdImportant) tier = "important";
-  else if (finalScore >= thresholdWatch) tier = "watch";
-
-  const shouldNotify = tier === "critical" || tier === "important";
-
-  let reason = "";
-  if (shouldNotify) {
-    const parts = [`Formasyon ${bestFormation}%`, `${indicatorCount} indikatör uyumlu`];
-    if (news.length > 0 && newsSupports) parts.push(`Haber ${avgNewsSentiment > 0 ? "olumlu" : "olumsuz"}`);
-    else if (news.length === 0) parts.push("Haber yok");
-    reason = parts.join(" + ");
-  } else {
-    reason = `Skor düşük (${finalScore}/${thresholdImportant})`;
-  }
-
-  return {
-    score: finalScore,
-    breakdown: {
-      formation: Math.round(formationScore),
-      indicator: Math.round(indicatorScore),
-      news: Math.round(newsScore),
-      volume: Math.round(volumeScore),
-      trend: Math.round(trendScore),
-    },
-    shouldNotify,
-    reason,
-    tier,
-  };
+  return fresh;
 }
 
 // ==========================================================
-// VERİ ÇEKME
+// VERİ ÇEKME — BINANCE + YAHOO
 // ==========================================================
 
-async function getCryptoCandles(symbol: string): Promise<Candle[]> {
-  const cacheKey = `binance:${symbol}:1h`;
+async function getCryptoCandles(symbol: string, interval = "1h"): Promise<Candle[]> {
+  const cacheKey = `binance:${symbol}:${interval}`;
   const cached = await getFromCache<Candle[]>(cacheKey);
   if (cached && cached.length > 0) return cached;
   try {
-    const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&limit=200`);
+    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=200`;
+    const res = await fetch(url);
     if (!res.ok) return [];
     const raw = (await res.json()) as unknown[][];
     const candles: Candle[] = raw.map((k) => ({
-      time: Number(k[0]), open: Number(k[1]), high: Number(k[2]),
-      low: Number(k[3]), close: Number(k[4]), volume: Number(k[5]),
+      time: Number(k[0]),
+      open: Number(k[1]),
+      high: Number(k[2]),
+      low: Number(k[3]),
+      close: Number(k[4]),
+      volume: Number(k[5]),
     }));
-    await setToCache(cacheKey, candles, 10);
+    const ttl = interval === "1h" ? 10 : interval === "4h" ? 30 : 60;
+    await setToCache(cacheKey, candles, ttl);
     return candles;
   } catch { return []; }
 }
@@ -814,6 +465,59 @@ async function getStockCandles(symbol: string): Promise<Candle[]> {
     }).filter((c) => Number.isFinite(c.close)).slice(-100);
     await setToCache(cacheKey, candles, 60 * 24);
     return candles;
+  } catch { return []; }
+}
+
+async function getYahooCandles(symbol: string, interval: string): Promise<Candle[]> {
+  const cacheKey = `yahoo:${symbol}:${interval}`;
+  const cached = await getFromCache<Candle[]>(cacheKey);
+  if (cached && cached.length > 0) return cached;
+  try {
+    const range = interval === "1h" ? "3mo" : interval === "4h" ? "1y" : "2y";
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`;
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 FormasyonAI" } });
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      chart?: {
+        result?: Array<{
+          timestamp?: number[];
+          indicators?: {
+            quote?: Array<{
+              open?: (number | null)[];
+              high?: (number | null)[];
+              low?: (number | null)[];
+              close?: (number | null)[];
+              volume?: (number | null)[];
+            }>;
+          };
+        }>;
+      };
+    };
+    const result = data.chart?.result?.[0];
+    if (!result) return [];
+    const timestamps = result.timestamp ?? [];
+    const quote = result.indicators?.quote?.[0];
+    if (!quote) return [];
+    const candles: Candle[] = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      const open = quote.open?.[i];
+      const high = quote.high?.[i];
+      const low = quote.low?.[i];
+      const close = quote.close?.[i];
+      const volume = quote.volume?.[i];
+      if (open == null || close == null || !Number.isFinite(open) || !Number.isFinite(close)) continue;
+      candles.push({
+        time: (timestamps[i] ?? 0) * 1000,
+        open: Number(open),
+        high: Number(high ?? close),
+        low: Number(low ?? close),
+        close: Number(close),
+        volume: Number(volume ?? 0),
+      });
+    }
+    const sliced = candles.slice(-200);
+    await setToCache(cacheKey, sliced, interval === "1h" ? 30 : 60 * 6);
+    return sliced;
   } catch { return []; }
 }
 
@@ -843,7 +547,6 @@ const US_TOP_25 = ["AAPL","MSFT","NVDA","AMZN","GOOGL","META","AVGO","TSLA","BRK
 const ASIA_TOP_50 = ["7203.T","6758.T","9984.T","6861.T","8306.T","8035.T","9432.T","6501.T","6098.T","4063.T","4502.T","7267.T","9433.T","6902.T","2914.T","8058.T","8001.T","8031.T","8766.T","7974.T","005930.KS","000660.KS","035420.KS","035720.KS","005380.KS","012330.KS","105560.KS","055550.KS","051910.KS","066570.KS","0700.HK","9988.HK","3690.HK","0941.HK","1810.HK","1299.HK","2318.HK","0005.HK","9618.HK","1024.HK","RELIANCE.NS","TCS.NS","HDFCBANK.NS","INFY.NS","ICICIBANK.NS","BHARTIARTL.NS","ITC.NS","SBIN.NS","HINDUNILVR.NS","LT.NS"];
 
 const EUROPE_TOP_50 = ["SAP.DE","SIE.DE","ALV.DE","DTE.DE","AIR.PA","ASML.AS","NESN.SW","ROG.SW","NOVN.SW","NOVO-B.CO","SHEL.L","AZN.L","HSBA.L","ULVR.L","BP.L","GSK.L","RIO.L","LSEG.L","REL.L","VOD.L","LVMH.PA","TTE.PA","OR.PA","SAN.PA","MC.PA","SU.PA","BNP.PA","AI.PA","SAF.PA","CS.PA","ENEL.MI","ENI.MI","ISP.MI","UCG.MI","STLAM.MI","IBE.MC","ITX.MC","SAN.MC","BBVA.MC","REP.MC","INGA.AS","ADYEN.AS","PHIA.AS","HEIA.AS","UNA.AS","VOLV-B.ST","ERIC-B.ST","EQNR.OL","NOKIA.HE","DSV.V"];
-
 // ==========================================================
 // İNDİKATÖR ANALİZİ
 // ==========================================================
@@ -1076,6 +779,416 @@ function combineAnalysis(symbol: string, market: string, candles: Candle[], indi
 }
 
 // ==========================================================
+// MULTI-TIMEFRAME ANALİZ
+// ==========================================================
+
+type TimeframeResult = {
+  direction: TimeframeDir;
+  strength: number;
+};
+
+async function analyzeMultiTimeframe(
+  symbol: string,
+  market: string,
+): Promise<{
+  h1?: TimeframeResult;
+  h4?: TimeframeResult;
+  d1?: TimeframeResult;
+  aligned: boolean;
+  alignedCount: number;
+  dominantDir: TimeframeDir;
+  bonus: number;
+  summary: string;
+} | null> {
+  try {
+    let candlesH1: Candle[] = [];
+    let candlesH4: Candle[] = [];
+    let candlesD1: Candle[] = [];
+
+    if (market === "crypto") {
+      [candlesH1, candlesH4, candlesD1] = await Promise.all([
+        getCryptoCandles(symbol, "1h"),
+        getCryptoCandles(symbol, "4h"),
+        getCryptoCandles(symbol, "1d"),
+      ]);
+    } else if (market === "bist") {
+      [candlesH1, candlesH4, candlesD1] = await Promise.all([
+        getYahooCandles(symbol, "1h"),
+        getYahooCandles(symbol, "4h"),
+        getYahooCandles(symbol, "1d"),
+      ]);
+    } else {
+      return null;
+    }
+
+    const analyze = (candles: Candle[]): TimeframeResult | undefined => {
+      if (candles.length < 50) return undefined;
+      const indicators = analyzeIndicators(candles);
+      const patterns = analyzePatterns(candles);
+      const base = combineAnalysis(symbol, market, candles, indicators, patterns);
+      return { direction: base.overallDirection, strength: base.overallStrength };
+    };
+
+    const h1 = analyze(candlesH1);
+    const h4 = analyze(candlesH4);
+    const d1 = analyze(candlesD1);
+
+    const dirs = [h1?.direction, h4?.direction, d1?.direction].filter(
+      (d): d is TimeframeDir => d !== undefined,
+    );
+
+    const counts: Record<TimeframeDir, number> = { bullish: 0, bearish: 0, neutral: 0 };
+    for (const d of dirs) counts[d] = (counts[d] ?? 0) + 1;
+
+    const sorted = (Object.entries(counts) as Array<[TimeframeDir, number]>).sort(
+      (a, b) => b[1] - a[1],
+    );
+    const dominantDir: TimeframeDir = sorted[0]?.[0] ?? "neutral";
+    const alignedCount = counts[dominantDir] ?? 0;
+    const aligned = alignedCount === 3;
+
+    let bonus = 0;
+    if (alignedCount === 3 && dominantDir !== "neutral") bonus = 15;
+    else if (alignedCount === 2 && dominantDir !== "neutral") bonus = 5;
+    else if (alignedCount === 1 && dominantDir !== "neutral" && dirs.length === 3) bonus = -5;
+
+    const emoji = (d?: TimeframeDir) => d === "bullish" ? "🟢" : d === "bearish" ? "🔴" : "⚪";
+    const label = (d?: TimeframeDir) => d === "bullish" ? "Bullish" : d === "bearish" ? "Bearish" : d === "neutral" ? "Nötr" : "—";
+
+    const summary = [
+      `├─ 1h: ${emoji(h1?.direction)} ${label(h1?.direction)}`,
+      `├─ 4h: ${emoji(h4?.direction)} ${label(h4?.direction)}`,
+      `└─ 1d: ${emoji(d1?.direction)} ${label(d1?.direction)}`,
+      aligned && dominantDir !== "neutral"
+        ? `→ 3/3 UYUMLU (+${bonus} bonus)`
+        : `→ ${alignedCount}/3 uyumlu`,
+    ].join("\n");
+
+    return { h1, h4, d1, aligned, alignedCount, dominantDir, bonus, summary };
+  } catch (error) {
+    console.error(`Multi-timeframe hatası (${symbol}):`, error);
+    return null;
+  }
+}
+
+// ==========================================================
+// S/R + POZİSYON
+// ==========================================================
+
+function findSupportResistance(candles: Candle[], currentPrice: number): { support: number; resistance: number } {
+  if (candles.length < 30) {
+    return { support: currentPrice * 0.97, resistance: currentPrice * 1.03 };
+  }
+  const recent = candles.slice(-100);
+  const lows = recent.map((c) => c.low);
+  const highs = recent.map((c) => c.high);
+  const belowPrice = lows.filter((l) => l < currentPrice * 0.995);
+  const support = belowPrice.length > 0 ? belowPrice.reduce((a, b) => a + b, 0) / belowPrice.length : currentPrice * 0.97;
+  const abovePrice = highs.filter((h) => h > currentPrice * 1.005);
+  const resistance = abovePrice.length > 0 ? abovePrice.reduce((a, b) => a + b, 0) / abovePrice.length : currentPrice * 1.03;
+  return { support, resistance };
+}
+
+function calculatePosition(
+  currentPrice: number,
+  direction: "bullish" | "bearish" | "neutral",
+  support: number,
+  resistance: number,
+): { entryZone: string; target: string; stopLoss: string; riskReward: string } {
+  const fmt = (n: number) => n.toFixed(n > 100 ? 2 : 4);
+  if (direction === "bullish") {
+    const entryMin = currentPrice * 0.995;
+    const entryMax = currentPrice * 1.005;
+    const targetPrice = Math.min(resistance, currentPrice * 1.05);
+    const stopPrice = Math.max(support, currentPrice * 0.97);
+    const reward = targetPrice - currentPrice;
+    const risk = currentPrice - stopPrice;
+    const rr = risk > 0 ? (reward / risk).toFixed(1) : "1.0";
+    return {
+      entryZone: `$${fmt(entryMin)} - $${fmt(entryMax)}`,
+      target: `$${fmt(targetPrice)} (+${((targetPrice / currentPrice - 1) * 100).toFixed(1)}%)`,
+      stopLoss: `$${fmt(stopPrice)} (-${((1 - stopPrice / currentPrice) * 100).toFixed(1)}%)`,
+      riskReward: `1:${rr}`,
+    };
+  } else if (direction === "bearish") {
+    const entryMin = currentPrice * 0.995;
+    const entryMax = currentPrice * 1.005;
+    const targetPrice = Math.max(support, currentPrice * 0.95);
+    const stopPrice = Math.min(resistance, currentPrice * 1.03);
+    const reward = currentPrice - targetPrice;
+    const risk = stopPrice - currentPrice;
+    const rr = risk > 0 ? (reward / risk).toFixed(1) : "1.0";
+    return {
+      entryZone: `$${fmt(entryMin)} - $${fmt(entryMax)}`,
+      target: `$${fmt(targetPrice)} (-${((1 - targetPrice / currentPrice) * 100).toFixed(1)}%)`,
+      stopLoss: `$${fmt(stopPrice)} (+${((stopPrice / currentPrice - 1) * 100).toFixed(1)}%)`,
+      riskReward: `1:${rr}`,
+    };
+  }
+  return { entryZone: "Bekle", target: "Belirsiz", stopLoss: "Belirsiz", riskReward: "—" };
+}
+
+// ==========================================================
+// AI YORUM
+// ==========================================================
+
+function generateRuleBasedCommentary(input: {
+  symbol: string;
+  direction: "bullish" | "bearish" | "neutral";
+  strength: number;
+  patterns: PatternSignal[];
+  indicators: IndicatorSignal[];
+  news: NewsItem[];
+  changePercent: number;
+  candles?: Candle[] | undefined;
+  price?: number | undefined;
+}): AiCommentary {
+  const { direction, strength, patterns, indicators, news, symbol, changePercent, candles, price } = input;
+  const displaySymbol = symbol.replace("USDT", "").replace(/\.(IS|US|T|KS|HK|NS|DE|PA|L|MI|MC|AS|ST|OL|HE|SW|CO|V)$/, "");
+  const avgNewsSentiment = news.length > 0 ? news.reduce((a, b) => a + b.sentimentScore, 0) / news.length : 0;
+
+  let sentiment = "nötr";
+  if (changePercent <= -8) sentiment = "panik";
+  else if (changePercent <= -5 || avgNewsSentiment <= -30) sentiment = "korku";
+  else if (changePercent >= 8) sentiment = "coşku";
+  else if (changePercent >= 5 || avgNewsSentiment >= 30) sentiment = "açgözlülük";
+
+  const impact: AiCommentary["impact"] =
+    direction === "bullish" && strength >= 60 ? "pozitif"
+    : direction === "bearish" && strength >= 60 ? "negatif"
+    : "nötr";
+
+  let action: AiCommentary["action"] = "İZLE";
+  if (direction === "bullish" && strength >= 75) action = "AL";
+  else if (direction === "bullish" && strength >= 55) action = "BEKLE";
+  else if (direction === "bearish" && strength >= 75) action = "SAT";
+  else if (direction === "bearish" && strength >= 55) action = "BEKLE";
+
+  const patternText = patterns.length > 0 ? `${patterns.map((p) => p.name).join(", ")} formasyonu` : "Formasyon";
+  const indText = indicators.length > 0 ? `${indicators.slice(0, 2).map((i) => `${i.name} ${i.value}`).join(" + ")}` : "indikatörler";
+  const newsText = news.length > 0 ? `${news.length} haber (${avgNewsSentiment > 10 ? "olumlu" : avgNewsSentiment < -10 ? "olumsuz" : "nötr"})` : "haber yok";
+
+  const result: AiCommentary = {
+    summary: `${displaySymbol} için ${patternText} + ${indText} uyumlu. ${newsText}. Fiyat ${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(2)}%.`,
+    impact, action, sentiment,
+    confidence: Math.min(100, Math.round(strength * 0.9 + Math.abs(avgNewsSentiment) * 0.1)),
+    source: "motor:rule-based",
+  };
+
+  if (candles && candles.length >= 30 && price !== undefined && price > 0) {
+    const sr = findSupportResistance(candles, price);
+    const pos = calculatePosition(price, direction, sr.support, sr.resistance);
+    result.support = `$${sr.support.toFixed(sr.support > 100 ? 2 : 4)}`;
+    result.resistance = `$${sr.resistance.toFixed(sr.resistance > 100 ? 2 : 4)}`;
+    result.entryZone = pos.entryZone;
+    result.target = pos.target;
+    result.stopLoss = pos.stopLoss;
+    result.riskReward = pos.riskReward;
+  }
+
+  return result;
+}
+
+async function generateWithOpenRouter(input: {
+  symbol: string; market: string; price: number; changePercent: number;
+  direction: "bullish" | "bearish" | "neutral"; strength: number;
+  indicators: IndicatorSignal[]; patterns: PatternSignal[]; news: NewsItem[];
+}): Promise<AiCommentary | null> {
+  if (!OPENROUTER_KEY) return null;
+  const newsText = input.news.length > 0
+    ? input.news.slice(0, 5).map((n, i) => `${i + 1}. [${n.source}] ${n.title}`).join("\n")
+    : "Haber bulunamadı.";
+
+  const prompt = `Finansal analist olarak bildirim metni hazırla.
+
+VARLIK: ${input.symbol} (${input.market})
+FİYAT: ${input.price.toFixed(4)} (${input.changePercent >= 0 ? "+" : ""}${input.changePercent.toFixed(2)}%)
+YÖN: ${input.direction} (güç: ${input.strength}/100)
+İndikatörler: ${input.indicators.map((i) => `${i.name}=${i.value}(${i.direction})`).join(", ")}
+Formasyonlar: ${input.patterns.map((p) => `${p.name}(${p.direction},${p.confidence}%)`).join(", ") || "yok"}
+HABERLER:
+${newsText}
+
+SADECE JSON döndür:
+{
+  "summary": "1-2 cümle Türkçe özet",
+  "impact": "pozitif" | "negatif" | "nötr",
+  "action": "AL" | "SAT" | "BEKLE" | "İZLE",
+  "sentiment": "korku" | "panik" | "nötr" | "açgözlülük" | "coşku",
+  "confidence": 0-100
+}`;
+
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENROUTER_KEY}`,
+        "HTTP-Referer": "https://formasyon.ai",
+        "X-Title": "Formasyon AI",
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.3,
+        max_tokens: 300,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return null;
+    const cleaned = content.replace(/```json\s*/g, "").replace(/```/g, "").trim();
+    const parsed = JSON.parse(cleaned) as Partial<AiCommentary>;
+    if (typeof parsed.summary !== "string" || !["pozitif", "negatif", "nötr"].includes(parsed.impact ?? "") || !["AL", "SAT", "BEKLE", "İZLE"].includes(parsed.action ?? "")) return null;
+    return {
+      summary: parsed.summary,
+      impact: parsed.impact as AiCommentary["impact"],
+      action: parsed.action as AiCommentary["action"],
+      sentiment: parsed.sentiment ?? "nötr",
+      confidence: Math.max(0, Math.min(100, Number(parsed.confidence ?? 70))),
+      source: `openrouter:${OPENROUTER_MODEL}`,
+    };
+  } catch { return null; }
+}
+
+async function generateCommentary(input: {
+  symbol: string; market: string; price: number; changePercent: number;
+  direction: "bullish" | "bearish" | "neutral"; strength: number;
+  indicators: IndicatorSignal[]; patterns: PatternSignal[]; news: NewsItem[];
+  candles?: Candle[] | undefined;
+}): Promise<AiCommentary> {
+  let result = await generateWithOpenRouter(input);
+  if (!result) {
+    console.log("⚠️ AI başarısız → rule-based motor");
+    result = generateRuleBasedCommentary({
+      symbol: input.symbol,
+      direction: input.direction,
+      strength: input.strength,
+      patterns: input.patterns,
+      indicators: input.indicators,
+      news: input.news,
+      changePercent: input.changePercent,
+      candles: input.candles,
+      price: input.price,
+    });
+  }
+  return result;
+}
+
+// ==========================================================
+// SİNYAL SKORU
+// ==========================================================
+
+function computeSignalScore(input: {
+  direction: "bullish" | "bearish" | "neutral";
+  changePercent: number;
+  indicators: IndicatorSignal[];
+  patterns: PatternSignal[];
+  news: NewsItem[];
+  isPriority?: boolean;
+}): SignalScoreResult {
+  const { direction, indicators, patterns, news, changePercent, isPriority = false } = input;
+
+  const sameDirPatterns = patterns.filter((p) => p.direction === direction);
+  const bestFormation = sameDirPatterns.reduce((max, p) => Math.max(max, p.confidence), 0);
+
+  if (sameDirPatterns.length === 0 || bestFormation < 60) {
+    return {
+      score: 0,
+      breakdown: { formation: 0, indicator: 0, news: 0, volume: 0, trend: 0 },
+      shouldNotify: false,
+      reason: "Net formasyon yok veya zayıf (<60)",
+      tier: "silent",
+    };
+  }
+
+  const sameDirIndicators = indicators.filter((i) => i.direction === direction);
+  const indicatorCount = sameDirIndicators.length;
+
+  if (indicatorCount < 2) {
+    return {
+      score: 0,
+      breakdown: { formation: bestFormation, indicator: indicatorCount * 20, news: 0, volume: 0, trend: 0 },
+      shouldNotify: false,
+      reason: `Yetersiz indikatör (${indicatorCount}/2)`,
+      tier: "silent",
+    };
+  }
+
+  const formationScore = clamp(bestFormation);
+  const avgIndicatorStrength = sameDirIndicators.reduce((a, b) => a + b.strength, 0) / indicatorCount;
+  const indicatorScore = clamp(avgIndicatorStrength * 0.7 + Math.min(indicatorCount - 2, 2) * 15);
+
+  const avgNewsSentiment = news.length > 0 ? news.reduce((a, b) => a + b.sentimentScore, 0) / news.length : 0;
+  const newsSupports =
+    (direction === "bullish" && avgNewsSentiment > 15) ||
+    (direction === "bearish" && avgNewsSentiment < -15);
+  const newsContradicts =
+    (direction === "bullish" && avgNewsSentiment < -40) ||
+    (direction === "bearish" && avgNewsSentiment > 40);
+
+  let newsScore = 50;
+  if (newsSupports) newsScore = clamp(50 + Math.abs(avgNewsSentiment) * 0.5);
+  if (newsContradicts) newsScore = 20;
+  if (news.length === 0) newsScore = 40;
+
+  const volumeIndicator = indicators.find((i) => i.name === "Hacim");
+  const volumeScore = volumeIndicator ? clamp(volumeIndicator.strength) : 40;
+  const adxIndicator = indicators.find((i) => i.name === "ADX");
+  const trendScore = adxIndicator ? clamp(Number(adxIndicator.value) * 1.5) : 40;
+
+  let finalScore =
+    formationScore * 0.4 +
+    indicatorScore * 0.25 +
+    newsScore * 0.2 +
+    volumeScore * 0.1 +
+    trendScore * 0.05;
+
+  if (bestFormation >= 85) finalScore += 5;
+  if ((direction === "bullish" && changePercent >= 3) || (direction === "bearish" && changePercent <= -3)) finalScore += 3;
+  if (Math.abs(avgNewsSentiment) >= 40 && newsSupports) finalScore += 5;
+
+  finalScore = clamp(Math.round(finalScore));
+
+  const thresholdCritical = 85;
+  const thresholdImportant = isPriority ? 55 : 60;
+  const thresholdWatch = isPriority ? 45 : 50;
+
+  let tier: SignalScoreResult["tier"] = "silent";
+  if (finalScore >= thresholdCritical) tier = "critical";
+  else if (finalScore >= thresholdImportant) tier = "important";
+  else if (finalScore >= thresholdWatch) tier = "watch";
+
+  const shouldNotify = tier === "critical" || tier
+   === "important";
+
+  let reason = "";
+  if (shouldNotify) {
+    const parts = [`Formasyon ${bestFormation}%`, `${indicatorCount} indikatör uyumlu`];
+    if (news.length > 0 && newsSupports) parts.push(`Haber ${avgNewsSentiment > 0 ? "olumlu" : "olumsuz"}`);
+    else if (news.length === 0) parts.push("Haber yok");
+    reason = parts.join(" + ");
+  } else {
+    reason = `Skor düşük (${finalScore}/${thresholdImportant})`;
+  }
+
+  return {
+    score: finalScore,
+    breakdown: {
+      formation: Math.round(formationScore),
+      indicator: Math.round(indicatorScore),
+      news: Math.round(newsScore),
+      volume: Math.round(volumeScore),
+      trend: Math.round(trendScore),
+    },
+    shouldNotify,
+    reason,
+    tier,
+  };
+}
+
+// ==========================================================
 // KULLANICI VERİLERİ
 // ==========================================================
 
@@ -1172,7 +1285,7 @@ async function sendNotification(params: {
         priority, severity, title, message, reason,
         event_key: eventKey, notification_type: type,
         confidence: ai.confidence, is_global: isGlobal ?? false,
-                signal_score: signalScore.score,
+        signal_score: signalScore.score,
         signal_breakdown: signalScore.breakdown,
         ai_summary: ai.summary, ai_impact: ai.impact,
         ai_action: ai.action, ai_sentiment: ai.sentiment,
@@ -1185,7 +1298,13 @@ async function sendNotification(params: {
         ai_support: ai.support ?? null,
         ai_resistance: ai.resistance ?? null,
         news_items: analysis.news ?? [],
-        data: { indicators: analysis.indicators, patterns: analysis.patterns, direction: analysis.overallDirection, changePercent: analysis.changePercent },
+        data: {
+          indicators: analysis.indicators,
+          patterns: analysis.patterns,
+          direction: analysis.overallDirection,
+          changePercent: analysis.changePercent,
+          timeframe: analysis.timeframeData ?? null,
+        },
       }),
     });
     if (!res.ok) console.error(`Bildirim hatası (${symbol}):`, res.status, await res.text());
@@ -1201,7 +1320,7 @@ async function sendNotification(params: {
 
 async function analyzeSymbol(symbol: string, market: string): Promise<AnalysisResult | null> {
   try {
-    const candles = market === "crypto" ? await getCryptoCandles(symbol) : await getStockCandles(symbol);
+    const candles = market === "crypto" ? await getCryptoCandles(symbol, "1h") : await getStockCandles(symbol);
     if (candles.length < 50) return null;
     const indicators = analyzeIndicators(candles);
     const patterns = analyzePatterns(candles);
@@ -1210,7 +1329,6 @@ async function analyzeSymbol(symbol: string, market: string): Promise<AnalysisRe
 
     let news: NewsItem[] = [];
     if (baseResult.isImportant) {
-      // Kullanıcılar bu coini takip ediyor mu?
       const users = await getUsersForSymbol(market, symbol);
       const isPriorityTracked = users.some((u) => u.type === "priority");
       news = await getNewsForSymbol(market, symbol, isPriorityTracked);
@@ -1281,11 +1399,10 @@ export default async function handler(request: RequestLike, response: ResponseLi
       if (!assets.some((a) => a.symbol === c.symbol && a.market === c.market)) assets.push({ symbol: c.symbol, market: c.market });
     }
 
-    // LIMIT / OFFSET uygula (parçalama için)
     let finalAssets = assets;
     if (limitParam > 0) {
       finalAssets = assets.slice(offsetParam, offsetParam + limitParam);
-      console.log(`🔢 Limit uygulandı: offset=${offsetParam}, limit=${limitParam}, sonuç=${finalAssets.length}`);
+      console.log(`🔢 Limit: offset=${offsetParam}, limit=${limitParam}, sonuç=${finalAssets.length}`);
     }
 
     console.log(`📊 ${finalAssets.length} varlık taranacak.`);
@@ -1300,6 +1417,36 @@ export default async function handler(request: RequestLike, response: ResponseLi
         const users = await getUsersForSymbol(result.market, result.symbol);
         const hasPriorityUser = users.some((u) => u.type === "priority");
 
+        // Multi-timeframe analiz (sadece priority)
+        let mtfBonus = 0;
+        let mtfSummary = "";
+        if (hasPriorityUser && result.market === "crypto") {
+          const mtf = await analyzeMultiTimeframe(result.symbol, result.market);
+          if (mtf) {
+            mtfBonus = mtf.bonus;
+            mtfSummary = mtf.summary;
+            result.timeframeData = {
+              h1: mtf.h1?.direction ?? "neutral",
+              h4: mtf.h4?.direction ?? "neutral",
+              d1: mtf.d1?.direction ?? "neutral",
+              aligned: mtf.aligned,
+            };
+          }
+        } else if (hasPriorityUser && result.market === "bist") {
+          const mtf = await analyzeMultiTimeframe(result.symbol, result.market);
+          if (mtf) {
+            mtfBonus = mtf.bonus;
+            mtfSummary = mtf.summary;
+            result.timeframeData = {
+              h1: mtf.h1?.direction ?? "neutral",
+              h4: mtf.h4?.direction ?? "neutral",
+              d1: mtf.d1?.direction ?? "neutral",
+              aligned: mtf.aligned,
+            };
+          }
+        }
+
+        // Signal score hesapla
         const signalScore = computeSignalScore({
           direction: result.overallDirection,
           changePercent: result.changePercent,
@@ -1308,6 +1455,21 @@ export default async function handler(request: RequestLike, response: ResponseLi
           news: result.news ?? [],
           isPriority: hasPriorityUser,
         });
+
+        // Multi-timeframe bonusunu ekle
+        if (mtfBonus !== 0) {
+          signalScore.score = Math.max(0, Math.min(100, signalScore.score + mtfBonus));
+          if (mtfBonus > 0) signalScore.reason += ` + MTF(+${mtfBonus})`;
+          else if (mtfBonus < 0) signalScore.reason += ` - MTF(${mtfBonus})`;
+
+          // Bonus sonrası tier'ı yeniden hesapla
+          if (signalScore.score >= 85) signalScore.tier = "critical";
+          else if (signalScore.score >= (hasPriorityUser ? 55 : 60)) signalScore.tier = "important";
+          else if (signalScore.score >= (hasPriorityUser ? 45 : 50)) signalScore.tier = "watch";
+          else signalScore.tier = "silent";
+          signalScore.shouldNotify = signalScore.tier === "critical" || signalScore.tier === "important";
+        }
+
         result.signalScore = signalScore;
 
         if (!signalScore.shouldNotify) {
@@ -1315,18 +1477,28 @@ export default async function handler(request: RequestLike, response: ResponseLi
           continue;
         }
 
-                const ai = await generateCommentary({
+        const ai = await generateCommentary({
           symbol: result.symbol, market: result.market, price: result.price,
           changePercent: result.changePercent, direction: result.overallDirection,
           strength: result.overallStrength, indicators: result.indicators,
           patterns: result.patterns, news: result.news ?? [],
-          candles: result.candles,        // ⬅️ YENİ EKLENEN SATIR
+          candles: result.candles,
         });
+
+        // Multi-timeframe özetini AI yorumuna ekle
+        if (mtfSummary) {
+          ai.summary = `${ai.summary}\n\n📊 TIMEFRAME:\n${mtfSummary}`;
+          if (mtfBonus > 0) ai.confidence = Math.min(100, ai.confidence + mtfBonus);
+        }
+        if (result.timeframeData) {
+          ai.timeframe = result.timeframeData;
+        }
+
         result.ai = ai;
         console.log(`🤖 AI (${ai.source}): ${result.symbol} → ${ai.action}`);
 
         for (const user of users) {
-         if (await isOnCooldown(user.user_id, result.symbol, result.market, user.type)) continue;
+          if (await isOnCooldown(user.user_id, result.symbol, result.market, user.type)) continue;
           await sendNotification({ userId: user.user_id, market: result.market, symbol: result.symbol, type: user.type, analysis: result, isGlobal: false });
           totalNotifications++;
         }
