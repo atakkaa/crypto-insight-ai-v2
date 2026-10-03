@@ -1,4 +1,4 @@
-// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v6 (Multi-Timeframe)
+// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v7 (Multi-Timeframe + Priority)
 
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
 
@@ -72,18 +72,18 @@ type AiCommentary = {
   sentiment: string;
   confidence: number;
   source: string;
-  entryZone?: string;
-  target?: string;
-  stopLoss?: string;
-  riskReward?: string;
-  support?: string;
-  resistance?: string;
+  entryZone?: string | undefined;
+  target?: string | undefined;
+  stopLoss?: string | undefined;
+  riskReward?: string | undefined;
+  support?: string | undefined;
+  resistance?: string | undefined;
   timeframe?: {
     h1: TimeframeDir;
     h4: TimeframeDir;
     d1: TimeframeDir;
     aligned: boolean;
-  };
+  } | undefined;
 };
 
 type SignalScoreResult = {
@@ -117,7 +117,7 @@ type AnalysisResult = {
     h4: TimeframeDir;
     d1: TimeframeDir;
     aligned: boolean;
-  };
+  } | undefined;
   signalScore?: SignalScoreResult;
   ai?: AiCommentary;
 };
@@ -203,19 +203,8 @@ function getCoinName(symbol: string): string {
   return COIN_NAME_MAP[base] ?? base;
 }
 
-const POSITIVE_WORDS = [
-  "rally", "surge", "soar", "bullish", "gain", "rise", "jump", "breakout",
-  "adoption", "approval", "partnership", "upgrade", "record", "high", "boost",
-  "launch", "listing", "etf", "inflow", "accumulate", "buy", "support",
-  "yükseliş", "rekor", "artış", "olumlu", "güçlü", "destek", "onay", "anlaşma",
-];
-
-const NEGATIVE_WORDS = [
-  "crash", "plunge", "drop", "bearish", "fall", "decline", "dump", "hack",
-  "ban", "lawsuit", "sec", "investigation", "fraud", "warning", "risk", "low",
-  "sell", "outflow", "liquidat", "exploit", "scam", "fear",
-  "düşüş", "çöküş", "kayıp", "olumsuz", "risk", "yasak", "soruşturma", "uyarı",
-];
+const POSITIVE_WORDS = ["rally","surge","soar","bullish","gain","rise","jump","breakout","adoption","approval","partnership","upgrade","record","high","boost","launch","listing","etf","inflow","accumulate","buy","support","yükseliş","rekor","artış","olumlu","güçlü","destek","onay","anlaşma"];
+const NEGATIVE_WORDS = ["crash","plunge","drop","bearish","fall","decline","dump","hack","ban","lawsuit","sec","investigation","fraud","warning","risk","low","sell","outflow","liquidat","exploit","scam","fear","düşüş","çöküş","kayıp","olumsuz","risk","yasak","soruşturma","uyarı"];
 
 function lexiconSentiment(text: string): { sentiment: "pozitif" | "negatif" | "nötr"; score: number } {
   const lower = text.toLowerCase();
@@ -418,7 +407,7 @@ async function getNewsForSymbol(market: string, symbol: string, isPriority = fal
 }
 
 // ==========================================================
-// VERİ ÇEKME — BINANCE + YAHOO
+// VERİ ÇEKME — BINANCE + STOOQ + YAHOO
 // ==========================================================
 
 async function getCryptoCandles(symbol: string, interval = "1h"): Promise<Candle[]> {
@@ -478,20 +467,7 @@ async function getYahooCandles(symbol: string, interval: string): Promise<Candle
     const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 FormasyonAI" } });
     if (!res.ok) return [];
     const data = (await res.json()) as {
-      chart?: {
-        result?: Array<{
-          timestamp?: number[];
-          indicators?: {
-            quote?: Array<{
-              open?: (number | null)[];
-              high?: (number | null)[];
-              low?: (number | null)[];
-              close?: (number | null)[];
-              volume?: (number | null)[];
-            }>;
-          };
-        }>;
-      };
+      chart?: { result?: Array<{ timestamp?: number[]; indicators?: { quote?: Array<{ open?: (number|null)[]; high?: (number|null)[]; low?: (number|null)[]; close?: (number|null)[]; volume?: (number|null)[]; }>; }; }>; };
     };
     const result = data.chart?.result?.[0];
     if (!result) return [];
@@ -501,9 +477,9 @@ async function getYahooCandles(symbol: string, interval: string): Promise<Candle
     const candles: Candle[] = [];
     for (let i = 0; i < timestamps.length; i++) {
       const open = quote.open?.[i];
+      const close = quote.close?.[i];
       const high = quote.high?.[i];
       const low = quote.low?.[i];
-      const close = quote.close?.[i];
       const volume = quote.volume?.[i];
       if (open == null || close == null || !Number.isFinite(open) || !Number.isFinite(close)) continue;
       candles.push({
@@ -547,6 +523,7 @@ const US_TOP_25 = ["AAPL","MSFT","NVDA","AMZN","GOOGL","META","AVGO","TSLA","BRK
 const ASIA_TOP_50 = ["7203.T","6758.T","9984.T","6861.T","8306.T","8035.T","9432.T","6501.T","6098.T","4063.T","4502.T","7267.T","9433.T","6902.T","2914.T","8058.T","8001.T","8031.T","8766.T","7974.T","005930.KS","000660.KS","035420.KS","035720.KS","005380.KS","012330.KS","105560.KS","055550.KS","051910.KS","066570.KS","0700.HK","9988.HK","3690.HK","0941.HK","1810.HK","1299.HK","2318.HK","0005.HK","9618.HK","1024.HK","RELIANCE.NS","TCS.NS","HDFCBANK.NS","INFY.NS","ICICIBANK.NS","BHARTIARTL.NS","ITC.NS","SBIN.NS","HINDUNILVR.NS","LT.NS"];
 
 const EUROPE_TOP_50 = ["SAP.DE","SIE.DE","ALV.DE","DTE.DE","AIR.PA","ASML.AS","NESN.SW","ROG.SW","NOVN.SW","NOVO-B.CO","SHEL.L","AZN.L","HSBA.L","ULVR.L","BP.L","GSK.L","RIO.L","LSEG.L","REL.L","VOD.L","LVMH.PA","TTE.PA","OR.PA","SAN.PA","MC.PA","SU.PA","BNP.PA","AI.PA","SAF.PA","CS.PA","ENEL.MI","ENI.MI","ISP.MI","UCG.MI","STLAM.MI","IBE.MC","ITX.MC","SAN.MC","BBVA.MC","REP.MC","INGA.AS","ADYEN.AS","PHIA.AS","HEIA.AS","UNA.AS","VOLV-B.ST","ERIC-B.ST","EQNR.OL","NOKIA.HE","DSV.V"];
+
 // ==========================================================
 // İNDİKATÖR ANALİZİ
 // ==========================================================
@@ -724,7 +701,7 @@ function analyzePatterns(candles: Candle[]): PatternSignal[] {
 }
 
 // ==========================================================
-// ANALİZ BİRLEŞTİR (Formation-first)
+// ANALİZ BİRLEŞTİR
 // ==========================================================
 
 function combineAnalysis(symbol: string, market: string, candles: Candle[], indicators: IndicatorSignal[], patterns: PatternSignal[]): AnalysisResult {
@@ -782,18 +759,13 @@ function combineAnalysis(symbol: string, market: string, candles: Candle[], indi
 // MULTI-TIMEFRAME ANALİZ
 // ==========================================================
 
-type TimeframeResult = {
-  direction: TimeframeDir;
-  strength: number;
-};
-
 async function analyzeMultiTimeframe(
   symbol: string,
   market: string,
 ): Promise<{
-  h1?: TimeframeResult;
-  h4?: TimeframeResult;
-  d1?: TimeframeResult;
+  h1?: { direction: TimeframeDir; strength: number };
+  h4?: { direction: TimeframeDir; strength: number };
+  d1?: { direction: TimeframeDir; strength: number };
   aligned: boolean;
   alignedCount: number;
   dominantDir: TimeframeDir;
@@ -821,7 +793,7 @@ async function analyzeMultiTimeframe(
       return null;
     }
 
-    const analyze = (candles: Candle[]): TimeframeResult | undefined => {
+    const analyze = (candles: Candle[]): { direction: TimeframeDir; strength: number } | undefined => {
       if (candles.length < 50) return undefined;
       const indicators = analyzeIndicators(candles);
       const patterns = analyzePatterns(candles);
@@ -837,20 +809,20 @@ async function analyzeMultiTimeframe(
       (d): d is TimeframeDir => d !== undefined,
     );
 
+    if (dirs.length === 0) return null;
+
     const counts: Record<TimeframeDir, number> = { bullish: 0, bearish: 0, neutral: 0 };
     for (const d of dirs) counts[d] = (counts[d] ?? 0) + 1;
 
-    const sorted = (Object.entries(counts) as Array<[TimeframeDir, number]>).sort(
-      (a, b) => b[1] - a[1],
-    );
+    const sorted = (Object.entries(counts) as Array<[TimeframeDir, number]>).sort((a, b) => b[1] - a[1]);
     const dominantDir: TimeframeDir = sorted[0]?.[0] ?? "neutral";
     const alignedCount = counts[dominantDir] ?? 0;
-    const aligned = alignedCount === 3;
+    const aligned = alignedCount === 3 && dominantDir !== "neutral";
 
     let bonus = 0;
-    if (alignedCount === 3 && dominantDir !== "neutral") bonus = 15;
+    if (aligned) bonus = 15;
     else if (alignedCount === 2 && dominantDir !== "neutral") bonus = 5;
-    else if (alignedCount === 1 && dominantDir !== "neutral" && dirs.length === 3) bonus = -5;
+    else if (dirs.length === 3 && dominantDir !== "neutral" && counts[dominantDir] === 1) bonus = -5;
 
     const emoji = (d?: TimeframeDir) => d === "bullish" ? "🟢" : d === "bearish" ? "🔴" : "⚪";
     const label = (d?: TimeframeDir) => d === "bullish" ? "Bullish" : d === "bearish" ? "Bearish" : d === "neutral" ? "Nötr" : "—";
@@ -859,9 +831,7 @@ async function analyzeMultiTimeframe(
       `├─ 1h: ${emoji(h1?.direction)} ${label(h1?.direction)}`,
       `├─ 4h: ${emoji(h4?.direction)} ${label(h4?.direction)}`,
       `└─ 1d: ${emoji(d1?.direction)} ${label(d1?.direction)}`,
-      aligned && dominantDir !== "neutral"
-        ? `→ 3/3 UYUMLU (+${bonus} bonus)`
-        : `→ ${alignedCount}/3 uyumlu`,
+      aligned ? `→ 3/3 UYUMLU (+${bonus} bonus)` : `→ ${alignedCount}/3 uyumlu`,
     ].join("\n");
 
     return { h1, h4, d1, aligned, alignedCount, dominantDir, bonus, summary };
@@ -1160,8 +1130,7 @@ function computeSignalScore(input: {
   else if (finalScore >= thresholdImportant) tier = "important";
   else if (finalScore >= thresholdWatch) tier = "watch";
 
-  const shouldNotify = tier === "critical" || tier
-   === "important";
+  const shouldNotify = tier === "critical" || tier === "important";
 
   let reason = "";
   if (shouldNotify) {
@@ -1417,10 +1386,10 @@ export default async function handler(request: RequestLike, response: ResponseLi
         const users = await getUsersForSymbol(result.market, result.symbol);
         const hasPriorityUser = users.some((u) => u.type === "priority");
 
-        // Multi-timeframe analiz (sadece priority)
+        // 1️⃣ ÖNCE MULTI-TIMEFRAME (sadece priority için)
         let mtfBonus = 0;
         let mtfSummary = "";
-        if (hasPriorityUser && result.market === "crypto") {
+        if (hasPriorityUser) {
           const mtf = await analyzeMultiTimeframe(result.symbol, result.market);
           if (mtf) {
             mtfBonus = mtf.bonus;
@@ -1431,22 +1400,11 @@ export default async function handler(request: RequestLike, response: ResponseLi
               d1: mtf.d1?.direction ?? "neutral",
               aligned: mtf.aligned,
             };
-          }
-        } else if (hasPriorityUser && result.market === "bist") {
-          const mtf = await analyzeMultiTimeframe(result.symbol, result.market);
-          if (mtf) {
-            mtfBonus = mtf.bonus;
-            mtfSummary = mtf.summary;
-            result.timeframeData = {
-              h1: mtf.h1?.direction ?? "neutral",
-              h4: mtf.h4?.direction ?? "neutral",
-              d1: mtf.d1?.direction ?? "neutral",
-              aligned: mtf.aligned,
-            };
+            console.log(`📊 MTF ${result.symbol}: ${mtf.alignedCount}/3 uyumlu, bonus=${mtfBonus}`);
           }
         }
 
-        // Signal score hesapla
+        // 2️⃣ SIGNAL SCORE
         const signalScore = computeSignalScore({
           direction: result.overallDirection,
           changePercent: result.changePercent,
@@ -1456,13 +1414,12 @@ export default async function handler(request: RequestLike, response: ResponseLi
           isPriority: hasPriorityUser,
         });
 
-        // Multi-timeframe bonusunu ekle
+        // 3️⃣ MTF BONUSUNU UYGULA
         if (mtfBonus !== 0) {
           signalScore.score = Math.max(0, Math.min(100, signalScore.score + mtfBonus));
           if (mtfBonus > 0) signalScore.reason += ` + MTF(+${mtfBonus})`;
           else if (mtfBonus < 0) signalScore.reason += ` - MTF(${mtfBonus})`;
 
-          // Bonus sonrası tier'ı yeniden hesapla
           if (signalScore.score >= 85) signalScore.tier = "critical";
           else if (signalScore.score >= (hasPriorityUser ? 55 : 60)) signalScore.tier = "important";
           else if (signalScore.score >= (hasPriorityUser ? 45 : 50)) signalScore.tier = "watch";
@@ -1472,11 +1429,13 @@ export default async function handler(request: RequestLike, response: ResponseLi
 
         result.signalScore = signalScore;
 
+        // 4️⃣ SONRA KONTROL
         if (!signalScore.shouldNotify) {
           console.log(`🔇 Bildirim atlandı: ${result.symbol} (score=${signalScore.score}, ${signalScore.reason})`);
           continue;
         }
 
+        // 5️⃣ AI YORUM
         const ai = await generateCommentary({
           symbol: result.symbol, market: result.market, price: result.price,
           changePercent: result.changePercent, direction: result.overallDirection,
@@ -1485,7 +1444,6 @@ export default async function handler(request: RequestLike, response: ResponseLi
           candles: result.candles,
         });
 
-        // Multi-timeframe özetini AI yorumuna ekle
         if (mtfSummary) {
           ai.summary = `${ai.summary}\n\n📊 TIMEFRAME:\n${mtfSummary}`;
           if (mtfBonus > 0) ai.confidence = Math.min(100, ai.confidence + mtfBonus);
@@ -1497,6 +1455,7 @@ export default async function handler(request: RequestLike, response: ResponseLi
         result.ai = ai;
         console.log(`🤖 AI (${ai.source}): ${result.symbol} → ${ai.action}`);
 
+        // 6️⃣ KULLANICILARA GÖNDER
         for (const user of users) {
           if (await isOnCooldown(user.user_id, result.symbol, result.market, user.type)) continue;
           await sendNotification({ userId: user.user_id, market: result.market, symbol: result.symbol, type: user.type, analysis: result, isGlobal: false });
