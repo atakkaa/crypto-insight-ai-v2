@@ -1,9 +1,9 @@
 // api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v2
 
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
-import { getNewsForSymbol } from "./_lib/news";
-import { generateCommentary, type AiCommentary } from "./_lib/ai-commentary";
-import { computeSignalScore, type SignalScoreResult } from "./_lib/signal-score";
+import { getNewsForSymbol } from "./lib/news";
+import { generateCommentary, type AiCommentary } from "./lib/ai-commentary";
+import { computeSignalScore, type SignalScoreResult } from "./lib/signal-score";
 
 // ==========================================================
 // TİPLER
