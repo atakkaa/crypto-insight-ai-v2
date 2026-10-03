@@ -334,11 +334,12 @@ async function fetchFinnhub(symbol: string): Promise<NewsItem[]> {
   } catch { return []; }
 }
 
-async function getNewsForSymbol(market: string, symbol: string): Promise<NewsItem[]> {
+async function getNewsForSymbol(market: string, symbol: string, isPriority = false): Promise<NewsItem[]> {
+  const limit = isPriority ? 20 : 10;
   try {
     const since = new Date(Date.now() - 24 * 3600_000).toISOString();
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/news_cache?market=eq.${market}&symbol=eq.${encodeURIComponent(symbol)}&published_at=gt.${since}&order=published_at.desc&limit=20`,
+      `${SUPABASE_URL}/rest/v1/news_cache?market=eq.${market}&symbol=eq.${encodeURIComponent(symbol)}&published_at=gt.${since}&order=published_at.desc&limit=${limit}`,
       {
         headers: {
           apikey: SUPABASE_SERVICE_ROLE_KEY,
@@ -370,7 +371,10 @@ async function getNewsForSymbol(market: string, symbol: string): Promise<NewsIte
   else if (market === "us" || market === "asia" || market === "europe") fresh = await fetchFinnhub(symbol);
   else if (market === "bist") fresh = await fetchBistRss(symbol);
 
-  if (fresh.length > 0 && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+  // Priority için daha fazla haber sakla
+  const freshLimited = fresh.slice(0, limit);
+
+  if (freshLimited.length > 0 && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/news_cache`, {
         method: "POST",
@@ -380,7 +384,7 @@ async function getNewsForSymbol(market: string, symbol: string): Promise<NewsIte
           Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
           Prefer: "resolution=ignore-duplicates",
         },
-        body: JSON.stringify(fresh.map((n) => ({
+        body: JSON.stringify(freshLimited.map((n) => ({
           market, symbol,
           title: n.title,
           url: n.url ?? null,
@@ -393,9 +397,8 @@ async function getNewsForSymbol(market: string, symbol: string): Promise<NewsIte
       });
     } catch {}
   }
-  return fresh;
+  return freshLimited;
 }
-
 // ==========================================================
 // AI YORUM
 // ==========================================================
@@ -1051,7 +1054,10 @@ async function analyzeSymbol(symbol: string, market: string): Promise<AnalysisRe
 
     let news: NewsItem[] = [];
     if (baseResult.isImportant) {
-      news = await getNewsForSymbol(market, symbol);
+      // Kullanıcılar bu coini takip ediyor mu?
+      const users = await getUsersForSymbol(market, symbol);
+      const isPriorityTracked = users.some((u) => u.type === "priority");
+      news = await getNewsForSymbol(market, symbol, isPriorityTracked);
     }
 
     return { ...baseResult, news };
