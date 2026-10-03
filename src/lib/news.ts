@@ -1,4 +1,4 @@
-// api/_lib/news.ts — Haber toplama + sentiment analizi (RSS tabanlı)
+// src/lib/news.ts — Haber toplama + sentiment analizi (RSS tabanlı)
 
 const ENV = (globalThis as any).process?.env ?? {};
 const SUPABASE_URL = String(ENV.SUPABASE_URL ?? "");
@@ -22,7 +22,7 @@ export type NewsItem = {
 };
 
 // ==========================================================
-// COIN İSİM HARİTASI (BTCUSDT → Bitcoin)
+// COIN İSİM HARİTASI
 // ==========================================================
 
 const COIN_NAME_MAP: Record<string, string> = {
@@ -63,11 +63,22 @@ function getCoinName(symbol: string): string {
 }
 
 // ==========================================================
+// TARİH GÜVENLİĞİ
+// ==========================================================
+
+function safeDate(input: string | undefined | null): string {
+  if (!input) return new Date().toISOString();
+  const ts = new Date(input).getTime();
+  if (!Number.isFinite(ts)) return new Date().toISOString();
+  return new Date(ts).toISOString();
+}
+
+// ==========================================================
 // CACHE
 // ==========================================================
 
 async function getCachedNews(market: string, symbol: string): Promise<NewsItem[]> {
-  if (!SUPABASE_URL) return [];
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
   try {
     const since = new Date(Date.now() - 24 * 3600_000).toISOString();
     const res = await fetch(
@@ -80,24 +91,27 @@ async function getCachedNews(market: string, symbol: string): Promise<NewsItem[]
       },
     );
     if (!res.ok) return [];
-    const rows = (await res.json()) as any[];
-    return rows.map((r) => ({
-      title: r.title,
-      url: r.url,
-      source: r.source,
-      publishedAt: r.published_at,
-      summary: r.summary,
-      sentiment: r.sentiment ?? "nötr",
-      sentimentScore: r.sentiment_score ?? 0,
-      keywords: r.keywords,
-    }));
+    const rows = (await res.json()) as Array<Record<string, unknown>>;
+    return rows.map((r) => {
+      const item: NewsItem = {
+        title: String(r["title"] ?? ""),
+        source: String(r["source"] ?? ""),
+        publishedAt: String(r["published_at"] ?? new Date().toISOString()),
+        sentiment: (r["sentiment"] as NewsItem["sentiment"]) ?? "nötr",
+        sentimentScore: Number(r["sentiment_score"] ?? 0),
+      };
+      if (r["url"]) item.url = String(r["url"]);
+      if (r["summary"]) item.summary = String(r["summary"]);
+      if (Array.isArray(r["keywords"])) item.keywords = r["keywords"] as string[];
+      return item;
+    });
   } catch {
     return [];
   }
 }
 
 async function saveNews(market: string, symbol: string, items: NewsItem[]) {
-  if (!SUPABASE_URL || items.length === 0) return;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || items.length === 0) return;
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/news_cache`, {
       method: "POST",
@@ -112,13 +126,13 @@ async function saveNews(market: string, symbol: string, items: NewsItem[]) {
           market,
           symbol,
           title: n.title,
-          url: n.url,
+          url: n.url ?? null,
           source: n.source,
           published_at: n.publishedAt,
-          summary: n.summary,
+          summary: n.summary ?? null,
           sentiment: n.sentiment,
           sentiment_score: n.sentimentScore,
-          keywords: n.keywords,
+          keywords: n.keywords ?? null,
         })),
       ),
     });
@@ -126,7 +140,7 @@ async function saveNews(market: string, symbol: string, items: NewsItem[]) {
 }
 
 // ==========================================================
-// LEXICON-BASED SENTIMENT
+// LEXICON SENTIMENT
 // ==========================================================
 
 const POSITIVE_WORDS = [
@@ -152,37 +166,31 @@ export function lexiconSentiment(text: string): {
   for (const w of POSITIVE_WORDS) if (lower.includes(w)) score += 15;
   for (const w of NEGATIVE_WORDS) if (lower.includes(w)) score -= 15;
   score = Math.max(-100, Math.min(100, score));
-  const sentiment = score > 10 ? "pozitif" : score < -10 ? "negatif" : "nötr";
+  const sentiment: "pozitif" | "negatif" | "nötr" =
+    score > 10 ? "pozitif" : score < -10 ? "negatif" : "nötr";
   return { sentiment, score };
 }
 
 // ==========================================================
-// RSS PARSER (basit ama etkili)
+// RSS PARSER
 // ==========================================================
 
-function parseRssItems(xml: string): Array<{
+type RawRssItem = {
   title: string;
   link: string;
   pubDate: string;
-  description?: string;
-}> {
-  const items: Array<{
-    title: string;
-    link: string;
-    pubDate: string;
-    description?: string;
-  }> = [];
+  description: string;
+};
 
-  // <item>...</item> bloklarını bul
+function parseRssItems(xml: string): RawRssItem[] {
+  const items: RawRssItem[] = [];
   const itemRegex = /<item[\s>][\s\S]*?<\/item>/gi;
   const matches = xml.match(itemRegex) ?? [];
 
   for (const block of matches) {
-    const title =
-      block.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "";
+    const title = block.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "";
     const link = block.match(/<link[^>]*>([\s\S]*?)<\/link>/i)?.[1]?.trim() ?? "";
-    const pubDate =
-      block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1]?.trim() ?? "";
+    const pubDate = block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1]?.trim() ?? "";
     const description =
       block.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1]?.trim() ?? "";
 
@@ -210,7 +218,7 @@ function parseRssItems(xml: string): Array<{
 }
 
 // ==========================================================
-// KRİPTO RSS (ücretsiz, API key gerektirmez)
+// KRİPTO RSS
 // ==========================================================
 
 const CRYPTO_RSS_FEEDS: Array<{ url: string; source: string }> = [
@@ -226,43 +234,40 @@ async function fetchCryptoRss(symbol: string): Promise<NewsItem[]> {
   const coinBase = symbol.replace("USDT", "").replace("USDC", "");
   const items: NewsItem[] = [];
 
-  // Feed'leri paralel çek (hız için)
   const results = await Promise.allSettled(
     CRYPTO_RSS_FEEDS.map(async (feed) => {
       try {
         const res = await fetch(feed.url, {
           headers: { "User-Agent": "Mozilla/5.0 FormasyonAI" },
         });
-        if (!res.ok) return [];
+        if (!res.ok) return [] as NewsItem[];
         const xml = await res.text();
         const parsed = parseRssItems(xml);
 
         return parsed
           .filter((p) => {
             const text = `${p.title} ${p.description ?? ""}`.toLowerCase();
-            // Coin adı veya ticker geçiyor mu?
             return (
               text.includes(coinName.toLowerCase()) ||
               text.includes(coinBase.toLowerCase())
             );
           })
-          .map((p) => {
+          .map((p): NewsItem => {
             const text = `${p.title} ${p.description ?? ""}`;
             const lex = lexiconSentiment(text);
-            return {
+            const item: NewsItem = {
               title: p.title,
               url: p.link,
               source: feed.source,
-              publishedAt: p.pubDate
-                ? new Date(p.pubDate).toISOString()
-                : new Date().toISOString(),
+              publishedAt: safeDate(p.pubDate),
               summary: p.description,
               sentiment: lex.sentiment,
               sentimentScore: lex.score,
-            } as NewsItem;
+            };
+            return item;
           });
       } catch {
-        return [];
+        return [] as NewsItem[];
       }
     }),
   );
@@ -273,7 +278,6 @@ async function fetchCryptoRss(symbol: string): Promise<NewsItem[]> {
     }
   }
 
-  // En yeni 10 tanesini al
   items.sort(
     (a, b) =>
       new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
@@ -283,7 +287,7 @@ async function fetchCryptoRss(symbol: string): Promise<NewsItem[]> {
 }
 
 // ==========================================================
-// NEWSAPI (US/global hisse haber — opsiyonel)
+// NEWSAPI (US/global)
 // ==========================================================
 
 async function fetchNewsApi(symbol: string): Promise<NewsItem[]> {
@@ -303,18 +307,19 @@ async function fetchNewsApi(symbol: string): Promise<NewsItem[]> {
         description?: string;
       }>;
     };
-    return (data.articles ?? []).map((a) => {
+    return (data.articles ?? []).map((a): NewsItem => {
       const text = `${a.title} ${a.description ?? ""}`;
       const lex = lexiconSentiment(text);
-      return {
+      const item: NewsItem = {
         title: a.title,
         url: a.url,
         source: a.source?.name ?? "NewsAPI",
-        publishedAt: a.publishedAt,
-        summary: a.description,
+        publishedAt: safeDate(a.publishedAt),
         sentiment: lex.sentiment,
         sentimentScore: lex.score,
       };
+      if (a.description) item.summary = a.description;
+      return item;
     });
   } catch {
     return [];
@@ -322,7 +327,7 @@ async function fetchNewsApi(symbol: string): Promise<NewsItem[]> {
 }
 
 // ==========================================================
-// FINNHUB (US hisse — opsiyonel)
+// FINNHUB (US)
 // ==========================================================
 
 async function fetchFinnhub(symbol: string): Promise<NewsItem[]> {
@@ -342,18 +347,19 @@ async function fetchFinnhub(symbol: string): Promise<NewsItem[]> {
       source: string;
       summary: string;
     }>;
-    return data.slice(0, 10).map((n) => {
-      const text = `${n.headline} ${n.summary}`;
+    return data.slice(0, 10).map((n): NewsItem => {
+      const text = `${n.headline} ${n.summary ?? ""}`;
       const lex = lexiconSentiment(text);
-      return {
+      const item: NewsItem = {
         title: n.headline,
         url: n.url,
         source: n.source,
-        publishedAt: new Date(n.datetime * 1000).toISOString(),
-        summary: n.summary,
+        publishedAt: safeDate(new Date(n.datetime * 1000).toISOString()),
         sentiment: lex.sentiment,
         sentimentScore: lex.score,
       };
+      if (n.summary) item.summary = n.summary;
+      return item;
     });
   } catch {
     return [];
@@ -361,7 +367,7 @@ async function fetchFinnhub(symbol: string): Promise<NewsItem[]> {
 }
 
 // ==========================================================
-// BIST RSS (Investing TR + Dünya)
+// BIST RSS
 // ==========================================================
 
 const BIST_RSS_FEEDS: Array<{ url: string; source: string }> = [
@@ -380,7 +386,7 @@ async function fetchBistRss(symbol: string): Promise<NewsItem[]> {
         const res = await fetch(feed.url, {
           headers: { "User-Agent": "Mozilla/5.0 FormasyonAI" },
         });
-        if (!res.ok) return [];
+        if (!res.ok) return [] as NewsItem[];
         const xml = await res.text();
         const parsed = parseRssItems(xml);
 
@@ -389,23 +395,22 @@ async function fetchBistRss(symbol: string): Promise<NewsItem[]> {
             const text = `${p.title} ${p.description ?? ""}`.toUpperCase();
             return text.includes(ticker);
           })
-          .map((p) => {
+          .map((p): NewsItem => {
             const text = `${p.title} ${p.description ?? ""}`;
             const lex = lexiconSentiment(text);
-            return {
+            const item: NewsItem = {
               title: p.title,
               url: p.link,
               source: feed.source,
-              publishedAt: p.pubDate
-                ? new Date(p.pubDate).toISOString()
-                : new Date().toISOString(),
-              summary: p.description,
+              publishedAt: safeDate(p.pubDate),
               sentiment: lex.sentiment,
               sentimentScore: lex.score,
-            } as NewsItem;
+            };
+            if (p.description) item.summary = p.description;
+            return item;
           });
       } catch {
-        return [];
+        return [] as NewsItem[];
       }
     }),
   );
@@ -432,23 +437,18 @@ export async function getNewsForSymbol(
   market: string,
   symbol: string,
 ): Promise<NewsItem[]> {
-  // 1. Cache
   const cached = await getCachedNews(market, symbol);
   if (cached.length > 0) return cached;
 
-  // 2. Kaynağa göre çek
   let fresh: NewsItem[] = [];
   if (market === "crypto") {
     fresh = await fetchCryptoRss(symbol);
   } else if (market === "us" || market === "asia" || market === "europe") {
-    fresh = NEWSAPI_KEY
-      ? await fetchNewsApi(symbol)
-      : await fetchFinnhub(symbol);
+    fresh = NEWSAPI_KEY ? await fetchNewsApi(symbol) : await fetchFinnhub(symbol);
   } else if (market === "bist") {
     fresh = await fetchBistRss(symbol);
   }
 
-  // 3. Kaydet
   if (fresh.length > 0) {
     await saveNews(market, symbol, fresh);
   }
@@ -457,7 +457,7 @@ export async function getNewsForSymbol(
 }
 
 // ==========================================================
-// HABERLERİ ÖZETLE (LLM'e vermek için)
+// ÖZETLEME
 // ==========================================================
 
 export function summarizeNewsForPrompt(items: NewsItem[]): {
