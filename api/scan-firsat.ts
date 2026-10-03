@@ -945,13 +945,13 @@ export default async function handler(
             confidence: p.confidence,
           })),
           news: (result.news ?? []).map((n) => ({
-            title: n.title,
-            url: n.url,
-            source: n.source,
-            publishedAt: n.publishedAt,
-            sentiment: n.sentiment as "pozitif" | "negatif" | "nötr",
-            sentimentScore: n.sentimentScore,
-          })),
+  title: n.title,
+  url: n.url ?? "",
+  source: n.source,
+  publishedAt: n.publishedAt,
+  sentiment: n.sentiment as "pozitif" | "negatif" | "nötr",
+  sentimentScore: n.sentimentScore,
+})),
           isPriority: hasPriorityUser,
         });
 
@@ -984,13 +984,13 @@ export default async function handler(
             description: p.description,
           })),
           news: (result.news ?? []).map((n) => ({
-            title: n.title,
-            url: n.url,
-            source: n.source,
-            publishedAt: n.publishedAt,
-            sentiment: n.sentiment as "pozitif" | "negatif" | "nötr",
-            sentimentScore: n.sentimentScore,
-          })),
+  title: n.title,
+  url: n.url ?? "",
+  source: n.source,
+  publishedAt: n.publishedAt,
+  sentiment: n.sentiment as "pozitif" | "negatif" | "nötr",
+  sentimentScore: n.sentimentScore,
+})),
         });
 
         result.ai = ai;
