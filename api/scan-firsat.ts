@@ -1169,7 +1169,7 @@ export default async function handler(request: RequestLike, response: ResponseLi
         console.log(`🤖 AI (${ai.source}): ${result.symbol} → ${ai.action}`);
 
         for (const user of users) {
-          if (await isOnCooldown(user.user_id, result.symbol, result.market, user.type)) continue;
+          // if (await isOnCooldown(user.user_id, result.symbol, result.market, user.type)) continue;
           await sendNotification({ userId: user.user_id, market: result.market, symbol: result.symbol, type: user.type, analysis: result, isGlobal: false });
           totalNotifications++;
         }
@@ -1187,7 +1187,7 @@ export default async function handler(request: RequestLike, response: ResponseLi
             const alreadyNotified = new Set(users.map((u) => u.user_id));
             for (const u of allUsers) {
               if (alreadyNotified.has(u.id)) continue;
-              if (await isOnCooldown(u.id, result.symbol, result.market, "global")) continue;
+              // if (await isOnCooldown(u.id, result.symbol, result.market, "global")) continue;
               await sendNotification({ userId: u.id, market: result.market, symbol: result.symbol, type: "favorite", analysis: result, isGlobal: true });
               totalNotifications++;
             }
