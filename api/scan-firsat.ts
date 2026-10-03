@@ -112,7 +112,7 @@ type AnalysisResult = {
   overallStrength: number;
   isImportant: boolean;
   news?: NewsItem[];
-  candles?: Candle[];         // ⬅️ YENİ EKLENEN SATIR
+  candles?: Candle[] | undefined;         // ⬅️ YENİ EKLENEN SATIR
   signalScore?: SignalScoreResult;
   ai?: AiCommentary;
 };
@@ -516,8 +516,8 @@ function calculatePosition(
 function generateRuleBasedCommentary(input: {
   symbol: string; direction: "bullish" | "bearish" | "neutral"; strength: number;
   patterns: PatternSignal[]; indicators: IndicatorSignal[]; news: NewsItem[]; changePercent: number;
-  candles?: Candle[];
-  price?: number;
+  candles?: Candle[] | undefined;
+  price?: number | undefined;
 }): AiCommentary {
   const { direction, strength, patterns, indicators, news, symbol, changePercent, candles, price } = input;
   const displaySymbol = symbol.replace("USDT", "").replace(/\.(IS|US|T|KS|HK|NS|DE|PA|L|MI|MC|AS|ST|OL|HE|SW|CO|V)$/, "");
@@ -643,7 +643,7 @@ async function generateCommentary(input: {
   symbol: string; market: string; price: number; changePercent: number;
   direction: "bullish" | "bearish" | "neutral"; strength: number;
   indicators: IndicatorSignal[]; patterns: PatternSignal[]; news: NewsItem[];
-  candles?: Candle[];
+  candles?: Candle[] | undefined;
 }): Promise<AiCommentary> {
   // 1. Önce AI dene (kota varsa)
   let result = await generateWithOpenRouter(input);
