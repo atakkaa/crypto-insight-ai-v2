@@ -1,6 +1,9 @@
 // api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v2
 
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
+import { getNewsForSymbol } from "./_lib/news";
+import { generateCommentary, type AiCommentary } from "./_lib/ai-commentary";
+import { computeSignalScore, type SignalScoreResult } from "./_lib/signal-score";
 
 // ==========================================================
 // TİPLER
@@ -52,6 +55,16 @@ type AnalysisResult = {
   overallDirection: "bullish" | "bearish" | "neutral";
   overallStrength: number;
   isImportant: boolean;
+  news?: Array<{
+    title: string;
+    url?: string;
+    source: string;
+    sentiment: string;
+    sentimentScore: number;
+    publishedAt: string;
+  }>;
+  signalScore?: SignalScoreResult;
+  ai?: AiCommentary;
 };
 
 type CustomAsset = {
@@ -759,27 +772,35 @@ async function sendNotification(params: {
   const { userId, market, symbol, type, analysis, isGlobal } = params;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
 
+  // Signal score ve AI zorunlu (yukarıda set edilmiş olmalı)
+  const signalScore = analysis.signalScore;
+  const ai = analysis.ai;
+  if (!signalScore || !ai) {
+    console.warn(`⚠️ ${symbol}: signalScore veya ai eksik, atlanıyor`);
+    return;
+  }
+
   const priority = type === "priority";
+
+  // Signal score'a göre severity
   const severity =
-    analysis.overallStrength >= 80 ? "kritik"
-    : analysis.overallStrength >= 60 ? "önemli"
+    signalScore.tier === "critical" ? "kritik"
+    : signalScore.tier === "important" ? "önemli"
     : "dikkat";
 
-  const directionEmoji =
-    analysis.overallDirection === "bullish" ? "🚀"
-    : analysis.overallDirection === "bearish" ? "⚠️"
+  // AI aksiyonuna göre emoji
+  const actionEmoji =
+    ai.action === "AL" ? "🟢"
+    : ai.action === "SAT" ? "🔴"
+    : ai.action === "BEKLE" ? "🟡"
     : "⚪";
 
   const typeLabel = isGlobal ? "🌍 GLOBAL" : priority ? "⭐ ÖNCELİKLİ" : "📢 FAVORİ";
   const title = `${typeLabel} | ${symbol.replace("USDT", "").replace(/\.(IS|US|T|KS|HK|NS|DE|PA|L|MI|MC|AS|ST|OL|HE|SW|CO|V)$/, "")}`;
 
-  const signalsText = [
-    ...analysis.indicators.map((i) => `${i.name}: ${i.value} (${i.strength}%)`),
-    ...analysis.patterns.map((p) => `${p.name} (${p.confidence}%)`),
-  ].slice(0, 5).join(" • ");
-
-  const message = `${directionEmoji} ${analysis.overallDirection.toUpperCase()} | Fiyat: ${analysis.price.toFixed(2)} (${analysis.changePercent >= 0 ? "+" : ""}${analysis.changePercent.toFixed(2)}%) | Güç: ${analysis.overallStrength}%`;
-  const reason = signalsText || "Detaylı analiz yapıldı";
+  // YENİ MESAJ: AI özet + aksiyon
+  const message = `${actionEmoji} ${ai.action} | ${ai.summary}`;
+  const reason = signalScore.reason;
 
   const eventKey = [
     type,
@@ -787,6 +808,7 @@ async function sendNotification(params: {
     symbol,
     analysis.overallDirection,
     Math.floor(analysis.overallStrength / 10),
+    signalScore.tier,
     new Date().toISOString().slice(0, 13),
   ].join("|");
 
@@ -811,8 +833,19 @@ async function sendNotification(params: {
         reason,
         event_key: eventKey,
         notification_type: type,
-        confidence: analysis.overallStrength,
+        confidence: ai.confidence,
         is_global: isGlobal ?? false,
+        // YENİ KOLONLAR
+        signal_score: signalScore.score,
+        signal_breakdown: signalScore.breakdown,
+        ai_summary: ai.summary,
+        ai_impact: ai.impact,
+        ai_action: ai.action,
+        ai_sentiment: ai.sentiment,
+        ai_confidence: ai.confidence,
+        ai_source: ai.source,
+        ai_generated_at: new Date().toISOString(),
+        news_items: analysis.news ?? [],
         data: {
           indicators: analysis.indicators,
           patterns: analysis.patterns,
@@ -826,7 +859,9 @@ async function sendNotification(params: {
       const err = await res.text();
       console.error(`Bildirim hatası (${symbol}):`, res.status, err);
     } else {
-      console.log(`✅ ${typeLabel} → ${symbol} → ${userId.slice(0, 8)}...`);
+      console.log(
+        `✅ ${typeLabel} → ${symbol} → score=${signalScore.score} → ${ai.action} (${ai.source})`,
+      );
     }
   } catch (error) {
     console.error("Bildirim fetch hatası:", error);
@@ -854,7 +889,15 @@ async function analyzeSymbol(
 
     if (indicators.length === 0 && patterns.length === 0) return null;
 
-    return combineAnalysis(symbol, market, candles, indicators, patterns);
+    const baseResult = combineAnalysis(symbol, market, candles, indicators, patterns);
+
+    // YENİ: Haberleri çek (sadece isImportant ise)
+    let news: AnalysisResult["news"] = [];
+    if (baseResult.isImportant) {
+      news = await getNewsForSymbol(market, symbol);
+    }
+
+    return { ...baseResult, news };
   } catch (error) {
     console.error(`Analiz hatası (${symbol}):`, error);
     return null;
