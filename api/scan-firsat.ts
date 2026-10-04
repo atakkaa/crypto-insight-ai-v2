@@ -1383,19 +1383,19 @@ async function getUserDndSettings(userId: string): Promise<DndSettings> {
     );
     if (!res.ok) return defaultSettings;
     const rows = (await res.json()) as Array<Record<string, unknown>>;
-    const row = rows[0];
+        const row = rows[0];
     if (!row) return defaultSettings;
 
     return {
-      enabled: Boolean(row.dnd_enabled),
-      ranges: (row.dnd_ranges as Array<{ start: string; end: string }>) ?? [],
-      timezone: String(row.dnd_timezone ?? "Europe/Istanbul"),
-      allow10Percent: Boolean(row.dnd_allow_10_percent ?? true),
-      allowPriorityCritical: Boolean(row.dnd_allow_priority_critical ?? true),
-      allowScore90: Boolean(row.dnd_allow_score_90 ?? true),
-      allowFavorite: Boolean(row.dnd_allow_favorite ?? false),
-      allowTier1News: Boolean(row.dnd_allow_tier1_news ?? true),
-      dailySummary: Boolean(row.dnd_daily_summary ?? true),
+      enabled: Boolean(row["dnd_enabled"]),
+      ranges: (row["dnd_ranges"] as Array<{ start: string; end: string }>) ?? [],
+      timezone: String(row["dnd_timezone"] ?? "Europe/Istanbul"),
+      allow10Percent: Boolean(row["dnd_allow_10_percent"] ?? true),
+      allowPriorityCritical: Boolean(row["dnd_allow_priority_critical"] ?? true),
+      allowScore90: Boolean(row["dnd_allow_score_90"] ?? true),
+      allowFavorite: Boolean(row["dnd_allow_favorite"] ?? false),
+      allowTier1News: Boolean(row["dnd_allow_tier1_news"] ?? true),
+      dailySummary: Boolean(row["dnd_daily_summary"] ?? true),
     };
   } catch {
     return defaultSettings;
