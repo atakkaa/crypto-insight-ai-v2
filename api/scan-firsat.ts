@@ -819,10 +819,20 @@ async function analyzeMultiTimeframe(
     const alignedCount = counts[dominantDir] ?? 0;
     const aligned = alignedCount === 3 && dominantDir !== "neutral";
 
+        // Yeni bonus mantığı: yön bazlı, neutral'ları görmezden gel
+    const bullishCount = counts.bullish ?? 0;
+    const bearishCount = counts.bearish ?? 0;
+    const strongDir = bullishCount > bearishCount ? "bullish" : bearishCount > bullishCount ? "bearish" : null;
+    const strongCount = strongDir === "bullish" ? bullishCount : strongDir === "bearish" ? bearishCount : 0;
+
     let bonus = 0;
-    if (aligned) bonus = 15;
-    else if (alignedCount === 2 && dominantDir !== "neutral") bonus = 5;
-    else if (dirs.length === 3 && dominantDir !== "neutral" && counts[dominantDir] === 1) bonus = -5;
+    // 3/3 UYUMLU (ve yön belirgin)
+    if (strongCount === 3 && strongDir) bonus = 15;
+    // 2/3 UYUMLU (ve yön belirgin)
+    else if (strongCount === 2 && strongDir) bonus = 5;
+    // 1/3 UYUMLU (yön belirgin) → hafif ceza
+    else if (strongCount === 1 && strongDir && dirs.length === 3) bonus = -5;
+    // Karışık yön (bullish vs bearish eşit) → 0 bonus
 
     const emoji = (d?: TimeframeDir) => d === "bullish" ? "🟢" : d === "bearish" ? "🔴" : "⚪";
     const label = (d?: TimeframeDir) => d === "bullish" ? "Bullish" : d === "bearish" ? "Bearish" : d === "neutral" ? "Nötr" : "—";
@@ -1400,7 +1410,7 @@ export default async function handler(request: RequestLike, response: ResponseLi
               d1: mtf.d1?.direction ?? "neutral",
               aligned: mtf.aligned,
             };
-            console.log(`📊 MTF ${result.symbol}: ${mtf.alignedCount}/3 uyumlu, bonus=${mtfBonus}`);
+            console.log(`📊 MTF ${result.symbol}: 1h=${mtf.h1?.direction} 4h=${mtf.h4?.direction} 1d=${mtf.d1?.direction} → bonus=${mtfBonus}`);
           }
         }
 
