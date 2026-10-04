@@ -1,0 +1,308 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { toast } from "sonner";
+
+import { useAuth } from "@/hooks/useAuth";
+import {
+  useDndSettings,
+  type DndRange,
+  type DndSettings,
+} from "@/hooks/useDndSettings";
+
+export const Route = createFileRoute("/settings")({
+  head: () => ({
+    meta: [{ title: "Ayarlar — Formasyon AI" }],
+  }),
+  component: SettingsPage,
+});
+
+function SettingsPage() {
+  const { user, loading: authLoading } = useAuth();
+  const { settings, loading, saving, save } = useDndSettings();
+
+  const [local, setLocal] = useState<DndSettings | null>(null);
+  const current = local ?? settings;
+
+  function update<K extends keyof DndSettings>(key: K, value: DndSettings[K]) {
+    setLocal({ ...current, [key]: value });
+  }
+
+  function addRange() {
+    const ranges = [...current.dnd_ranges, { start: "12:00", end: "13:00" }];
+    update("dnd_ranges", ranges);
+  }
+
+  function removeRange(index: number) {
+    const ranges = current.dnd_ranges.filter((_, i) => i !== index);
+    update("dnd_ranges", ranges);
+  }
+
+  function updateRange(index: number, field: keyof DndRange, value: string) {
+    const ranges = current.dnd_ranges.map((r, i) =>
+      i === index ? { ...r, [field]: value } : r,
+    );
+    update("dnd_ranges", ranges);
+  }
+
+  async function handleSave() {
+    const ok = await save(current);
+    if (ok) {
+      toast.success("Ayarlar kaydedildi");
+      setLocal(null);
+    } else {
+      toast.error("Kaydedilemedi");
+    }
+  }
+
+  if (authLoading || loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-muted-foreground">Yükleniyor...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="panel max-w-md p-6 text-center">
+          <p className="text-3xl">🔒</p>
+          <h1 className="mt-3 text-lg font-bold">Giriş Yapmanız Gerekiyor</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Ayarlara erişmek için lütfen giriş yapın.
+          </p>
+          <Link
+            to="/auth"
+            className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+          >
+            Giriş Yap
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
+        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-3">
+          <Link
+            to="/"
+            className="num text-sm font-bold uppercase tracking-[0.2em] text-primary"
+          >
+            Formasyon AI
+          </Link>
+          <nav className="flex gap-2 text-xs">
+            <Link
+              to="/"
+              className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
+            >
+              Grafik
+            </Link>
+            <span className="rounded-md bg-primary/15 px-3 py-1.5 font-bold text-primary">
+              ⚙️ Ayarlar
+            </span>
+          </nav>
+          <div className="ml-auto text-xs text-muted-foreground">
+            {user?.email}
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-4xl space-y-4 px-4 py-6">
+        <section className="panel p-5">
+          <h1 className="text-xl font-bold">⚙️ Bildirim Ayarları</h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Sessiz saatler, bildirim tercihleri ve özet ayarlarını buradan
+            yönetin.
+          </p>
+        </section>
+
+        {/* SESSİZ MOD */}
+        <section className="panel p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold">🔕 Sessiz Mod</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Belirttiğiniz saat aralıklarında bildirimler sessize alınır.
+                Önemli gelişmeler birikir ve sabah özet olarak gönderilir.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => update("dnd_enabled", !current.dnd_enabled)}
+              className={`relative h-7 w-14 shrink-0 rounded-full transition-colors ${
+                current.dnd_enabled ? "bg-primary" : "bg-secondary"
+              }`}
+            >
+              <span
+                className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
+                  current.dnd_enabled ? "left-8" : "left-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          {current.dnd_enabled && (
+            <>
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Sessiz Saat Aralıkları
+                  </p>
+                  <button
+                    type="button"
+                    onClick={addRange}
+                    className="rounded-md border border-border px-2 py-1 text-[10px] font-bold hover:bg-secondary"
+                  >
+                    + Aralık Ekle
+                  </button>
+                </div>
+
+                {current.dnd_ranges.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-border p-3 text-center text-[10px] text-muted-foreground">
+                    Aralık eklenmedi — sessiz mod hiç aktif olmaz
+                  </p>
+                ) : (
+                  current.dnd_ranges.map((range, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 rounded-md border border-border bg-card p-2"
+                    >
+                      <input
+                        type="time"
+                        value={range.start}
+                        onChange={(e) =>
+                          updateRange(index, "start", e.target.value)
+                        }
+                        className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+                      />
+                      <span className="text-xs text-muted-foreground">→</span>
+                      <input
+                        type="time"
+                        value={range.end}
+                        onChange={(e) =>
+                          updateRange(index, "end", e.target.value)
+                        }
+                        className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeRange(index)}
+                        className="ml-auto rounded border border-destructive/30 px-2 py-1 text-[10px] font-bold text-destructive hover:bg-destructive/10"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="mt-5 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Sessiz Modda İzin Verilenler
+                </p>
+
+                <BypassToggle
+                  label="%10+ büyük fiyat hareketi"
+                  description="Ani fırsat/risk — anlık gönderilir"
+                  checked={current.dnd_allow_10_percent}
+                  onChange={(v) => update("dnd_allow_10_percent", v)}
+                />
+                <BypassToggle
+                  label="Öncelikli varlık kritik hareket"
+                  description="Öncelikli hisse/kriptonuzda %5+ hareket"
+                  checked={current.dnd_allow_priority_critical}
+                  onChange={(v) => update("dnd_allow_priority_critical", v)}
+                />
+                <BypassToggle
+                  label="Çok güçlü sinyal (skor ≥ 90)"
+                  description="Çok yüksek güvenli sinyaller"
+                  checked={current.dnd_allow_score_90}
+                  onChange={(v) => update("dnd_allow_score_90", v)}
+                />
+                <BypassToggle
+                  label="Favori varlık kritik"
+                  description="Favori hisse/kriptonuzda kritik sinyal"
+                  checked={current.dnd_allow_favorite}
+                  onChange={(v) => update("dnd_allow_favorite", v)}
+                />
+                <BypassToggle
+                  label="Tier 1 önemli haber"
+                  description="Bloomberg, Reuters gibi güvenilir kaynaklardan"
+                  checked={current.dnd_allow_tier1_news}
+                  onChange={(v) => update("dnd_allow_tier1_news", v)}
+                />
+              </div>
+
+              <div className="mt-5">
+                <BypassToggle
+                  label="Sabah özet bildirimi"
+                  description="Birikmiş gelişmeler sabah 'X önemli gelişme' olarak gelsin"
+                  checked={current.dnd_daily_summary}
+                  onChange={(v) => update("dnd_daily_summary", v)}
+                />
+              </div>
+            </>
+          )}
+        </section>
+
+        <section className="panel flex items-center justify-between p-4">
+          <p className="text-xs text-muted-foreground">
+            {local
+              ? "Kaydedilmemiş değişiklikleriniz var"
+              : "Tüm değişiklikler kaydedildi"}
+          </p>
+          <div className="flex gap-2">
+            {local && (
+              <button
+                type="button"
+                onClick={() => setLocal(null)}
+                className="rounded-md border border-border px-3 py-2 text-xs font-bold hover:bg-secondary"
+              >
+                İptal
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={saving || !local}
+              className="rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground disabled:opacity-50"
+            >
+              {saving ? "Kaydediliyor..." : "💾 Kaydet"}
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function BypassToggle({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-card p-3 hover:bg-secondary/50">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 cursor-pointer accent-primary"
+      />
+      <div className="flex-1">
+        <p className="text-xs font-bold">{label}</p>
+        <p className="mt-0.5 text-[10px] text-muted-foreground">
+          {description}
+        </p>
+      </div>
+    </label>
+  );
+}

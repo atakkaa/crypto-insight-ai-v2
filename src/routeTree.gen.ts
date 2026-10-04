@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CoinsRouteImport } from './routes/coins'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ApiPublicScanRouteImport } from './routes/api/public/scan'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,6 +36,11 @@ const CoinsRoute = CoinsRouteImport.update({
   path: '/coins',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicScanRoute = ApiPublicScanRouteImport.update({
   id: '/api/public/scan',
   path: '/api/public/scan',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/coins': typeof CoinsRoute
+  '/settings': typeof SettingsRoute
   '/api/public/scan': typeof ApiPublicScanRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/coins': typeof CoinsRoute
+  '/settings': typeof SettingsRoute
   '/api/public/scan': typeof ApiPublicScanRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,23 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/coins': typeof CoinsRoute
+  '/settings': typeof SettingsRoute
   '/api/public/scan': typeof ApiPublicScanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/auth' | '/coins' | '/api/public/scan'
+  fullPaths:
+    '/' | '/admin' | '/auth' | '/coins' | '/settings' | '/api/public/scan'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/auth' | '/coins' | '/api/public/scan'
-  id: '__root__' | '/' | '/admin' | '/auth' | '/coins' | '/api/public/scan'
+  to: '/' | '/admin' | '/auth' | '/coins' | '/settings' | '/api/public/scan'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/auth'
+    | '/coins'
+    | '/settings'
+    | '/api/public/scan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +93,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRoute
   CoinsRoute: typeof CoinsRoute
+  SettingsRoute: typeof SettingsRoute
   ApiPublicScanRoute: typeof ApiPublicScanRoute
 }
 
@@ -109,6 +127,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CoinsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/scan': {
       id: '/api/public/scan'
       path: '/api/public/scan'
@@ -124,6 +149,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   AuthRoute: AuthRoute,
   CoinsRoute: CoinsRoute,
+  SettingsRoute: SettingsRoute,
   ApiPublicScanRoute: ApiPublicScanRoute,
 }
 export const routeTree = rootRouteImport
