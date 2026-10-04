@@ -1106,17 +1106,26 @@ SADECE JSON döndür:
 }
 
 async function generateCommentary(input: {
-  symbol: string; market: string; price: number; changePercent: number;
-  direction: "bullish" | "bearish" | "neutral"; strength: number;
-  indicators: IndicatorSignal[]; patterns: PatternSignal[]; news: NewsItem[];
+  symbol: string;
+  market: string;
+  price: number;
+  changePercent: number;
+  direction: "bullish" | "bearish" | "neutral";
+  strength: number;
+  indicators: IndicatorSignal[];
+  patterns: PatternSignal[];
+  news: NewsItem[];
   candles?: Candle[] | undefined;
+  allowFearGreed?: boolean;
 }): Promise<AiCommentary> {
   let result = await generateWithOpenRouter(input);
-    // Kripto için Fear & Greed çek (paralel)
+
+  // Kripto için Fear & Greed çek
   let fearGreed: FearGreedResult = null;
-  if (input.market === "crypto") {
+  if (input.market === "crypto" && input.allowFearGreed !== false) {
     fearGreed = await getFearGreedIndex();
   }
+
   if (!result) {
     console.log("⚠️ AI başarısız → rule-based motor");
     result = generateRuleBasedCommentary({
@@ -1131,7 +1140,8 @@ async function generateCommentary(input: {
       price: input.price,
     });
   }
-    // Fear & Greed'i AI yorumuna ekle
+
+  // Fear & Greed'i AI yorumuna ekle
   if (fearGreed) {
     result.fearGreed = fearGreed.value;
     result.fearGreedClass = fearGreed.classification;
@@ -1139,6 +1149,7 @@ async function generateCommentary(input: {
     const fgLine = `\n\n${fearGreed.emoji} PİYASA DUYARLILIĞI:\nFear & Greed: ${fearGreed.value} (${fearGreed.classification})\n${fearGreed.advice}`;
     result.summary = `${result.summary}${fgLine}`;
   }
+
   return result;
 }
 
@@ -1466,6 +1477,102 @@ function canBypassDnd(
 
   return false;
 }
+// ==========================================================
+// KULLANICI TIER SİSTEMİ
+// ==========================================================
+
+type UserTier = "admin" | "premium" | "trial" | "free";
+
+type TierLimits = {
+  favorites: number;
+  priority: number;
+  newsDepth: number;
+  hasMTF: boolean;
+  hasFearGreed: boolean;
+};
+
+type TierInfo = {
+  tier: UserTier;
+  limits: TierLimits;
+  trialEndsAt?: string;
+  isTrialExpiringSoon?: boolean;
+};
+
+const TIER_LIMITS: Record<UserTier, TierLimits> = {
+  admin:   { favorites: 999, priority: 999, newsDepth: 20, hasMTF: true,  hasFearGreed: true },
+  premium: { favorites: 999, priority: 999, newsDepth: 20, hasMTF: true,  hasFearGreed: true },
+  trial:   { favorites: 10,  priority: 3,   newsDepth: 15, hasMTF: true,  hasFearGreed: true },
+  free:    { favorites: 5,   priority: 0,   newsDepth: 10, hasMTF: false, hasFearGreed: false },
+};
+
+async function getUserTier(userId: string): Promise<TierInfo> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return { tier: "free", limits: TIER_LIMITS.free };
+  }
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=role,membership,trial_ends_at,trial_used`,
+      {
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      },
+    );
+    if (!res.ok) return { tier: "free", limits: TIER_LIMITS.free };
+
+    const rows = (await res.json()) as Array<Record<string, unknown>>;
+    const row = rows[0];
+    if (!row) return { tier: "free", limits: TIER_LIMITS.free };
+
+    const role = String(row["role"] ?? "user");
+    const membership = String(row["membership"] ?? "free");
+    const trialEndsAt = row["trial_ends_at"] as string | null;
+
+    // 1. Admin mi?
+    if (role === "admin") {
+      return { tier: "admin", limits: TIER_LIMITS.admin };
+    }
+
+    // 2. Premium mu?
+    if (membership === "premium") {
+      return { tier: "premium", limits: TIER_LIMITS.premium };
+    }
+
+    // 3. Trial mı? (süresi geçmiş mi kontrol)
+    if (membership === "trial" && trialEndsAt) {
+      const isExpired = new Date(trialEndsAt).getTime() < Date.now();
+      if (isExpired) {
+        // Otomatik düşür
+        void fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({ membership: "free" }),
+        });
+        return { tier: "free", limits: TIER_LIMITS.free };
+      }
+
+      const msLeft = new Date(trialEndsAt).getTime() - Date.now();
+      const daysLeft = msLeft / (1000 * 60 * 60 * 24);
+      return {
+        tier: "trial",
+        limits: TIER_LIMITS.trial,
+        trialEndsAt,
+        isTrialExpiringSoon: daysLeft <= 2,
+      };
+    }
+
+    // 4. Free
+    return { tier: "free", limits: TIER_LIMITS.free };
+  } catch {
+    return { tier: "free", limits: TIER_LIMITS.free };
+  }
+}
 async function getUsersForSymbol(market: string, symbol: string): Promise<Array<{ user_id: string; type: "favorite" | "priority" }>> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
   try {
@@ -1606,6 +1713,19 @@ async function analyzeSymbol(symbol: string, market: string): Promise<AnalysisRe
     let news: NewsItem[] = [];
     if (baseResult.isImportant) {
       const users = await getUsersForSymbol(market, symbol);
+              // Tier hesapla (MTF için)
+        let maxTier: UserTier = "free";
+        let tierInfoForUser: TierInfo | null = null;
+        for (const u of users) {
+          const t = await getUserTier(u.user_id);
+          const rank: Record<UserTier, number> = { free: 0, trial: 1, premium: 2, admin: 3 };
+          if (rank[t.tier] > rank[maxTier]) {
+            maxTier = t.tier;
+            tierInfoForUser = t;
+          }
+        }
+        const allowMTF = tierInfoForUser?.limits.hasMTF ?? false;
+        const allowFearGreed = tierInfoForUser?.limits.hasFearGreed ?? false;
       const isPriorityTracked = users.some((u) => u.type === "priority");
       news = await getNewsForSymbol(market, symbol, isPriorityTracked);
     }
@@ -1691,12 +1811,25 @@ export default async function handler(request: RequestLike, response: ResponseLi
     for (const result of importantResults) {
       try {
         const users = await getUsersForSymbol(result.market, result.symbol);
+                // Tier hesapla
         const hasPriorityUser = users.some((u) => u.type === "priority");
-
+        // En yüksek tier'lı kullanıcıyı bul (MTF için)
+        let maxTier: UserTier = "free";
+        let tierInfoForUser: TierInfo | null = null;
+        for (const u of users) {
+          const t = await getUserTier(u.user_id);
+          const rank: Record<UserTier, number> = { free: 0, trial: 1, premium: 2, admin: 3 };
+          if (rank[t.tier] > rank[maxTier]) {
+            maxTier = t.tier;
+            tierInfoForUser = t;
+          }
+        }
+        const allowMTF = tierInfoForUser?.limits.hasMTF ?? false;
+                const allowFearGreed = tierInfoForUser?.limits.hasFearGreed ?? false;
         // 1️⃣ ÖNCE MULTI-TIMEFRAME (sadece priority için)
-        let mtfBonus = 0;
+                let mtfBonus = 0;
         let mtfSummary = "";
-        if (hasPriorityUser) {
+                if (hasPriorityUser && allowMTF) {
           const mtf = await analyzeMultiTimeframe(result.symbol, result.market);
           if (mtf) {
             mtfBonus = mtf.bonus;
@@ -1743,12 +1876,13 @@ export default async function handler(request: RequestLike, response: ResponseLi
         }
 
         // 5️⃣ AI YORUM
-        const ai = await generateCommentary({
+         const ai = await generateCommentary({
           symbol: result.symbol, market: result.market, price: result.price,
           changePercent: result.changePercent, direction: result.overallDirection,
           strength: result.overallStrength, indicators: result.indicators,
           patterns: result.patterns, news: result.news ?? [],
           candles: result.candles,
+          allowFearGreed,
         });
 
         if (mtfSummary) {
