@@ -1340,7 +1340,132 @@ async function getCustomAssets(): Promise<CustomAsset[]> {
     return (await res.json()) as CustomAsset[];
   } catch { return []; }
 }
+// ==========================================================
+// DND (SESSİZ SAATLER) KONTROLÜ
+// ==========================================================
 
+type DndSettings = {
+  enabled: boolean;
+  ranges: Array<{ start: string; end: string }>;
+  timezone: string;
+  allow10Percent: boolean;
+  allowPriorityCritical: boolean;
+  allowScore90: boolean;
+  allowFavorite: boolean;
+  allowTier1News: boolean;
+  dailySummary: boolean;
+};
+
+async function getUserDndSettings(userId: string): Promise<DndSettings> {
+  const defaultSettings: DndSettings = {
+    enabled: false,
+    ranges: [],
+    timezone: "Europe/Istanbul",
+    allow10Percent: true,
+    allowPriorityCritical: true,
+    allowScore90: true,
+    allowFavorite: false,
+    allowTier1News: true,
+    dailySummary: true,
+  };
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return defaultSettings;
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=dnd_enabled,dnd_ranges,dnd_timezone,dnd_allow_10_percent,dnd_allow_priority_critical,dnd_allow_score_90,dnd_allow_favorite,dnd_allow_tier1_news,dnd_daily_summary`,
+      {
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      },
+    );
+    if (!res.ok) return defaultSettings;
+    const rows = (await res.json()) as Array<Record<string, unknown>>;
+    const row = rows[0];
+    if (!row) return defaultSettings;
+
+    return {
+      enabled: Boolean(row.dnd_enabled),
+      ranges: (row.dnd_ranges as Array<{ start: string; end: string }>) ?? [],
+      timezone: String(row.dnd_timezone ?? "Europe/Istanbul"),
+      allow10Percent: Boolean(row.dnd_allow_10_percent ?? true),
+      allowPriorityCritical: Boolean(row.dnd_allow_priority_critical ?? true),
+      allowScore90: Boolean(row.dnd_allow_score_90 ?? true),
+      allowFavorite: Boolean(row.dnd_allow_favorite ?? false),
+      allowTier1News: Boolean(row.dnd_allow_tier1_news ?? true),
+      dailySummary: Boolean(row.dnd_daily_summary ?? true),
+    };
+  } catch {
+    return defaultSettings;
+  }
+}
+
+// Saat "HH:MM" formatı → dakika (0-1439)
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+// Şu an DND saatinde mi?
+function isInDndHours(dnd: DndSettings): boolean {
+  if (!dnd.enabled || dnd.ranges.length === 0) return false;
+
+  // Türkiye saatine çevir
+  const now = new Date();
+  const trTime = new Date(now.toLocaleString("en-US", { timeZone: dnd.timezone }));
+  const currentMinutes = trTime.getHours() * 60 + trTime.getMinutes();
+
+  for (const range of dnd.ranges) {
+    const start = timeToMinutes(range.start);
+    const end = timeToMinutes(range.end);
+
+    // Normal aralık: 23:00 - 07:00 → gece yarısını geçer
+    if (start <= end) {
+      if (currentMinutes >= start && currentMinutes < end) return true;
+    } else {
+      // Gece yarısını geçen aralık (23:00 - 07:00)
+      if (currentMinutes >= start || currentMinutes < end) return true;
+    }
+  }
+  return false;
+}
+
+// DND sırasında bu bildirim geçebilir mi?
+function canBypassDnd(
+  dnd: DndSettings,
+  analysis: AnalysisResult,
+  type: "global" | "favorite" | "priority",
+): boolean {
+  const signalScore = analysis.signalScore;
+  if (!signalScore) return false;
+
+  const changePct = Math.abs(analysis.changePercent);
+
+  // %10+ hareket → izinli
+  if (dnd.allow10Percent && changePct >= 10) return true;
+
+  // Öncelikli varlık kritik hareket
+  if (dnd.allowPriorityCritical && type === "priority") {
+    if (changePct >= 5 || signalScore.tier === "critical") return true;
+  }
+
+  // Skor ≥ 90
+  if (dnd.allowScore90 && signalScore.score >= 90) return true;
+
+  // Favori izinli mi?
+  if (dnd.allowFavorite && type === "favorite") {
+    if (signalScore.tier === "critical") return true;
+  }
+
+  // Tier 1 önemli haber
+  if (dnd.allowTier1News && signalScore.isImportantNews && signalScore.newsTier === 1) {
+    return true;
+  }
+
+  return false;
+}
 async function getUsersForSymbol(market: string, symbol: string): Promise<Array<{ user_id: string; type: "favorite" | "priority" }>> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
   try {
@@ -1397,7 +1522,15 @@ async function sendNotification(params: {
   const signalScore = analysis.signalScore;
   const ai = analysis.ai;
   if (!signalScore || !ai) return;
+  // DND kontrolü
+  const dnd = await getUserDndSettings(userId);
+  const inDnd = isInDndHours(dnd);
+  const canBypass = canBypassDnd(dnd, analysis, type);
 
+  if (inDnd && !canBypass) {
+    // DND sırasında gönderilmez → biriktir (delivered = false)
+    console.log(`🌙 DND biriktirildi: ${symbol} (${type})`);
+  }
   const priority = type === "priority";
     const severity = 
     signalScore.tier === "critical" ? "kritik" 
@@ -1426,6 +1559,7 @@ async function sendNotification(params: {
         priority, severity, title, message, reason,
         event_key: eventKey, notification_type: type,
         confidence: ai.confidence, is_global: isGlobal ?? false,
+                delivered: !inDnd || canBypass,
         signal_score: signalScore.score,
         signal_breakdown: signalScore.breakdown,
         ai_summary: ai.summary, ai_impact: ai.impact,
@@ -1640,8 +1774,18 @@ export default async function handler(request: RequestLike, response: ResponseLi
             ? users.filter((u) => u.type === "priority")  // sadece priority
             : users;  // critical fallback
 
-        for (const user of eligibleUsers) {
+                for (const user of eligibleUsers) {
           if (await isOnCooldown(user.user_id, result.symbol, result.market, user.type)) continue;
+          
+          // DND kontrolü (sendNotification içinde tekrar kontrol edilecek, burada log için)
+          const userDnd = await getUserDndSettings(user.user_id);
+          const userInDnd = isInDndHours(userDnd);
+          
+          if (userInDnd) {
+            const canBypass = canBypassDnd(userDnd, result, user.type);
+            console.log(`🌙 ${user.user_id.slice(0, 8)} DND'de — ${canBypass ? "GEÇTİ" : "biriktirildi"}: ${result.symbol}`);
+          }
+          
           await sendNotification({ userId: user.user_id, market: result.market, symbol: result.symbol, type: user.type, analysis: result, isGlobal: false });
           totalNotifications++;
         }
