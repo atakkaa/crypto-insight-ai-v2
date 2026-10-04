@@ -9,7 +9,6 @@ import {
   type DndSettings,
 } from "@/hooks/useDndSettings";
 import { useUserTier, startTrial } from "@/hooks/useUserTier";
-import { PremiumGate } from "@/components/PremiumGate";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -60,16 +59,24 @@ function SettingsPage() {
   }
 
   async function handleStartTrial() {
-    if (!user) return;
-    setTrialStarting(true);
-    const result = await startTrial(user.id);
-    setTrialStarting(false);
-    if (result.success) {
-      toast.success("🎉 7 günlük deneme başladı!");
-      setTimeout(() => window.location.reload(), 1000);
-    } else {
-      toast.error(result.message);
+    if (!user) {
+      toast.error("Önce giriş yapmalısınız");
+      return;
     }
+    setTrialStarting(true);
+    try {
+      const result = await startTrial(user.id);
+      if (result.success) {
+        toast.success("🎉 7 günlük deneme başladı!");
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (err) {
+      console.error("Trial hatası:", err);
+      toast.error("Bağlantı hatası");
+    }
+    setTrialStarting(false);
   }
 
   if (authLoading || loading) {
@@ -128,21 +135,20 @@ function SettingsPage() {
       </header>
 
       <main className="mx-auto max-w-4xl space-y-4 px-4 py-6">
+        {/* BAŞLIK */}
         <section className="panel p-5">
           <h1 className="text-xl font-bold">⚙️ Bildirim Ayarları</h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            Sessiz saatler, bildirim tercihleri ve özet ayarlarını buradan
+            Sessiz saatler, bildirim tercihleri ve hesap ayarlarınızı buradan
             yönetin.
           </p>
         </section>
 
-        {/* ============================ */}
         {/* TIER BADGE */}
-        {/* ============================ */}
         {tierInfo && (
           <section className="panel p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Hesap Durumu
                 </p>
@@ -155,18 +161,21 @@ function SettingsPage() {
                   </span>
                 </div>
 
-                {tierInfo.tier === "trial" && tierInfo.trialDaysLeft !== undefined && (
-                  <p className="mt-2 text-xs">
-                    {tierInfo.isTrialExpiringSoon ? "⚠️ " : "⏱️ "}
-                    Deneme süreniz:{" "}
-                    <span className="font-bold">{tierInfo.trialDaysLeft} gün</span>{" "}
-                    kaldı
-                  </p>
-                )}
+                {tierInfo.tier === "trial" &&
+                  tierInfo.trialDaysLeft !== undefined && (
+                    <p className="mt-2 text-xs">
+                      {tierInfo.isTrialExpiringSoon ? "⚠️ " : "⏱️ "}
+                      Deneme süreniz:{" "}
+                      <span className="font-bold">
+                        {tierInfo.trialDaysLeft} gün
+                      </span>{" "}
+                      kaldı
+                    </p>
+                  )}
 
                 {tierInfo.tier === "admin" && (
                   <p className="mt-2 text-xs text-amber-500">
-                    Yönetici yetkileri aktif
+                    👑 Yönetici yetkileri aktif
                   </p>
                 )}
 
@@ -237,132 +246,71 @@ function SettingsPage() {
           </section>
         )}
 
-        {/* ============================ */}
+        {/* PREMIUM ÖZELLİKLER (Sadece free için) */}
+        {tierInfo && tierInfo.tier === "free" && (
+          <section className="panel p-5">
+            <h2 className="text-lg font-bold">⭐ Premium Özellikler</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Aşağıdaki özellikler şu an kilitli. Deneme başlatarak veya
+              Premium'a geçerek tümünü açabilirsiniz.
+            </p>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="flex items-start gap-3 rounded-md border border-border bg-card p-3 opacity-60">
+                <span className="text-xl">📊</span>
+                <div>
+                  <p className="text-xs font-bold">MTF Analiz</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    🔒 Kilitli
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-md border border-border bg-card p-3 opacity-60">
+                <span className="text-xl">😱</span>
+                <div>
+                  <p className="text-xs font-bold">Fear & Greed</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    🔒 Kilitli
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-md border border-border bg-card p-3 opacity-60">
+                <span className="text-xl">📰</span>
+                <div>
+                  <p className="text-xs font-bold">20 Haber Analizi</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    🔒 Şu an 10 haber
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-md border border-border bg-card p-3 opacity-60">
+                <span className="text-xl">⭐</span>
+                <div>
+                  <p className="text-xs font-bold">Öncelikli Varlıklar</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    🔒 Kilitli
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={trialStarting}
+              onClick={() => void handleStartTrial()}
+              className="mt-4 w-full rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {trialStarting
+                ? "Başlatılıyor..."
+                : "🚀 1 Hafta Ücretsiz Dene"}
+            </button>
+          </section>
+        )}
+
         {/* SESSİZ MOD */}
-        {/* ============================ */}
         <section className="panel p-5">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-                        {/* PREMIUM ÖZELLİKLER */}
-        {tierInfo && tierInfo.tier === "free" && (
-          <section className="panel p-5">
-            <h2 className="text-lg font-bold">⭐ Premium Özellikler</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Aşağıdaki özellikler şu an kilitli. Deneme başlatarak veya
-              Premium'a geçerek tümünü açabilirsiniz.
-            </p>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="flex items-start gap-3 rounded-md border border-border bg-card p-3 opacity-60">
-                <span className="text-xl">📊</span>
-                <div>
-                  <p className="text-xs font-bold">MTF Analiz</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    🔒 Kilitli
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 rounded-md border border-border bg-card p-3 opacity-60">
-                <span className="text-xl">😱</span>
-                <div>
-                  <p className="text-xs font-bold">Fear & Greed</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    🔒 Kilitli
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 rounded-md border border-border bg-card p-3 opacity-60">
-                <span className="text-xl">📰</span>
-                <div>
-                  <p className="text-xs font-bold">20 Haber Analizi</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    🔒 Şu an 10 haber
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 rounded-md border border-border bg-card p-3 opacity-60">
-                <span className="text-xl">⭐</span>
-                <div>
-                  <p className="text-xs font-bold">Öncelikli Varlıklar</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    🔒 Kilitli
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              disabled={trialStarting}
-              onClick={() => void handleStartTrial()}
-              className="mt-4 w-full rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {trialStarting
-                ? "Başlatılıyor..."
-                : "🚀 1 Hafta Ücretsiz Dene"}
-            </button>
-          </section>
-        )}
-                {/* PREMIUM ÖZELLİKLER */}
-        {tierInfo && tierInfo.tier === "free" && (
-          <section className="panel p-5">
-            <h2 className="text-lg font-bold">⭐ Premium Özellikler</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Aşağıdaki özellikler şu an kilitli. Deneme başlatarak veya
-              Premium'a geçerek tümünü açabilirsiniz.
-            </p>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="flex items-start gap-3 rounded-md border border-border bg-card p-3 opacity-60">
-                <span className="text-xl">📊</span>
-                <div>
-                  <p className="text-xs font-bold">MTF Analiz</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    🔒 Kilitli
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 rounded-md border border-border bg-card p-3 opacity-60">
-                <span className="text-xl">😱</span>
-                <div>
-                  <p className="text-xs font-bold">Fear & Greed</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    🔒 Kilitli
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 rounded-md border border-border bg-card p-3 opacity-60">
-                <span className="text-xl">📰</span>
-                <div>
-                  <p className="text-xs font-bold">20 Haber Analizi</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    🔒 Şu an 10 haber
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 rounded-md border border-border bg-card p-3 opacity-60">
-                <span className="text-xl">⭐</span>
-                <div>
-                  <p className="text-xs font-bold">Öncelikli Varlıklar</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    🔒 Kilitli
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              disabled={trialStarting}
-              onClick={() => void handleStartTrial()}
-              className="mt-4 w-full rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {trialStarting
-                ? "Başlatılıyor..."
-                : "🚀 1 Hafta Ücretsiz Dene"}
-            </button>
-          </section>
-        )}
               <h2 className="text-lg font-bold">🔕 Sessiz Mod</h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 Belirttiğiniz saat aralıklarında bildirimler sessize alınır.
@@ -489,7 +437,7 @@ function SettingsPage() {
         </section>
 
         {/* KAYDET */}
-        <section className="panel flex items-center justify-between p-4">
+        <section className="panel flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="text-xs text-muted-foreground">
             {local
               ? "Kaydedilmemiş değişiklikleriniz var"
