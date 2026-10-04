@@ -1,4 +1,4 @@
-// src/routes/admin.tsx — Admin Paneli
+// src/routes/admin.tsx — Admin Paneli v2
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -14,6 +14,10 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
+// ==========================================================
+// TİPLER
+// ==========================================================
+
 type Profile = {
   id: string;
   email: string | null;
@@ -21,7 +25,73 @@ type Profile = {
   membership: string;
   is_banned: boolean;
   created_at: string;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  trial_used: boolean;
 };
+
+type UserTier = "admin" | "premium" | "trial" | "free";
+
+// ==========================================================
+// TIER YARDIMCILARI
+// ==========================================================
+
+function getUserTier(profile: Profile): UserTier {
+  if (profile.role === "admin") return "admin";
+  if (profile.membership === "premium") return "premium";
+  if (profile.membership === "trial") {
+    if (profile.trial_ends_at) {
+      const isExpired =
+        new Date(profile.trial_ends_at).getTime() < Date.now();
+      if (!isExpired) return "trial";
+    }
+    return "free";
+  }
+  return "free";
+}
+
+function getTrialDaysLeft(profile: Profile): number | null {
+  if (!profile.trial_ends_at) return null;
+  const msLeft = new Date(profile.trial_ends_at).getTime() - Date.now();
+  if (msLeft <= 0) return null;
+  return Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+}
+
+function tierBadge(tier: UserTier) {
+  switch (tier) {
+    case "admin":
+      return {
+        emoji: "👑",
+        label: "ADMIN",
+        cls: "bg-amber-500/15 text-amber-500",
+      };
+    case "premium":
+      return {
+        emoji: "⭐",
+        label: "PREMIUM",
+        cls: "bg-primary/15 text-primary",
+      };
+    case "trial":
+      return {
+        emoji: "⏱️",
+        label: "DENEME",
+        cls: "bg-blue-500/15 text-blue-400",
+      };
+    case "free":
+      return {
+        emoji: "🆓",
+        label: "FREE",
+        cls: "bg-secondary text-muted-foreground",
+      };
+  }
+}
+
+const SELECT_FIELDS =
+  "id, email, role, membership, is_banned, created_at, trial_started_at, trial_ends_at, trial_used";
+
+// ==========================================================
+// ANA BİLEŞEN
+// ==========================================================
 
 function AdminPage() {
   const { user, loading: authLoading } = useAuth();
@@ -31,8 +101,11 @@ function AdminPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [search, setSearch] = useState("");
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [tierFilter, setTierFilter] = useState<"all" | UserTier>("all");
 
-  // Admin kontrolü ve kullanıcı listesi
+  // =========================================================
+  // ADMIN KONTROLÜ VE KULLANICI LİSTESİ
+  // =========================================================
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -42,7 +115,6 @@ function AdminPage() {
     }
 
     void (async () => {
-      // Admin mi?
       const { data, error } = await (supabase as any)
         .from("profiles")
         .select("role")
@@ -64,10 +136,9 @@ function AdminPage() {
         return;
       }
 
-      // Admin ise tüm kullanıcıları çek
       const { data: allUsers, error: usersError } = await (supabase as any)
         .from("profiles")
-        .select("id, email, role, membership, is_banned, created_at")
+        .select(SELECT_FIELDS)
         .order("created_at", { ascending: false });
 
       if (usersError) {
@@ -79,6 +150,9 @@ function AdminPage() {
     })();
   }, [user, authLoading]);
 
+  // =========================================================
+  // PREMIUM TOGGLE
+  // =========================================================
   async function togglePremium(userId: string, current: string) {
     setBusyUserId(userId);
     const newVal = current === "premium" ? "free" : "premium";
@@ -98,6 +172,73 @@ function AdminPage() {
     setBusyUserId(null);
   }
 
+  // =========================================================
+  // TRIAL BAŞLAT
+  // =========================================================
+  async function startTrialForUser(userId: string) {
+    setBusyUserId(userId);
+    try {
+      const res = await fetch("/api/start-trial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const data = (await res.json()) as { success: boolean; error?: string };
+      if (!res.ok || !data.success) {
+        toast.error(data.error ?? "Deneme başlatılamadı");
+      } else {
+        const now = new Date();
+        const endsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === userId
+              ? {
+                  ...u,
+                  membership: "trial",
+                  trial_started_at: now.toISOString(),
+                  trial_ends_at: endsAt.toISOString(),
+                  trial_used: true,
+                }
+              : u,
+          ),
+        );
+        toast.success("🚀 7 günlük deneme başladı");
+      }
+    } catch {
+      toast.error("Bağlantı hatası");
+    }
+    setBusyUserId(null);
+  }
+
+  // =========================================================
+  // TRIAL İPTAL
+  // =========================================================
+  async function cancelTrialForUser(userId: string) {
+    if (!window.confirm("Deneme iptal edilsin mi?")) return;
+    setBusyUserId(userId);
+    const { error } = await (supabase as any)
+      .from("profiles")
+      .update({ membership: "free", trial_ends_at: null })
+      .eq("id", userId);
+
+    if (error) {
+      toast.error("İptal edilemedi");
+    } else {
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId
+            ? { ...u, membership: "free", trial_ends_at: null }
+            : u,
+        ),
+      );
+      toast.success("Deneme iptal edildi");
+    }
+    setBusyUserId(null);
+  }
+
+  // =========================================================
+  // BAN TOGGLE
+  // =========================================================
   async function toggleBan(userId: string, current: boolean) {
     setBusyUserId(userId);
     const newVal = !current;
@@ -117,6 +258,9 @@ function AdminPage() {
     setBusyUserId(null);
   }
 
+  // =========================================================
+  // ADMIN ROLE TOGGLE
+  // =========================================================
   async function toggleAdminRole(userId: string, current: string) {
     if (userId === user?.id) {
       toast.error("Kendi rolünüzü değiştiremezsiniz");
@@ -143,6 +287,9 @@ function AdminPage() {
     setBusyUserId(null);
   }
 
+  // =========================================================
+  // KULLANICI SİL
+  // =========================================================
   async function deleteUser(userId: string, email: string | null) {
     if (userId === user?.id) {
       toast.error("Kendi hesabınızı silemezsiniz");
@@ -165,6 +312,19 @@ function AdminPage() {
   }
 
   // =========================================================
+  // YENİLE
+  // =========================================================
+  async function refreshUsers() {
+    setLoading(true);
+    const { data } = await (supabase as any)
+      .from("profiles")
+      .select(SELECT_FIELDS)
+      .order("created_at", { ascending: false });
+    setUsers((data ?? []) as Profile[]);
+    setLoading(false);
+  }
+
+  // =========================================================
   // YÜKLENİYOR
   // =========================================================
   if (authLoading || loading || isAdmin === null) {
@@ -176,7 +336,7 @@ function AdminPage() {
   }
 
   // =========================================================
-  // KULLANICI YOKSA → GİRİŞ SAYFASINA YÖNLENDİR
+  // GİRİŞ YOK
   // =========================================================
   if (!user) {
     return (
@@ -205,7 +365,7 @@ function AdminPage() {
   }
 
   // =========================================================
-  // ADMIN DEĞİLSE → "YETKİNİZ YOK" EKRANI
+  // ADMIN DEĞİL
   // =========================================================
   if (!isAdmin) {
     return (
@@ -231,19 +391,31 @@ function AdminPage() {
   }
 
   // =========================================================
-  // ADMIN PANELİ
+  // FİLTRELEME
   // =========================================================
   const filtered = users.filter((u) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      (u.email ?? "").toLowerCase().includes(q) ||
-      u.id.toLowerCase().includes(q)
-    );
+    // Arama
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const matches =
+        (u.email ?? "").toLowerCase().includes(q) ||
+        u.id.toLowerCase().includes(q);
+      if (!matches) return false;
+    }
+    // Tier filtresi
+    if (tierFilter !== "all") {
+      const tier = getUserTier(u);
+      if (tier !== tierFilter) return false;
+    }
+    return true;
   });
 
+  // İstatistikler
   const totalUsers = users.length;
-  const premiumUsers = users.filter((u) => u.membership === "premium").length;
+  const premiumUsers = users.filter(
+    (u) => getUserTier(u) === "premium",
+  ).length;
+  const trialUsers = users.filter((u) => getUserTier(u) === "trial").length;
   const bannedUsers = users.filter((u) => u.is_banned).length;
 
   return (
@@ -269,6 +441,12 @@ function AdminPage() {
             >
               Liste
             </Link>
+            <Link
+              to="/settings"
+              className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
+            >
+              ⚙️ Ayarlar
+            </Link>
             <span className="rounded-md bg-primary/15 px-3 py-1.5 font-bold text-primary">
               👑 Admin
             </span>
@@ -280,13 +458,15 @@ function AdminPage() {
       </header>
 
       <main className="mx-auto max-w-7xl space-y-4 px-4 py-6">
+        {/* BAŞLIK */}
         <section className="panel p-5">
           <h1 className="text-xl font-bold">👑 Admin Paneli</h1>
           <p className="mt-1 text-xs text-muted-foreground">
             Kullanıcıları yönetin, üyelik ve erişim durumlarını kontrol edin.
           </p>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {/* İSTATİSTİKLER */}
+          <div className="mt-4 grid gap-3 sm:grid-cols-4">
             <div className="rounded-lg border border-border bg-card p-3">
               <p className="text-xs text-muted-foreground">Toplam Kullanıcı</p>
               <p className="num mt-1 text-2xl font-bold">{totalUsers}</p>
@@ -298,6 +478,12 @@ function AdminPage() {
               </p>
             </div>
             <div className="rounded-lg border border-border bg-card p-3">
+              <p className="text-xs text-muted-foreground">Deneme Süresinde</p>
+              <p className="num mt-1 text-2xl font-bold text-blue-400">
+                {trialUsers}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border bg-card p-3">
               <p className="text-xs text-muted-foreground">Banlı</p>
               <p className="num mt-1 text-2xl font-bold text-bear">
                 {bannedUsers}
@@ -305,6 +491,7 @@ function AdminPage() {
             </div>
           </div>
 
+          {/* ARAMA + FİLTRE */}
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <input
               value={search}
@@ -312,21 +499,22 @@ function AdminPage() {
               placeholder="E-posta veya ID ara..."
               className="min-w-[240px] flex-1 rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring"
             />
+            <select
+              value={tierFilter}
+              onChange={(e) =>
+                setTierFilter(e.target.value as typeof tierFilter)
+              }
+              className="rounded-md border border-input bg-card px-3 py-2 text-xs font-bold outline-none"
+            >
+              <option value="all">Tüm Tier'lar</option>
+              <option value="admin">👑 Admin</option>
+              <option value="premium">⭐ Premium</option>
+              <option value="trial">⏱️ Deneme</option>
+              <option value="free">🆓 Free</option>
+            </select>
             <button
               type="button"
-              onClick={() => {
-                setLoading(true);
-                void (async () => {
-                  const { data } = await (supabase as any)
-                    .from("profiles")
-                    .select(
-                      "id, email, role, membership, is_banned, created_at",
-                    )
-                    .order("created_at", { ascending: false });
-                  setUsers((data ?? []) as Profile[]);
-                  setLoading(false);
-                })();
-              }}
+              onClick={() => void refreshUsers()}
               className="rounded-md border border-border px-3 py-2 text-xs font-bold hover:bg-secondary"
             >
               🔄 Yenile
@@ -334,6 +522,7 @@ function AdminPage() {
           </div>
         </section>
 
+        {/* KULLANICI TABLOSU */}
         <section className="panel overflow-hidden">
           <div className="border-b border-border px-4 py-3">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -352,8 +541,8 @@ function AdminPage() {
                   <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
                     <th className="px-3 py-2">#</th>
                     <th className="px-3 py-2">E-posta</th>
+                    <th className="px-3 py-2">Tier</th>
                     <th className="px-3 py-2">Rol</th>
-                    <th className="px-3 py-2">Üyelik</th>
                     <th className="px-3 py-2">Durum</th>
                     <th className="px-3 py-2">Kayıt</th>
                     <th className="px-3 py-2 text-right">Aksiyonlar</th>
@@ -363,6 +552,10 @@ function AdminPage() {
                   {filtered.map((u, idx) => {
                     const isMe = u.id === user?.id;
                     const busy = busyUserId === u.id;
+                    const tier = getUserTier(u);
+                    const badge = tierBadge(tier);
+                    const daysLeft =
+                      tier === "trial" ? getTrialDaysLeft(u) : null;
 
                     return (
                       <tr
@@ -376,12 +569,24 @@ function AdminPage() {
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs">
-                              {u.email ?? "—"}
-                            </span>
+                            <span className="text-xs">{u.email ?? "—"}</span>
                             {isMe && (
                               <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold text-primary">
                                 SEN
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-col gap-0.5">
+                            <span
+                              className={`inline-flex w-fit items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold ${badge.cls}`}
+                            >
+                              {badge.emoji} {badge.label}
+                            </span>
+                            {daysLeft !== null && (
+                              <span className="text-[9px] text-blue-400">
+                                {daysLeft} gün kaldı
                               </span>
                             )}
                           </div>
@@ -394,17 +599,6 @@ function AdminPage() {
                           ) : (
                             <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-bold">
                               USER
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">
-                          {u.membership === "premium" ? (
-                            <span className="rounded bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
-                              ⭐ PREMIUM
-                            </span>
-                          ) : (
-                            <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-bold">
-                              FREE
                             </span>
                           )}
                         </td>
@@ -424,22 +618,54 @@ function AdminPage() {
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex flex-wrap items-center justify-end gap-1">
+                            {/* TRIAL BUTONU */}
+                            {tier === "trial" ? (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void cancelTrialForUser(u.id)}
+                                className="rounded border border-blue-500/30 px-2 py-1 text-[10px] font-bold text-blue-400 hover:bg-blue-500/10 disabled:opacity-50"
+                              >
+                                ⏱️ İptal
+                              </button>
+                            ) : tier === "free" && !u.trial_used ? (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void startTrialForUser(u.id)}
+                                className="rounded border border-blue-500/30 px-2 py-1 text-[10px] font-bold text-blue-400 hover:bg-blue-500/10 disabled:opacity-50"
+                              >
+                                🚀 Trial Ver
+                              </button>
+                            ) : null}
+
+                            {/* PREMIUM TOGGLE */}
                             <button
                               type="button"
                               disabled={busy}
-                              onClick={() => void togglePremium(u.id, u.membership)}
+                              onClick={() =>
+                                void togglePremium(u.id, u.membership)
+                              }
                               className="rounded border border-border px-2 py-1 text-[10px] font-bold hover:bg-primary/10 disabled:opacity-50"
                             >
-                              {u.membership === "premium" ? "↩️ Free" : "⭐ Premium"}
+                              {u.membership === "premium"
+                                ? "↩️ Free"
+                                : "⭐ Premium"}
                             </button>
+
+                            {/* ADMIN TOGGLE */}
                             <button
                               type="button"
                               disabled={busy || isMe}
-                              onClick={() => void toggleAdminRole(u.id, u.role)}
+                              onClick={() =>
+                                void toggleAdminRole(u.id, u.role)
+                              }
                               className="rounded border border-border px-2 py-1 text-[10px] font-bold hover:bg-amber-500/10 disabled:opacity-50"
                             >
                               {u.role === "admin" ? "↓ User" : "👑 Admin"}
                             </button>
+
+                            {/* BAN TOGGLE */}
                             <button
                               type="button"
                               disabled={busy || isMe}
@@ -448,6 +674,8 @@ function AdminPage() {
                             >
                               {u.is_banned ? "✅ Aç" : "🚫 Ban"}
                             </button>
+
+                            {/* SİL */}
                             <button
                               type="button"
                               disabled={busy || isMe}
