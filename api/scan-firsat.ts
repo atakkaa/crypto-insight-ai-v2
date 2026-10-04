@@ -78,6 +78,8 @@ type AiCommentary = {
   riskReward?: string | undefined;
   support?: string | undefined;
   resistance?: string | undefined;
+    fearGreed?: number | undefined;
+  fearGreedClass?: string | undefined;
   timeframe?: {
     h1: TimeframeDir;
     h4: TimeframeDir;
@@ -496,7 +498,76 @@ async function getYahooCandles(symbol: string, interval: string): Promise<Candle
     return sliced;
   } catch { return []; }
 }
+// ==========================================================
+// FEAR & GREED INDEX (Alternative.me)
+// ==========================================================
 
+type FearGreedResult = {
+  value: number;
+  classification: string;
+  emoji: string;
+  advice: string;
+} | null;
+
+async function getFearGreedIndex(): Promise<FearGreedResult> {
+  const cacheKey = "feargreed:current";
+  const cached = await getFromCache<FearGreedResult>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch("https://api.alternative.me/fng/?limit=1");
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      data?: Array<{ value: string; value_classification: string }>;
+    };
+    const entry = data.data?.[0];
+    if (!entry) return null;
+
+    const value = Number(entry.value);
+    const classification = entry.value_classification;
+
+    // Türkçe çeviri + emoji + tavsiye
+    let emoji = "😐";
+    let advice = "Piyasa dengede, net sinyal beklenebilir.";
+    let trClass = "Nötr";
+
+    if (value <= 24) {
+      emoji = "😱";
+      trClass = "Aşırı Korku";
+      advice = "Panik satışları hakim. Klasik dip alım fırsatı olabilir.";
+    } else if (value <= 44) {
+      emoji = "😰";
+      trClass = "Korku";
+      advice = "Piyasa temkinli, dikkatli alım değerlendirilebilir.";
+    } else if (value <= 55) {
+      emoji = "😐";
+      trClass = "Nötr";
+      advice = "Piyasa dengede, net sinyal beklenebilir.";
+    } else if (value <= 74) {
+      emoji = "🤑";
+      trClass = "Açgözlülük";
+      advice = "Piyasa iyimser, kısmi kar realizasyonu düşünülebilir.";
+    } else {
+      emoji = "🚀";
+      trClass = "Aşırı Açgözlülük";
+      advice = "Coşku zirvede, düzeltme riski yüksek.";
+    }
+
+    const result: FearGreedResult = {
+      value,
+      classification: trClass,
+      emoji,
+      advice,
+    };
+
+    // 1 saatlik cache
+    await setToCache(cacheKey, result, 60);
+    return result;
+  } catch (error) {
+    console.error("Fear & Greed hatası:", error);
+    return null;
+  }
+}
 async function getTopCryptoSymbols(limit = 100): Promise<string[]> {
   const cacheKey = `binance:top:${limit}`;
   const cached = await getFromCache<string[]>(cacheKey);
@@ -1039,6 +1110,11 @@ async function generateCommentary(input: {
   candles?: Candle[] | undefined;
 }): Promise<AiCommentary> {
   let result = await generateWithOpenRouter(input);
+    // Kripto için Fear & Greed çek (paralel)
+  let fearGreed: FearGreedResult = null;
+  if (input.market === "crypto") {
+    fearGreed = await getFearGreedIndex();
+  }
   if (!result) {
     console.log("⚠️ AI başarısız → rule-based motor");
     result = generateRuleBasedCommentary({
@@ -1052,6 +1128,14 @@ async function generateCommentary(input: {
       candles: input.candles,
       price: input.price,
     });
+  }
+    // Fear & Greed'i AI yorumuna ekle
+  if (fearGreed) {
+    result.fearGreed = fearGreed.value;
+    result.fearGreedClass = fearGreed.classification;
+
+    const fgLine = `\n\n${fearGreed.emoji} PİYASA DUYARLILIĞI:\nFear & Greed: ${fearGreed.value} (${fearGreed.classification})\n${fearGreed.advice}`;
+    result.summary = `${result.summary}${fgLine}`;
   }
   return result;
 }
@@ -1276,6 +1360,7 @@ async function sendNotification(params: {
         ai_risk_reward: ai.riskReward ?? null,
         ai_support: ai.support ?? null,
         ai_resistance: ai.resistance ?? null,
+                fear_greed: ai.fearGreed ?? null,
         news_items: analysis.news ?? [],
         data: {
           indicators: analysis.indicators,

@@ -38,6 +38,7 @@ export type Notification = {
   ai_risk_reward?: string | null;
   ai_support?: string | null;
   ai_resistance?: string | null;
+    fear_greed?: number | null;
   // === DİĞER ===
   is_global?: boolean | null;
   notification_type?: string | null;

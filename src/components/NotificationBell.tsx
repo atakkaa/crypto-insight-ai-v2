@@ -307,6 +307,26 @@ export function NotificationBell({ onOpenSymbol }: Props) {
                       )}
                     </div>
                   )}
+                                    {/* 🆕 Fear & Greed */}
+                  {n.fear_greed != null && (
+                    <div className="mt-1 flex items-center gap-2 rounded-md border border-border/60 bg-secondary/20 px-2 py-1 text-[10px]">
+                      <span>😱</span>
+                      <span className="text-muted-foreground">Piyasa:</span>
+                      <span className="num font-bold">
+                        {n.fear_greed}
+                        {" "}
+                        {n.fear_greed <= 24
+                          ? "(Aşırı Korku)"
+                          : n.fear_greed <= 44
+                            ? "(Korku)"
+                            : n.fear_greed <= 55
+                              ? "(Nötr)"
+                              : n.fear_greed <= 74
+                                ? "(Açgözlülük)"
+                                : "(Aşırı Açgözlülük)"}
+                      </span>
+                    </div>
+                  )}
                 </button>
               ))
             )}
