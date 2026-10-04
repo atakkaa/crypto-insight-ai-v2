@@ -1,9 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { supabase } from "@/integrations/supabase/client";
 import type { ChartAnalysis } from "./analysis-types";
 
 export type { ChartAnalysis, PatternLine } from "./analysis-types";
+
+// ============================================================
+// INPUT SCHEMAS
+// ============================================================
 
 const CandleSchema = z.object({
   time: z.number(),
@@ -32,19 +37,109 @@ const AnalyzeInput = z.object({
   news: z.array(NewsContextSchema).max(6).optional(),
 });
 
+// ============================================================
+// CACHE AYARLARI
+// ============================================================
+
+const CACHE_TTL_MINUTES = 30;
+
+// ============================================================
+// CACHE OKUMA
+// ============================================================
+
+async function getCachedAnalysis(
+  market: string,
+  symbol: string,
+  interval: string,
+): Promise<ChartAnalysis | null> {
+  try {
+    const { data, error } = await (supabase as any)
+      .from("precomputed_analysis")
+      .select("analysis, computed_at")
+      .eq("market", market)
+      .eq("symbol", symbol)
+      .eq("timeframe", interval)
+      .maybeSingle();
+
+    if (error || !data?.analysis || !data.computed_at) return null;
+
+    const ageMinutes =
+      (Date.now() - new Date(data.computed_at).getTime()) / 60_000;
+
+    if (ageMinutes > CACHE_TTL_MINUTES) {
+      console.log(
+        `⚠️ Cache eski: ${symbol} (${ageMinutes.toFixed(0)} dk > ${CACHE_TTL_MINUTES} dk)`,
+      );
+      return null;
+    }
+
+    console.log(`✅ CACHE HIT: ${symbol} (${ageMinutes.toFixed(0)} dk)`);
+    return data.analysis as ChartAnalysis;
+  } catch (error) {
+    console.warn("Cache okuma hatası:", error);
+    return null;
+  }
+}
+
+// ============================================================
+// CACHE YAZMA (fire-and-forget)
+// ============================================================
+
+async function saveToCache(
+  market: string,
+  symbol: string,
+  interval: string,
+  analysis: ChartAnalysis,
+): Promise<void> {
+  try {
+    await (supabase as any)
+      .from("precomputed_analysis")
+      .upsert(
+        {
+          market,
+          symbol,
+          timeframe: interval,
+          analysis,
+          computed_at: new Date().toISOString(),
+        },
+        { onConflict: "market,symbol,timeframe" },
+      );
+
+    console.log(`💾 CACHE KAYDEDİLDİ: ${symbol}`);
+  } catch (error) {
+    console.warn("Cache kayıt hatası:", error);
+  }
+}
+
+// ============================================================
+// ANA FONKSİYON
+// ============================================================
+
 export const analyzeChart = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => AnalyzeInput.parse(data))
   .handler(async ({ data }) => {
+    const { symbol, market, interval } = data;
+
+    // 1. ÖNCE CACHE'E BAK
+    const cached = await getCachedAnalysis(market, symbol, interval);
+    if (cached) {
+      return { analysis: cached, error: null as string | null };
+    }
+
+    // 2. CACHE YOK → ESKİ YÖNTEM (hesapla)
+    console.log(`⚠️ CACHE MISS: ${symbol} — yeniden hesaplanıyor...`);
+
     const { runChartAnalysis } = await import("./analysis.server");
     const { GatewayError } = await import("./ai-gateway.server");
+
     try {
       const result = await runChartAnalysis(data);
+
+      // 3. SONUCU CACHE'E YAZ (arka planda, fire-and-forget)
+      void saveToCache(market, symbol, interval, result);
+
       return { analysis: result, error: null as string | null };
     } catch (error) {
-      // runChartAnalysis kendi içinde AI kota/gateway hatalarını
-      // deterministik teknik + formasyon fallback'ine çevirir.
-      // Buraya düşülmesi artık AI kotasının bittiği anlamına gelmez;
-      // burada yalnızca gerçek bir sunucu/veri hatasını bildiriyoruz.
       const message =
         error instanceof GatewayError
           ? error.message
