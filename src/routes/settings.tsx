@@ -8,6 +8,7 @@ import {
   type DndRange,
   type DndSettings,
 } from "@/hooks/useDndSettings";
+import { useUserTier, startTrial } from "@/hooks/useUserTier";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -19,8 +20,11 @@ export const Route = createFileRoute("/settings")({
 function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
   const { settings, loading, saving, save } = useDndSettings();
+  const { tierInfo } = useUserTier();
 
   const [local, setLocal] = useState<DndSettings | null>(null);
+  const [trialStarting, setTrialStarting] = useState(false);
+
   const current = local ?? settings;
 
   function update<K extends keyof DndSettings>(key: K, value: DndSettings[K]) {
@@ -51,6 +55,19 @@ function SettingsPage() {
       setLocal(null);
     } else {
       toast.error("Kaydedilemedi");
+    }
+  }
+
+  async function handleStartTrial() {
+    if (!user) return;
+    setTrialStarting(true);
+    const result = await startTrial(user.id);
+    setTrialStarting(false);
+    if (result.success) {
+      toast.success("🎉 7 günlük deneme başladı!");
+      setTimeout(() => window.location.reload(), 1000);
+    } else {
+      toast.error(result.message);
     }
   }
 
@@ -118,10 +135,113 @@ function SettingsPage() {
           </p>
         </section>
 
+        {/* ============================ */}
+        {/* TIER BADGE */}
+        {/* ============================ */}
+        {tierInfo && (
+          <section className="panel p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Hesap Durumu
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className={`text-3xl ${tierInfo.color}`}>
+                    {tierInfo.emoji}
+                  </span>
+                  <span className={`text-xl font-bold ${tierInfo.color}`}>
+                    {tierInfo.label}
+                  </span>
+                </div>
+
+                {tierInfo.tier === "trial" && tierInfo.trialDaysLeft !== undefined && (
+                  <p className="mt-2 text-xs">
+                    {tierInfo.isTrialExpiringSoon ? "⚠️ " : "⏱️ "}
+                    Deneme süreniz:{" "}
+                    <span className="font-bold">{tierInfo.trialDaysLeft} gün</span>{" "}
+                    kaldı
+                  </p>
+                )}
+
+                {tierInfo.tier === "admin" && (
+                  <p className="mt-2 text-xs text-amber-500">
+                    Yönetici yetkileri aktif
+                  </p>
+                )}
+
+                {tierInfo.tier === "premium" && (
+                  <p className="mt-2 text-xs text-primary">
+                    ✅ Tüm özellikler aktif
+                  </p>
+                )}
+
+                {tierInfo.tier === "free" && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Kısıtlı özellikler — Premium'a geçerek tümünü açın
+                  </p>
+                )}
+              </div>
+
+              {tierInfo.tier === "free" && (
+                <button
+                  type="button"
+                  disabled={trialStarting}
+                  onClick={() => void handleStartTrial()}
+                  className="shrink-0 rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {trialStarting ? "Başlatılıyor..." : "🚀 1 Hafta Dene"}
+                </button>
+              )}
+            </div>
+
+            {/* LİMİTLER */}
+            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border pt-4 sm:grid-cols-4">
+              <div className="rounded-md border border-border bg-card p-3">
+                <p className="text-[10px] text-muted-foreground">
+                  Favori Limiti
+                </p>
+                <p className="num mt-1 text-lg font-bold">
+                  {tierInfo.limits.favorites >= 999
+                    ? "∞"
+                    : tierInfo.limits.favorites}
+                </p>
+              </div>
+              <div className="rounded-md border border-border bg-card p-3">
+                <p className="text-[10px] text-muted-foreground">
+                  Öncelikli Limiti
+                </p>
+                <p className="num mt-1 text-lg font-bold">
+                  {tierInfo.limits.priority >= 999
+                    ? "∞"
+                    : tierInfo.limits.priority === 0
+                      ? "🔒"
+                      : tierInfo.limits.priority}
+                </p>
+              </div>
+              <div className="rounded-md border border-border bg-card p-3">
+                <p className="text-[10px] text-muted-foreground">MTF Analiz</p>
+                <p className="mt-1 text-lg font-bold">
+                  {tierInfo.limits.hasMTF ? "✅" : "🔒"}
+                </p>
+              </div>
+              <div className="rounded-md border border-border bg-card p-3">
+                <p className="text-[10px] text-muted-foreground">
+                  Fear & Greed
+                </p>
+                <p className="mt-1 text-lg font-bold">
+                  {tierInfo.limits.hasFearGreed ? "✅" : "🔒"}
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ============================ */}
         {/* SESSİZ MOD */}
+        {/* ============================ */}
         <section className="panel p-5">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="flex-1">
               <h2 className="text-lg font-bold">🔕 Sessiz Mod</h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 Belirttiğiniz saat aralıklarında bildirimler sessize alınır.
@@ -131,7 +251,7 @@ function SettingsPage() {
             <button
               type="button"
               onClick={() => update("dnd_enabled", !current.dnd_enabled)}
-              className={`relative h-7 w-14 shrink-0 rounded-full transition-colors ${
+              className={`relative ml-4 h-7 w-14 shrink-0 rounded-full transition-colors ${
                 current.dnd_enabled ? "bg-primary" : "bg-secondary"
               }`}
             >
@@ -247,6 +367,7 @@ function SettingsPage() {
           )}
         </section>
 
+        {/* KAYDET */}
         <section className="panel flex items-center justify-between p-4">
           <p className="text-xs text-muted-foreground">
             {local
@@ -277,6 +398,10 @@ function SettingsPage() {
     </div>
   );
 }
+
+// ==========================================================
+// YARDIMCI BİLEŞEN
+// ==========================================================
 
 function BypassToggle({
   label,
