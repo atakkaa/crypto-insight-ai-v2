@@ -99,7 +99,9 @@ type SignalScoreResult = {
   };
   shouldNotify: boolean;
   reason: string;
-  tier: "critical" | "important" | "watch" | "silent";
+  tier: "critical" | "important" | "normal" | "watch" | "silent";
+  newsTier?: 1 | 2 | 3;
+  isImportantNews?: boolean;
 };
 
 type AnalysisResult = {
@@ -1143,8 +1145,71 @@ async function generateCommentary(input: {
 // ==========================================================
 // SİNYAL SKORU
 // ==========================================================
+// ==========================================================
+// HABER KALİTE FİLTRESİ (Tier 1/2/3)
+// ==========================================================
 
-function computeSignalScore(input: {
+const TIER1_SOURCES = [
+  "Bloomberg", "Reuters", "CoinDesk", "WSJ", "Wall Street Journal",
+  "Financial Times", "SEC.gov", "Federal Reserve", "Bloomberg HT",
+];
+
+const TIER2_SOURCES = [
+  "Cointelegraph", "Decrypt", "Investing.com", "Investing TR",
+  "Yahoo Finance", "Dünya", "Finnhub", "CryptoPotato", "Bitcoinist",
+];
+
+function evaluateNewsQuality(
+  news: NewsItem[],
+  direction: string,
+): { score: number; tier: 1 | 2 | 3; isImportant: boolean } {
+  if (news.length === 0) {
+    return { score: 0, tier: 3, isImportant: false };
+  }
+
+  let bestScore = 0;
+  let bestTier: 1 | 2 | 3 = 3;
+
+  for (const item of news) {
+    let itemScore = 0;
+
+    // 1. Kaynak kalitesi
+    const source = item.source ?? "";
+    if (TIER1_SOURCES.some((s) => source.includes(s))) {
+      itemScore += 30;
+      if (bestTier > 1) bestTier = 1;
+    } else if (TIER2_SOURCES.some((s) => source.includes(s))) {
+      itemScore += 15;
+      if (bestTier > 2) bestTier = 2;
+    }
+
+    // 2. Sentiment şiddeti
+    const absSent = Math.abs(item.sentimentScore);
+    if (absSent >= 60) itemScore += 25;
+    else if (absSent >= 40) itemScore += 15;
+    else if (absSent < 20) itemScore -= 10;
+
+    // 3. Teknik uyum
+    const newsDir =
+      item.sentiment === "pozitif"
+        ? "bullish"
+        : item.sentiment === "negatif"
+          ? "bearish"
+          : "neutral";
+
+    if (newsDir === direction) itemScore += 30;
+    else if (newsDir !== "neutral" && newsDir !== direction) itemScore -= 20;
+
+    if (itemScore > bestScore) bestScore = itemScore;
+  }
+
+  return {
+    score: bestScore,
+    tier: bestTier,
+    isImportant: bestScore >= 60,
+  };
+}
+ function computeSignalScore(input: {
   direction: "bullish" | "bearish" | "neutral";
   changePercent: number;
   indicators: IndicatorSignal[];
@@ -1164,6 +1229,8 @@ function computeSignalScore(input: {
       shouldNotify: false,
       reason: "Net formasyon yok veya zayıf (<60)",
       tier: "silent",
+      newsTier: 3,
+      isImportantNews: false,
     };
   }
 
@@ -1177,6 +1244,8 @@ function computeSignalScore(input: {
       shouldNotify: false,
       reason: `Yetersiz indikatör (${indicatorCount}/2)`,
       tier: "silent",
+      newsTier: 3,
+      isImportantNews: false,
     };
   }
 
@@ -1184,18 +1253,13 @@ function computeSignalScore(input: {
   const avgIndicatorStrength = sameDirIndicators.reduce((a, b) => a + b.strength, 0) / indicatorCount;
   const indicatorScore = clamp(avgIndicatorStrength * 0.7 + Math.min(indicatorCount - 2, 2) * 15);
 
-  const avgNewsSentiment = news.length > 0 ? news.reduce((a, b) => a + b.sentimentScore, 0) / news.length : 0;
-  const newsSupports =
-    (direction === "bullish" && avgNewsSentiment > 15) ||
-    (direction === "bearish" && avgNewsSentiment < -15);
-  const newsContradicts =
-    (direction === "bullish" && avgNewsSentiment < -40) ||
-    (direction === "bearish" && avgNewsSentiment > 40);
+  // HABER KALİTESİ
+  const newsQuality = evaluateNewsQuality(news, direction);
 
   let newsScore = 50;
-  if (newsSupports) newsScore = clamp(50 + Math.abs(avgNewsSentiment) * 0.5);
-  if (newsContradicts) newsScore = 20;
-  if (news.length === 0) newsScore = 40;
+  if (newsQuality.isImportant) newsScore = clamp(60 + newsQuality.score * 0.4);
+  else if (newsQuality.tier === 1) newsScore = clamp(55 + newsQuality.score * 0.3);
+  else if (news.length === 0) newsScore = 40;
 
   const volumeIndicator = indicators.find((i) => i.name === "Hacim");
   const volumeScore = volumeIndicator ? clamp(volumeIndicator.strength) : 40;
@@ -1211,29 +1275,38 @@ function computeSignalScore(input: {
 
   if (bestFormation >= 85) finalScore += 5;
   if ((direction === "bullish" && changePercent >= 3) || (direction === "bearish" && changePercent <= -3)) finalScore += 3;
-  if (Math.abs(avgNewsSentiment) >= 40 && newsSupports) finalScore += 5;
+  if (newsQuality.isImportant) finalScore += 5;
 
   finalScore = clamp(Math.round(finalScore));
 
+  // 4 KATMANLI EŞİK
   const thresholdCritical = 85;
-  const thresholdImportant = isPriority ? 55 : 60;
+  const thresholdImportant = isPriority ? 70 : 75;
+  const thresholdNormal = isPriority ? 55 : 60;
   const thresholdWatch = isPriority ? 45 : 50;
 
   let tier: SignalScoreResult["tier"] = "silent";
   if (finalScore >= thresholdCritical) tier = "critical";
   else if (finalScore >= thresholdImportant) tier = "important";
+  else if (finalScore >= thresholdNormal) tier = "normal";
   else if (finalScore >= thresholdWatch) tier = "watch";
 
-  const shouldNotify = tier === "critical" || tier === "important";
+  // KATMAN 1 (critical) → herkese
+  // KATMAN 2 (important) → favori + priority
+  // KATMAN 3 (normal) → sadece priority
+  // KATMAN 4 (watch) → sadece admin panelde
+  // KATMAN 5 (silent) → hiçbir yere
+
+  const shouldNotify = tier === "critical" || tier === "important" || tier === "normal";
 
   let reason = "";
   if (shouldNotify) {
     const parts = [`Formasyon ${bestFormation}%`, `${indicatorCount} indikatör uyumlu`];
-    if (news.length > 0 && newsSupports) parts.push(`Haber ${avgNewsSentiment > 0 ? "olumlu" : "olumsuz"}`);
+    if (newsQuality.isImportant) parts.push(`Haber Tier ${newsQuality.tier} (önemli)`);
     else if (news.length === 0) parts.push("Haber yok");
     reason = parts.join(" + ");
   } else {
-    reason = `Skor düşük (${finalScore}/${thresholdImportant})`;
+    reason = `Skor düşük (${finalScore}/${thresholdNormal})`;
   }
 
   return {
@@ -1248,6 +1321,8 @@ function computeSignalScore(input: {
     shouldNotify,
     reason,
     tier,
+    newsTier: newsQuality.tier,
+    isImportantNews: newsQuality.isImportant,
   };
 }
 
@@ -1324,7 +1399,10 @@ async function sendNotification(params: {
   if (!signalScore || !ai) return;
 
   const priority = type === "priority";
-  const severity = signalScore.tier === "critical" ? "kritik" : signalScore.tier === "important" ? "önemli" : "dikkat";
+    const severity = 
+    signalScore.tier === "critical" ? "kritik" 
+    : signalScore.tier === "important" ? "önemli" 
+    : "dikkat";
   const actionEmoji = ai.action === "AL" ? "🟢" : ai.action === "SAT" ? "🔴" : ai.action === "BEKLE" ? "🟡" : "⚪";
   const typeLabel = isGlobal ? "🌍 GLOBAL" : priority ? "⭐ ÖNCELİKLİ" : "📢 FAVORİ";
   const cleanSymbol = symbol.replace("USDT", "").replace(/\.(IS|US|T|KS|HK|NS|DE|PA|L|MI|MC|AS|ST|OL|HE|SW|CO|V)$/, "");
@@ -1551,16 +1629,30 @@ export default async function handler(request: RequestLike, response: ResponseLi
         console.log(`🤖 AI (${ai.source}): ${result.symbol} → ${ai.action}`);
 
         // 6️⃣ KULLANICILARA GÖNDER
-        for (const user of users) {
+                // KATMAN MANTIĞI
+        const tier = signalScore.tier;
+        
+        // KATMAN 2 (important) → favori + priority
+        // KATMAN 3 (normal) → sadece priority
+        const eligibleUsers = tier === "important"
+          ? users  // favori + priority
+          : tier === "normal"
+            ? users.filter((u) => u.type === "priority")  // sadece priority
+            : users;  // critical fallback
+
+        for (const user of eligibleUsers) {
           if (await isOnCooldown(user.user_id, result.symbol, result.market, user.type)) continue;
           await sendNotification({ userId: user.user_id, market: result.market, symbol: result.symbol, type: user.type, analysis: result, isGlobal: false });
           totalNotifications++;
         }
 
-        const isGlobalImportant = signalScore.tier === "critical" ||
-          (result.market === "crypto" && Math.abs(result.changePercent) >= 8) ||
+                // KATMAN 1 (critical) → herkese
+        const isGlobalImportant = 
+          signalScore.tier === "critical" ||
+          (signalScore.isImportantNews && signalScore.newsTier === 1) ||
+          (result.market === "crypto" && Math.abs(result.changePercent) >= 10) ||
+          (result.market === "crypto" && Math.abs(result.changePercent) >= 5 && signalScore.isImportantNews) ||
           (["bist", "us", "asia", "europe"].includes(result.market) && Math.abs(result.changePercent) >= 5);
-
         if (isGlobalImportant) {
           const allUsersRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id&is_banned=eq.false`, {
             headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
