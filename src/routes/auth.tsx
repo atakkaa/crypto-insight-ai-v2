@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { useAuth } from "@/hooks/useAuth";
-
+import { toast } from "sonner";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
@@ -127,6 +127,24 @@ function AuthPage() {
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring"
             />
+            <button
+  type="button"
+  onClick={async () => {
+    const email = prompt("🔑 Şifre sıfırlama için email adresinizi girin:");
+    if (!email) return;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      toast.error("Hata: " + error.message);
+    } else {
+      toast.success("✅ Şifre sıfırlama linki email'inize gönderildi!");
+    }
+  }}
+  className="mt-2 text-xs text-primary underline hover:no-underline"
+>
+  🔑 Şifremi Unuttum
+</button>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           {message && <p className="text-sm text-bull">{message}</p>}
