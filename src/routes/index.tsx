@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -1491,7 +1492,7 @@ function Dashboard() {
     setPriorityPromptAsset(null);
   }
 
-  function removeAllFavorites() {
+    async function removeAllFavorites() {
     if (favorites.length === 0) return;
 
     const confirmed = window.confirm(
@@ -1499,8 +1500,44 @@ function Dashboard() {
     );
     if (!confirmed) return;
 
+    // Local state sıfırla (hızlı UX)
     setFavorites([]);
     setPriorityAssets([]);
+
+    // Supabase'e silme isteği gönder
+    if (user) {
+      try {
+        // Tüm favorileri sil
+        const favRes = await (supabase as any)
+          .from("favorites")
+          .delete()
+          .eq("user_id", user.id);
+
+        if (favRes.error) {
+          console.error("Favoriler silinemedi:", favRes.error);
+          toast.error("Favoriler silinemedi");
+          return;
+        }
+
+        // Tüm priority_assets'leri sil
+        const priRes = await (supabase as any)
+          .from("priority_assets")
+          .delete()
+          .eq("user_id", user.id);
+
+        if (priRes.error) {
+          console.error("Öncelikli varlıklar silinemedi:", priRes.error);
+          toast.error("Öncelikli varlıklar silinemedi");
+          return;
+        }
+
+        console.log("✅ Tüm favoriler ve öncelikler silindi");
+        toast.success("Tüm favoriler ve öncelikler kaldırıldı");
+      } catch (err) {
+        console.error("Silme hatası:", err);
+        toast.error("Bağlantı hatası");
+      }
+    }
   }
 
   const isFavorite = isFavoriteAsset(
