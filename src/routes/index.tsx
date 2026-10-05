@@ -1291,36 +1291,6 @@ function Dashboard() {
         }
       });
   }, [user]);
-  // ==========================================================
-  // FAVORİ + ÖNCELİKLİ BİRLEŞTİRME
-  // ==========================================================
-  const combinedFavorites = useMemo(() => {
-    const map = new Map<string, { market: Market; symbol: string; isPriority: boolean }>();
-
-    for (const f of favorites) {
-      const key = `${f.market}:${f.symbol}`;
-      map.set(key, {
-        market: f.market as Market,
-        symbol: f.symbol,
-        isPriority: isPriorityAsset(f.market as Market, f.symbol),
-      });
-    }
-
-    for (const p of priorityAssets) {
-      const key = `${p.market}:${p.symbol}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          market: p.market,
-          symbol: p.symbol,
-          isPriority: true,
-        });
-      } else {
-        map.get(key)!.isPriority = true;
-      }
-    }
-
-    return Array.from(map.values());
-  }, [favorites, priorityAssets]);
 
   const isFavoriteAsset = (assetMarket: Market, assetSymbol: string) =>
     favorites.some(
@@ -1958,17 +1928,16 @@ function Dashboard() {
               </div>
             )}
 
-                        {combinedFavorites.length > 0 && (
+            {favorites.length > 0 && (
               <div className="mt-4 rounded-lg border border-border bg-card p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs uppercase tracking-wider text-muted-foreground">⭐ Favoriler</p>
-                  <span className="num text-[10px] text-muted-foreground">{combinedFavorites.length}</span>
+                  <span className="num text-[10px] text-muted-foreground">{favorites.length}</span>
                 </div>
                 <div className="mt-2 space-y-1">
-                  {combinedFavorites.map((f) => {
-                    const favoriteMarket = f.market;
-                    const priority = f.isPriority;
-                    const isFav = isFavoriteAsset(favoriteMarket, f.symbol);
+                  {favorites.map((f) => {
+                    const favoriteMarket = f.market as Market;
+                    const priority = isPriorityAsset(favoriteMarket, f.symbol);
                     return (
                       <div key={`${f.market}-${f.symbol}`} className="flex items-center gap-1">
                         <button
@@ -1984,14 +1953,8 @@ function Dashboard() {
                           }}
                           className="num min-w-0 flex-1 rounded px-2 py-1.5 text-left text-xs hover:bg-secondary"
                         >
-                          <span className="block font-semibold">
-                            {f.symbol.replace(/\.(IS|US)$/, "").replace(/USDT$/, "")}
-                          </span>
-                          <span className="block text-[9px] text-muted-foreground">
-                            {MARKET_LABELS[favoriteMarket]}
-                            {priority && !isFav && " · ⚡ Öncelikli"}
-                            {priority && isFav && " · ⭐ ⚡"}
-                          </span>
+                          <span className="block font-semibold">{f.symbol.replace(/\.(IS|US)$/, "").replace(/USDT$/, "")}</span>
+                          <span className="block text-[9px] text-muted-foreground">{MARKET_LABELS[favoriteMarket]}</span>
                         </button>
                         <button
                           type="button"
@@ -1999,15 +1962,11 @@ function Dashboard() {
                             event.stopPropagation();
                             void toggleFavoriteAsset(favoriteMarket, f.symbol);
                           }}
-                          className={`rounded px-1.5 py-1 text-base leading-none transition-colors ${
-                            isFav
-                              ? "text-primary hover:bg-destructive/10 hover:text-destructive"
-                              : "text-muted-foreground hover:bg-secondary hover:text-primary"
-                          }`}
-                          title={isFav ? "Favoriden kaldır" : "Favoriye ekle"}
-                          aria-label={`${f.symbol} favori durumu`}
+                          className="rounded px-1.5 py-1 text-base leading-none text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          title="Favoriden kaldır"
+                          aria-label={`${f.symbol} favorilerden kaldır`}
                         >
-                          {isFav ? "★" : "☆"}
+                          ★
                         </button>
                         <button
                           type="button"
@@ -2034,7 +1993,7 @@ function Dashboard() {
                   onClick={() => void removeAllFavorites()}
                   className="mt-3 w-full rounded-md border border-destructive/30 px-3 py-2 text-[11px] font-bold text-destructive hover:bg-destructive/10"
                 >
-                  🗑️ TÜMÜNÜ KALDIR
+                  🗑️ TÜM FAVORİLERİ KALDIR
                 </button>
               </div>
             )}
