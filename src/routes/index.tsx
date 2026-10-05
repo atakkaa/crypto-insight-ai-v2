@@ -1305,6 +1305,41 @@ function Dashboard() {
         p.symbol === assetSymbol &&
         p.market === assetMarket,
     );
+  // ==========================================================
+  // FAVORİ + ÖNCELİKLİ BİRLEŞTİRME
+  // ==========================================================
+  const combinedFavorites = useMemo(() => {
+    const map = new Map<
+      string,
+      { market: Market; symbol: string; isPriority: boolean }
+    >();
+
+    // Önce favorileri ekle
+    for (const f of favorites) {
+      const key = `${f.market}:${f.symbol}`;
+      map.set(key, {
+        market: f.market as Market,
+        symbol: f.symbol,
+        isPriority: isPriorityAsset(f.market as Market, f.symbol),
+      });
+    }
+
+    // Sonra önceliklileri ekle (favoride olmayanları)
+    for (const p of priorityAssets) {
+      const key = `${p.market}:${p.symbol}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          market: p.market,
+          symbol: p.symbol,
+          isPriority: true,
+        });
+      } else {
+        map.get(key)!.isPriority = true;
+      }
+    }
+
+    return Array.from(map.values());
+  }, [favorites, priorityAssets]);
 
   function setFavoriteAsset(
     assetMarket: Market,
