@@ -1703,8 +1703,9 @@ async function sendNotification(params: {
 
 async function analyzeSymbol(symbol: string, market: string): Promise<AnalysisResult | null> {
   try {
-    const candles = market === "crypto" ? await getCryptoCandles(symbol, "1h") : await getStockCandles(symbol);
-    if (candles.length < 50) return null;
+    const candles = market === "crypto" 
+  ? await getCryptoCandles(symbol, "1h") 
+  : await getYahooCandles(symbol, "1d");
     const indicators = analyzeIndicators(candles);
     const patterns = analyzePatterns(candles);
     if (indicators.length === 0 && patterns.length === 0) return null;
