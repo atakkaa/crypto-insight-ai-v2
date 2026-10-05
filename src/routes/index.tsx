@@ -8,6 +8,8 @@ import { CandleChart } from "@/components/CandleChart";
 import { FormationEvaluationPanel, type FormationChatMessage } from "@/components/FormationEvaluationPanel";
 import { NewsPanel, PredictionPanel, ReasoningPanel } from "@/components/AnalysisPanels";
 import { NotificationBell } from "@/components/NotificationBell";
+import { LimitReachedModal } from "@/components/LimitReachedModal";
+import { useUserTier } from "@/hooks/useUserTier";
 import { WelcomeGate } from "@/components/WelcomeGate";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdmin } from "@/hooks/useAdmin";
@@ -917,6 +919,11 @@ const EMPTY_FORMATION_MESSAGES: FormationChatMessage[] = [];
 function Dashboard() {
   const { user, signOut } = useAuth();
   const { isAdmin } = useAdmin();
+    const { tierInfo } = useUserTier();
+  const [limitModal, setLimitModal] = useState<{
+    open: boolean;
+    type: "favorites" | "priority";
+  }>({ open: false, type: "favorites" });
   const routeSearch = Route.useSearch();
   const [market, setMarket] = useState<Market>(routeSearch.m ?? "crypto");
   const [symbol, setSymbol] = useState(
@@ -1322,8 +1329,17 @@ function Dashboard() {
     });
   }
 
-  async function toggleFavoriteAsset(assetMarket: Market, assetSymbol: string) {
+    async function toggleFavoriteAsset(assetMarket: Market, assetSymbol: string) {
     const currentlyFavorite = isFavoriteAsset(assetMarket, assetSymbol);
+
+    // LİMİT KONTROLÜ — favori eklerken
+    if (!currentlyFavorite && tierInfo) {
+      const limit = tierInfo.limits.favorites;
+      if (limit < 999 && favorites.length >= limit) {
+        setLimitModal({ open: true, type: "favorites" });
+        return;
+      }
+    }
 
     if (currentlyFavorite) {
       await removePriorityAsset(assetMarket, assetSymbol);
@@ -1394,10 +1410,23 @@ function Dashboard() {
     }
   }
 
-  function togglePriorityAsset(
+    function togglePriorityAsset(
     assetMarket: Market,
     assetSymbol: string,
   ) {
+    // LİMİT KONTROLÜ — priority eklerken
+    if (!isPriorityAsset(assetMarket, assetSymbol) && tierInfo) {
+      const limit = tierInfo.limits.priority;
+      if (limit === 0) {
+        setLimitModal({ open: true, type: "priority" });
+        return;
+      }
+      if (limit < 999 && priorityAssets.length >= limit) {
+        setLimitModal({ open: true, type: "priority" });
+        return;
+      }
+    }
+
     if (isPriorityAsset(assetMarket, assetSymbol)) {
       void removePriorityAsset(
         assetMarket,
@@ -1731,7 +1760,18 @@ function Dashboard() {
             </div>
           </div>
         </header>
-
+        {/* LİMİT AŞIMI MODALI */}
+        <LimitReachedModal
+          open={limitModal.open}
+          onClose={() => setLimitModal({ ...limitModal, open: false })}
+          limitType={limitModal.type}
+          currentTier={tierInfo?.tier ?? "free"}
+          currentLimit={
+            limitModal.type === "favorites"
+              ? tierInfo?.limits.favorites ?? 5
+              : tierInfo?.limits.priority ?? 0
+          }
+        />
         {priorityPromptAsset && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
