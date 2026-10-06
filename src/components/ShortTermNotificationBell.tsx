@@ -1,0 +1,288 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+
+import { useAuth } from "@/hooks/useAuth";
+import {
+  fetchShortTermNotifications,
+  markAllShortTermNotificationsRead,
+  markShortTermNotificationRead,
+  clearAllShortTermNotifications,
+  subscribeToShortTermNotifications,
+  type ShortTermNotification,
+} from "@/lib/notifications";
+
+type Props = {
+  onOpenSymbol: (market: string, symbol: string) => void;
+};
+
+export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<ShortTermNotification[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  // 1. İlk yüklemede bildirimleri çek
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+    setLoading(true);
+    void fetchShortTermNotifications(user.id, 100).then((data) => {
+      setNotifications(data);
+      setLoading(false);
+    });
+  }, [user]);
+
+  // 2. Realtime: yeni bildirim gelince state'e ekle
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = subscribeToShortTermNotifications(user.id, (n) => {
+      setNotifications((prev) => {
+        if (prev.some((x) => x.id === n.id)) return prev;
+        return [n, ...prev].slice(0, 100);
+      });
+
+      // Toast göster
+      const biasEmoji = n.pattern_bias === "yükseliş" ? "🟢" : "🔴";
+      toast.info(`📉 Kısa Vadeli | ${n.symbol}`, {
+        description: `${biasEmoji} ${n.pattern_name} (%${n.confidence})`,
+      });
+
+      // Tarayıcı bildirimi
+      if (
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        window.Notification.permission === "granted"
+      ) {
+        new window.Notification(`📉 Kısa Vadeli | ${n.symbol}`, {
+          body: `${biasEmoji} ${n.pattern_name} (%${n.confidence})`,
+          tag: `short-${n.id}`,
+        });
+      }
+    });
+
+    return unsubscribe;
+  }, [user]);
+
+  // 3. Panel dışına tıklanınca kapat
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // 4. Okunmamış sayı
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.read).length,
+    [notifications],
+  );
+
+  // 5. Bildirime tıklama
+  async function handleNotificationClick(n: ShortTermNotification) {
+    if (!n.read) {
+      await markShortTermNotificationRead(n.id);
+      setNotifications((prev) =>
+        prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)),
+      );
+    }
+    onOpenSymbol(n.market, n.symbol);
+    setOpen(false);
+  }
+
+  // 6. Tümünü okundu işaretle
+  async function handleMarkAllRead() {
+    if (!user) return;
+    await markAllShortTermNotificationsRead(user.id);
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    toast.success("Tüm kısa vadeli bildirimler okundu olarak işaretlendi.");
+  }
+
+  // 7. Tümünü temizle
+  async function handleClearAll() {
+    if (!user) return;
+    if (!window.confirm("Tüm kısa vadeli bildirimleri silmek istediğinize emin misiniz?")) return;
+    await clearAllShortTermNotifications(user.id);
+    setNotifications([]);
+    toast.success("Tüm kısa vadeli bildirimler temizlendi.");
+  }
+
+  return (
+    <div className="relative" ref={panelRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`relative rounded-md border px-2.5 py-1.5 text-sm transition-colors ${
+          unreadCount > 0
+            ? "border-amber-500/50 text-amber-500"
+            : "border-border text-muted-foreground hover:bg-secondary"
+        }`}
+        title="Kısa Vadeli Bildirimler"
+        aria-label="Kısa Vadeli Bildirimler"
+      >
+        📉
+        {unreadCount > 0 && (
+          <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-amber-500 px-1 text-[9px] font-bold text-white">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-background shadow-2xl">
+          {/* Başlık */}
+          <div className="flex items-center justify-between border-b border-border p-3">
+            <div>
+              <h3 className="text-sm font-bold">📉 KISA VADELİ BİLDİRİMLER</h3>
+              <p className="text-[10px] text-muted-foreground">
+                {unreadCount > 0 ? `${unreadCount} okunmamış` : "Tümü okundu"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-secondary"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Aksiyonlar */}
+          {notifications.length > 0 && (
+            <div className="flex gap-2 border-b border-border p-2">
+              <button
+                type="button"
+                onClick={() => void handleMarkAllRead()}
+                className="flex-1 rounded-md border border-border px-2 py-1.5 text-[10px] font-bold hover:bg-secondary"
+              >
+                TÜMÜNÜ OKUNDU İŞARETLE
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleClearAll()}
+                className="flex-1 rounded-md border border-destructive/30 px-2 py-1.5 text-[10px] font-bold text-destructive hover:bg-destructive/10"
+              >
+                TEMİZLE
+              </button>
+            </div>
+          )}
+
+          {/* Liste */}
+          <div className="max-h-[60vh] overflow-y-auto">
+            {loading ? (
+              <div className="p-6 text-center text-xs text-muted-foreground">
+                Kısa vadeli bildirimler yükleniyor...
+              </div>
+            ) : notifications.length === 0 ? (
+              <div className="p-6 text-center text-xs text-muted-foreground">
+                Henüz kısa vadeli bildiriminiz yok.
+                <br />
+                <span className="text-[10px]">
+                  Premium üyeler için 20-30 mumluk formasyonlar taranıyor.
+                </span>
+              </div>
+            ) : (
+              notifications.map((n) => {
+                const biasEmoji = n.pattern_bias === "yükseliş" ? "🟢" : "🔴";
+                const biasColor = n.pattern_bias === "yükseliş" ? "text-bull" : "text-bear";
+                return (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => void handleNotificationClick(n)}
+                    className={`w-full border-b border-border p-3 text-left transition-colors hover:bg-secondary/60 ${
+                      !n.read ? "bg-amber-500/5" : ""
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-500">
+                          📉 KISA VADELİ
+                        </span>
+                        <span className={`num text-xs font-bold ${biasColor}`}>
+                          {biasEmoji} {n.symbol.replace(/USDT$/, "").replace(/\.(IS|US)$/, "")}
+                        </span>
+                      </div>
+                      <span className="text-[9px] text-muted-foreground">
+                        {new Date(n.created_at).toLocaleString("tr-TR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          day: "2-digit",
+                          month: "2-digit",
+                        })}
+                        {!n.read && (
+                          <span className="ml-2 font-bold text-amber-500">• YENİ</span>
+                        )}
+                      </span>
+                    </div>
+
+                    <p className="mt-2 text-xs font-bold">
+                      {biasEmoji} {n.pattern_name} · {n.pattern_bias}
+                    </p>
+                    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                      Güven: %{n.confidence} · Skor: {n.signal_score}/100
+                    </p>
+
+                    {/* Giriş / Hedef / Stop */}
+                    {(n.entry != null || n.target != null || n.stop != null) && (
+                      <div className="mt-2 grid grid-cols-3 gap-1 rounded-md border border-border/60 bg-secondary/30 p-2 text-[10px]">
+                        {n.entry != null && (
+                          <div className="flex flex-col">
+                            <span className="text-muted-foreground">Giriş</span>
+                            <span className="num font-bold">{n.entry.toFixed(4)}</span>
+                          </div>
+                        )}
+                        {n.target != null && (
+                          <div className="flex flex-col">
+                            <span className="text-muted-foreground">Hedef</span>
+                            <span className="num font-bold text-bull">{n.target.toFixed(4)}</span>
+                          </div>
+                        )}
+                        {n.stop != null && (
+                          <div className="flex flex-col">
+                            <span className="text-muted-foreground">Stop</span>
+                            <span className="num font-bold text-bear">{n.stop.toFixed(4)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Fear & Greed */}
+                    {n.fear_greed != null && (
+                      <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                        <span>😱</span>
+                        <span>
+                          Fear & Greed: <span className="num font-bold">{n.fear_greed}</span>
+                        </span>
+                      </div>
+                    )}
+
+                    {n.reason && (
+                      <p className="mt-1 text-[10px] italic leading-4 text-muted-foreground/80">
+                        {n.reason.slice(0, 150)}
+                        {n.reason.length > 150 ? "..." : ""}
+                      </p>
+                    )}
+
+                    <p className="mt-2 text-[9px] font-bold text-amber-500">
+                      🚀 Coin detayına gitmek için tıkla →
+                    </p>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

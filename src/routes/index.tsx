@@ -10,6 +10,7 @@ import { CandleChart } from "@/components/CandleChart";
 import { FormationEvaluationPanel, type FormationChatMessage } from "@/components/FormationEvaluationPanel";
 import { NewsPanel, PredictionPanel, ReasoningPanel } from "@/components/AnalysisPanels";
 import { NotificationBell } from "@/components/NotificationBell";
+import { ShortTermNotificationBell } from "@/components/ShortTermNotificationBell";
 import { LimitReachedModal } from "@/components/LimitReachedModal";
 import { useUserTier } from "@/hooks/useUserTier";
 import { WelcomeGate } from "@/components/WelcomeGate";
@@ -2132,6 +2133,17 @@ function Dashboard() {
                 }}
               />
               </div>
+              <ShortTermNotificationBell
+  onOpenSymbol={(m, s) => {
+    setMarket(m as Market);
+    if (m !== "crypto") {
+      setStockSymbol(s);
+      setStockInput(s);
+    } else {
+      setSymbol(s);
+    }
+  }}
+/>
 
               {user ? (
                 <>

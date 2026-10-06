@@ -203,3 +203,121 @@ export function severityColorClass(severity: NotificationSeverity): string {
       return "bg-secondary text-secondary-foreground";
   }
 }
+// =====================================================
+// KISA VADELİ BİLDİRİMLER (short_term_notifications)
+// =====================================================
+
+export type ShortTermNotification = {
+  id: string;
+  user_id: string;
+  market: string;
+  symbol: string;
+  pattern_name: string;
+  pattern_bias: string; // "yükseliş" | "düşüş"
+  confidence: number;
+  signal_score: number;
+  entry: number | null;
+  stop: number | null;
+  target: number | null;
+  reason: string | null;
+  fear_greed: number | null;
+  created_at: string;
+  read: boolean;
+};
+
+export async function fetchShortTermNotifications(
+  userId: string,
+  limit = 100,
+): Promise<ShortTermNotification[]> {
+  const { data, error } = await (supabase as any)
+    .from("short_term_notifications")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("Kısa vadeli bildirimler çekilemedi:", error);
+    return [];
+  }
+
+  return (data ?? []) as ShortTermNotification[];
+}
+
+export async function markShortTermNotificationRead(
+  notificationId: string,
+): Promise<boolean> {
+  const { error } = await (supabase as any)
+    .from("short_term_notifications")
+    .update({ read: true })
+    .eq("id", notificationId);
+
+  if (error) {
+    console.error("Kısa vadeli bildirim okundu işaretlenemedi:", error);
+    return false;
+  }
+  return true;
+}
+
+export async function markAllShortTermNotificationsRead(
+  userId: string,
+): Promise<boolean> {
+  const { error } = await (supabase as any)
+    .from("short_term_notifications")
+    .update({ read: true })
+    .eq("user_id", userId)
+    .eq("read", false);
+
+  if (error) {
+    console.error("Kısa vadeli bildirimler okundu işaretlenemedi:", error);
+    return false;
+  }
+  return true;
+}
+
+export async function clearAllShortTermNotifications(
+  userId: string,
+): Promise<boolean> {
+  const { error } = await (supabase as any)
+    .from("short_term_notifications")
+    .delete()
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("Kısa vadeli bildirimler silinemedi:", error);
+    return false;
+  }
+  return true;
+}
+
+export function subscribeToShortTermNotifications(
+  userId: string,
+  onNewNotification: (notification: ShortTermNotification) => void,
+): () => void {
+  const channel = supabase
+    .channel(`short_term_notifications:${userId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "short_term_notifications",
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => {
+        const newNotification = payload.new as ShortTermNotification;
+        onNewNotification(newNotification);
+      },
+    )
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        console.log("🔔 Kısa vadeli bildirim kanalı açıldı:", userId);
+      } else if (status === "CHANNEL_ERROR") {
+        console.error("❌ Kısa vadeli bildirim kanalı hatası");
+      }
+    });
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}
