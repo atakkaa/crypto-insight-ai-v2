@@ -7,7 +7,7 @@ import { startTrial } from "@/hooks/useUserTier";
 type Props = {
   open: boolean;
   onClose: () => void;
-  limitType: "favorites" | "priority";
+  limitType: "favorites" | "priority" | "short_term";
   currentTier: string;
   currentLimit: number;
 };
@@ -27,14 +27,18 @@ export function LimitReachedModal({
   const title =
     limitType === "favorites"
       ? "Favori limiti doldu"
-      : "Öncelikli varlık limiti doldu";
+      : limitType === "priority"
+        ? "Öncelikli varlık limiti doldu"
+        : "Kısa vadeli analiz limiti doldu";
 
   const description =
     limitType === "favorites"
       ? `Free üyeler en fazla ${currentLimit} favori ekleyebilir. Premium üyeler sınırsız favori ekler.`
-      : currentLimit === 0
-        ? "Öncelikli varlıklar Premium'a özeldir. Deneme başlatarak 3 öncelikli varlık ekleyebilirsiniz."
-        : `Free üyeler en fazla ${currentLimit} öncelikli varlık ekleyebilir. Premium üyeler sınırsız ekler.`;
+      : limitType === "priority"
+        ? currentLimit === 0
+          ? "Öncelikli varlıklar Premium'a özeldir. Deneme başlatarak 3 öncelikli varlık ekleyebilirsiniz."
+          : `Free üyeler en fazla ${currentLimit} öncelikli varlık ekleyebilir. Premium üyeler sınırsız ekler.`
+        : `Free üyeler en fazla ${currentLimit} farklı varlık için kısa vadeli analiz yapabilir. Premium üyeler sınırsız kısa vadeli analiz yapar.`;
 
   async function handleStartTrial() {
     if (!user) {
@@ -69,7 +73,9 @@ export function LimitReachedModal({
           </p>
           {currentTier === "free" && (
             <p className="mt-2 text-xs text-amber-500">
-              💡 1 haftalık ücretsiz deneme başlatarak limitleri artırabilirsiniz
+              {limitType === "short_term"
+                ? "💡 1 haftalık ücretsiz deneme başlatarak sınırsız kısa vadeli analiz yapabilirsiniz"
+                : "💡 1 haftalık ücretsiz deneme başlatarak limitleri artırabilirsiniz"}
             </p>
           )}
         </div>

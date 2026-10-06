@@ -962,6 +962,11 @@ function Dashboard() {
   const [formationChats, setFormationChats] = useState<FormationChatStore>({});
   const [formationEvaluationOpen, setFormationEvaluationOpen] = useState<Record<string, boolean>>({});
   const [showFormationCloseDialog, setShowFormationCloseDialog] = useState(false);
+    // ==========================================================
+  // KISA VADELİ TAKİP (FREE ÜYE LİMİTİ)
+  // ==========================================================
+  const [shortTermTracked, setShortTermTracked] = useState<Array<{ market: string; symbol: string }>>([]);
+  const [shortTermModal, setShortTermModal] = useState(false);
   // ==========================================================
   // KISA VADELİ ANALİZ STATE'LERİ
   // ==========================================================
@@ -1276,6 +1281,28 @@ function Dashboard() {
     }
   }, []);
 
+    // ==========================================================
+  // KISA VADELİ TAKİP LİSTESİNİ ÇEK
+  // ==========================================================
+  useEffect(() => {
+    if (!user) return;
+    const userId = user.id;
+
+    void (supabase as any)
+      .from("short_term_tracking")
+      .select("market, symbol")
+      .eq("user_id", userId)
+      .then((response: { data: Array<{ market: string; symbol: string }> | null; error: { message: string } | null }) => {
+        if (response.error) {
+          console.error("Kısa vadeli takip listesi çekilemedi:", response.error);
+          return;
+        }
+        if (response.data) {
+          setShortTermTracked(response.data);
+          console.log(`✅ ${response.data.length} kısa vadeli takip varlığı çekildi.`);
+        }
+      });
+  }, [user]);
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -1837,19 +1864,65 @@ function Dashboard() {
   // ==========================================================
   // KISA VADELİ ANALİZ - ÇALIŞTIR
   // ==========================================================
-  async function runShortTermAnalysis() {
+    async function runShortTermAnalysis() {
     if (candles.length < 20) {
       toast.error("Kısa vadeli analiz için en az 20 mum gerekli.");
       return;
     }
 
+    // ==========================================================
+    // FREE ÜYE LİMİT KONTROLÜ
+    // ==========================================================
+    const tier = tierInfo?.tier ?? "free";
+    const isPaidUser = tier === "admin" || tier === "premium" || tier === "trial";
+    const shortTermLimit = tierInfo?.limits.shortTermTracking ?? 2;
+
+    if (!isPaidUser) {
+      const isAlreadyTracked = shortTermTracked.some(
+        (t) => t.market === market && t.symbol === activeSymbol,
+      );
+
+      if (!isAlreadyTracked) {
+        // 2 varlık sınırına ulaşıldı mı?
+        if (shortTermTracked.length >= shortTermLimit) {
+          setShortTermModal(true);
+          return;
+        }
+
+        // Yeni varlığı kaydet
+        if (user) {
+          const { error: insertError } = await (supabase as any)
+            .from("short_term_tracking")
+            .insert({
+              user_id: user.id,
+              market,
+              symbol: activeSymbol,
+            });
+
+          if (insertError) {
+            console.error("Kısa vadeli takip kaydedilemedi:", insertError);
+            toast.error("Kayıt sırasında bir hata oluştu.");
+            return;
+          }
+
+          setShortTermTracked((prev) => [
+            ...prev,
+            { market, symbol: activeSymbol },
+          ]);
+          toast.success(`✅ ${activeSymbol} kısa vadeli takibe eklendi`);
+        }
+      }
+    }
+
+    // ==========================================================
+    // ANALİZİ ÇALIŞTIR
+    // ==========================================================
     setShortTermAnalyzing(true);
     setShowShortTerm(true);
 
     try {
-      // Son 30 mumu al
       const shortCandles = candles.slice(-30);
-      
+
       const result = await runAnalysis({
         data: {
           symbol: activeSymbol,
@@ -1866,7 +1939,6 @@ function Dashboard() {
       const nextAnalysis = result.analysis as DashboardAnalysis | null;
       setShortTermAnalysis(nextAnalysis);
 
-      // localStorage'a kaydet
       try {
         const raw = window.localStorage.getItem(shortTermCacheKey);
         const parsed = raw ? (JSON.parse(raw) as Record<string, DashboardAnalysis>) : {};
@@ -2047,6 +2119,7 @@ function Dashboard() {
     👑
   </Link>
 )}
+<div className="notification-bell">
               <NotificationBell
                 onOpenSymbol={(m, s) => {
                   setMarket(m as Market);
@@ -2058,6 +2131,7 @@ function Dashboard() {
                   }
                 }}
               />
+              </div>
 
               {user ? (
                 <>
@@ -2091,6 +2165,14 @@ function Dashboard() {
               ? tierInfo?.limits.favorites ?? 5
               : tierInfo?.limits.priority ?? 0
           }
+        />
+                {/* KISA VADELİ ANALİZ LİMİT MODALI */}
+        <LimitReachedModal
+          open={shortTermModal}
+          onClose={() => setShortTermModal(false)}
+          limitType="short_term"
+          currentTier={tierInfo?.tier ?? "free"}
+          currentLimit={tierInfo?.limits.shortTermTracking ?? 2}
         />
         {priorityPromptAsset && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -2212,7 +2294,7 @@ function Dashboard() {
             )}
 
                         {combinedFavorites.length > 0 && (
-              <div className="mt-4 rounded-lg border border-border bg-card p-3">
+              <div className="favorites-panel mt-4 rounded-lg border border-border bg-card p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs uppercase tracking-wider text-muted-foreground">⭐ Favoriler</p>
                   <span className="num text-[10px] text-muted-foreground">{combinedFavorites.length}</span>
@@ -2530,37 +2612,39 @@ function Dashboard() {
                   )}
                 </div>
               </div>
-              {/* KISA VADELİ ANALİZ BUTONU */}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void runShortTermAnalysis()}
-                  disabled={shortTermAnalyzing || candles.length < 20}
-                  className="rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
-                >
-                  {shortTermAnalyzing
-                    ? "⏳ Analiz ediliyor..."
+                          {/* KISA VADELİ ANALİZ BUTONU */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <button
+                type="button"
+                onClick={() => void runShortTermAnalysis()}
+                disabled={shortTermAnalyzing || candles.length < 20}
+                className="short-term-button rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
+              >
+                {shortTermAnalyzing
+                  ? "⏳ Analiz ediliyor..."
+                  : tierInfo?.tier === "free"
+                    ? `📉 Kısa Vadeli Analiz (${shortTermTracked.length}/${tierInfo?.limits.shortTermTracking ?? 2})`
                     : "📉 Kısa Vadeli (20-30 Mum) Formasyon Değerlendir"}
-                </button>
+              </button>
 
-                {shortTermAnalysis && (
-                  <button
-                    type="button"
-                    onClick={() => clearShortTermForCurrentSymbol()}
-                    className="rounded-md border border-destructive/30 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10"
-                  >
-                    🗑️ Bu Sembolü Temizle
-                  </button>
-                )}
-
+              {shortTermAnalysis && (
                 <button
                   type="button"
-                  onClick={() => clearAllShortTermAnalyses()}
-                  className="ml-auto rounded-md border border-border px-3 py-1.5 text-xs font-bold hover:bg-secondary"
+                  onClick={() => clearShortTermForCurrentSymbol()}
+                  className="rounded-md border border-destructive/30 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10"
                 >
-                  🗑️ Tüm Kısa Vadeli Analizleri Temizle
+                  🗑️ Bu Sembolü Temizle
                 </button>
-              </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => clearAllShortTermAnalyses()}
+                className="ml-auto rounded-md border border-border px-3 py-1.5 text-xs font-bold hover:bg-secondary"
+              >
+                🗑️ Tüm Kısa Vadeli Analizleri Temizle
+              </button>
+            </div>
               <div className="mt-3 overflow-hidden rounded-md bg-card p-2">
                 <CandleChart
                   candles={candles}

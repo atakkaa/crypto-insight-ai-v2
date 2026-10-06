@@ -10,6 +10,7 @@ export type TierLimits = {
   newsDepth: number;
   hasMTF: boolean;
   hasFearGreed: boolean;
+  shortTermTracking: number; // <-- YENİ: Kısa vadeli analiz yapılabilecek varlık sayısı
 };
 
 export type TierInfo = {
@@ -24,10 +25,10 @@ export type TierInfo = {
 };
 
 const TIER_LIMITS: Record<UserTier, TierLimits> = {
-  admin: { favorites: 999, priority: 999, newsDepth: 20, hasMTF: true, hasFearGreed: true },
-  premium: { favorites: 999, priority: 999, newsDepth: 20, hasMTF: true, hasFearGreed: true },
-  trial: { favorites: 10, priority: 3, newsDepth: 15, hasMTF: true, hasFearGreed: true },
-  free: { favorites: 5, priority: 0, newsDepth: 10, hasMTF: false, hasFearGreed: false },
+  admin: { favorites: 999, priority: 999, newsDepth: 20, hasMTF: true, hasFearGreed: true, shortTermTracking: 999 },
+  premium: { favorites: 999, priority: 999, newsDepth: 20, hasMTF: true, hasFearGreed: true, shortTermTracking: 999 },
+  trial: { favorites: 10, priority: 3, newsDepth: 15, hasMTF: true, hasFearGreed: true, shortTermTracking: 999 },
+  free: { favorites: 5, priority: 0, newsDepth: 10, hasMTF: false, hasFearGreed: false, shortTermTracking: 2 },
 };
 
 const TIER_META: Record<UserTier, { label: string; emoji: string; color: string }> = {
