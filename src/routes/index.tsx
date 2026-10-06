@@ -2614,18 +2614,18 @@ function Dashboard() {
               </div>
                           {/* KISA VADELİ ANALİZ BUTONU */}
             <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <button
-                type="button"
-                onClick={() => void runShortTermAnalysis()}
-                disabled={shortTermAnalyzing || candles.length < 20}
-                className="short-term-button rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
-              >
-                {shortTermAnalyzing
-                  ? "⏳ Analiz ediliyor..."
-                  : tierInfo?.tier === "free"
-                    ? `📉 Kısa Vadeli Analiz (${shortTermTracked.length}/${tierInfo?.limits.shortTermTracking ?? 2})`
-                    : "📉 Kısa Vadeli (20-30 Mum) Formasyon Değerlendir"}
-              </button>
+               <button
+  type="button"
+  onClick={() => void runShortTermAnalysis()}
+  disabled={shortTermAnalyzing || candles.length < 20}
+  className="short-term-button rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
+>
+  {shortTermAnalyzing
+    ? "⏳ Analiz ediliyor..."
+    : tierInfo?.tier === "free"
+      ? `📉 Kısa Vadeli Analiz (${shortTermTracked.length}/${tierInfo?.limits.shortTermTracking ?? 2})`
+      : "📉 Kısa Vadeli (20-30 Mum) Formasyon Değerlendir"}
+</button>
 
               {shortTermAnalysis && (
                 <button
