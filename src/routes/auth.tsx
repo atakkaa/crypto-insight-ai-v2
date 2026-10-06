@@ -69,7 +69,7 @@ function AuthPage() {
         setError(signUpError.message);
       } else if (!data.session) {
         setMessage(
-          "📧 E-postanıza gelen bağlantıya tıklayarak hesabınızı doğrulayın.",
+          "📧 E-postanıza doğrulama linki gönderdik. Hesabınızı aktifleştirmek için link'e tıklayın.",
         );
       }
     } else {
@@ -267,9 +267,7 @@ function PasswordStrength({ password }: { password: string }) {
       <div className="grid grid-cols-2 gap-1 text-[10px]">
         <div
           className={
-            validation.checks.minLength
-              ? "text-bull"
-              : "text-muted-foreground"
+            validation.checks.minLength ? "text-bull" : "text-muted-foreground"
           }
         >
           {validation.checks.minLength ? "✅" : "○"} En az 8 karakter
