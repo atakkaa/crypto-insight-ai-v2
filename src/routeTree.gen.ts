@@ -16,6 +16,7 @@ import { Route as CoinsRouteImport } from './routes/coins'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ShortTermNotificationsRouteImport } from './routes/short-term-notifications'
 import { Route as ApiPublicScanRouteImport } from './routes/api/public/scan'
 
 const IndexRoute = IndexRouteImport.update({
@@ -53,6 +54,11 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShortTermNotificationsRoute = ShortTermNotificationsRouteImport.update({
+  id: '/short-term-notifications',
+  path: '/short-term-notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicScanRoute = ApiPublicScanRouteImport.update({
   id: '/api/public/scan',
   path: '/api/public/scan',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
+  '/short-term-notifications': typeof ShortTermNotificationsRoute
   '/api/public/scan': typeof ApiPublicScanRoute
 }
 export interface FileRoutesByTo {
@@ -77,6 +84,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
+  '/short-term-notifications': typeof ShortTermNotificationsRoute
   '/api/public/scan': typeof ApiPublicScanRoute
 }
 export interface FileRoutesById {
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
+  '/short-term-notifications': typeof ShortTermNotificationsRoute
   '/api/public/scan': typeof ApiPublicScanRoute
 }
 export interface FileRouteTypes {
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reset-password'
     | '/settings'
+    | '/short-term-notifications'
     | '/api/public/scan'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reset-password'
     | '/settings'
+    | '/short-term-notifications'
     | '/api/public/scan'
   id:
     | '__root__'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reset-password'
     | '/settings'
+    | '/short-term-notifications'
     | '/api/public/scan'
   fileRoutesById: FileRoutesById
 }
@@ -131,6 +143,7 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
+  ShortTermNotificationsRoute: typeof ShortTermNotificationsRoute
   ApiPublicScanRoute: typeof ApiPublicScanRoute
 }
 
@@ -185,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/short-term-notifications': {
+      id: '/short-term-notifications'
+      path: '/short-term-notifications'
+      fullPath: '/short-term-notifications'
+      preLoaderRoute: typeof ShortTermNotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/scan': {
       id: '/api/public/scan'
       path: '/api/public/scan'
@@ -203,6 +223,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
+  ShortTermNotificationsRoute: ShortTermNotificationsRoute,
   ApiPublicScanRoute: ApiPublicScanRoute,
 }
 export const routeTree = rootRouteImport

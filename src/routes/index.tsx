@@ -2110,6 +2110,12 @@ function Dashboard() {
             >
               ⚙️ Ayarlar
             </Link>
+            <Link
+  to="/short-term-notifications"
+  className="rounded-md border border-amber-500/40 px-3 py-1.5 text-xs font-bold text-amber-500 hover:bg-amber-500/10"
+>
+  📉 Kısa Vadeli
+</Link>
             <div className="ml-auto flex items-center gap-2 text-sm">
               {isAdmin && (
   <Link
