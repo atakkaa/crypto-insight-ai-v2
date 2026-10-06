@@ -1024,7 +1024,7 @@ Görevin:
 
 Tek bir indikatöre dayanarak kesin sonuç çıkarma.
 
-"Kesin yükselecek", "kesin düşecek" gibi ifadeler kullanma.
+"Kesin yükselеcek", "kesin düşecek" gibi ifadeler kullanma.
 
 Bunun yerine:
 - yükseliş senaryosu
@@ -1032,6 +1032,25 @@ Bunun yerine:
 - kararsız / teyit bekleyen senaryo
 
 şeklinde teknik değerlendirme yap.
+
+TUTARLILIK KURALI (ÇOK ÖNEMLİ):
+
+indicatorAnalysis.direction alanı ile 
+indicatorAnalysis.summary ve indicatorAnalysis.combinedComment 
+metinleri KESİNLİKLE aynı yönü göstermelidir.
+
+- Eğer direction "yükseliş" ise, summary ve combinedComment 
+  metinleri de yükseliş senaryosunu anlatmalıdır. 
+  Metin içinde "düşüş" kelimesi geçmemelidir.
+
+- Eğer direction "düşüş" ise, summary ve combinedComment 
+  metinleri de düşüş senaryosunu anlatmalıdır. 
+  Metin içinde "yükseliş" kelimesi geçmemelidir.
+
+- Eğer direction "kararsız" ise, summary ve combinedComment 
+  metinleri de kararsızlığı vurgulamalıdır.
+
+Bu kurala uymayan cevaplar geçersiz sayılacaktır.
 
 Analiz Türkçe olmalıdır.
 
@@ -1134,7 +1153,7 @@ Aşağıdaki JSON şemasına birebir uy:
     "direction": "yükseliş|düşüş|kararsız",
     "confidence": 0,
 
-    "summary": "İndikatörlerin genel olarak ne söylediğini 2-3 cümleyle açıkla.",
+    "summary": "İndikatörlerin genel olarak ne söylediğini 2-3 cümleyle açıkla. Direction ile aynı yönü göster.",
 
     "reasons": [
       "RSI ve momentum gerekçesi",
@@ -1176,6 +1195,8 @@ Kurallar:
 - indicatorAnalysis kesin fiyat tahmini değil,
   teknik senaryo açıklaması olmalıdır.
 - İndikatörler birbirleriyle çelişiyorsa bunu açıkça belirt.
+- indicatorAnalysis.direction, summary ve combinedComment 
+  alanları AYNI YÖNÜ göstermelidir.
 `,
     },
   ]);
@@ -1421,6 +1442,134 @@ Kurallar:
     };
 
     result.indicatorAnalysis = fallback;
+  }
+
+  // ----------------------------------------------------------
+  // 8.1. AI ÇIKTI TUTARLILIK KONTROLÜ (GUARD)
+  // ----------------------------------------------------------
+  // AI, direction="yükseliş" derken summary metninde "düşüş"
+  // yazmış olabilir. Bu durumda güvenli fallback'e geçilir.
+  // Böylece rozet ile metin arasındaki çelişki engellenir.
+
+  if (result.indicatorAnalysis) {
+    const dir = result.indicatorAnalysis.direction;
+    const summaryLower = result.indicatorAnalysis.summary.toLowerCase();
+    const combinedLower = result.indicatorAnalysis.combinedComment.toLowerCase();
+
+    const hasYukselis = summaryLower.includes("yükseliş") || combinedLower.includes("yükseliş");
+    const hasDusus = summaryLower.includes("düşüş") || combinedLower.includes("düşüş");
+
+    let conflict = false;
+
+    if (dir === "yükseliş" && hasDusus && !hasYukselis) conflict = true;
+    if (dir === "düşüş" && hasYukselis && !hasDusus) conflict = true;
+
+    if (conflict) {
+      console.warn(
+        `⚠️ AI tutarsızlığı tespit edildi: direction=${dir}, summary çelişkili. Fallback devreye giriyor.`,
+      );
+      result.indicatorAnalysis = null;
+    }
+  }
+
+  // Tutarsızlık tespit edildiyse (veya AI analizi yoksa),
+  // yeniden güvenli fallback üret.
+  if (!result.indicatorAnalysis) {
+    const currentPrice =
+      candles[candles.length - 1]?.close ?? 0;
+
+    let direction:
+      | "yükseliş"
+      | "düşüş"
+      | "kararsız" = "kararsız";
+
+    let confidence = 50;
+
+    const bullishSignals = [
+      i.rsi > 50,
+      i.macdHistogram > 0,
+      currentPrice > i.ema20,
+      currentPrice > i.ema50,
+      currentPrice > i.ema200,
+      i.volumeRatio >= 1,
+    ].filter(Boolean).length;
+
+    const bearishSignals = [
+      i.rsi < 50,
+      i.macdHistogram < 0,
+      currentPrice < i.ema20,
+      currentPrice < i.ema50,
+      currentPrice < i.ema200,
+      i.volumeRatio >= 1,
+    ].filter(Boolean).length;
+
+    if (bullishSignals >= 4) {
+      direction = "yükseliş";
+      confidence = Math.min(90, 50 + bullishSignals * 6);
+    } else if (bearishSignals >= 4) {
+      direction = "düşüş";
+      confidence = Math.min(90, 50 + bearishSignals * 6);
+    }
+
+    result.indicatorAnalysis = {
+      direction,
+      confidence,
+      summary:
+        "İndikatörler birlikte değerlendirildiğinde teknik görünüm " +
+        `${direction} senaryosuna işaret ediyor. ` +
+        "Göstergeler arasında teyit ve çelişki noktaları birlikte değerlendirilmelidir.",
+      reasons: [
+        `RSI: ${i.rsi.toFixed(2)}`,
+        `MACD Histogram: ${i.macdHistogram.toFixed(6)}`,
+        `EMA20: ${i.ema20.toFixed(2)}, EMA50: ${i.ema50.toFixed(2)}, EMA200: ${i.ema200.toFixed(2)}`,
+        `ADX: ${i.adx.toFixed(2)}`,
+        `Hacim / Ortalama Hacim: ${(i.volumeRatio * 100).toFixed(0)}%`,
+      ],
+      rsiComment:
+        `RSI ${i.rsi.toFixed(2)} seviyesinde. ` +
+        (i.rsi >= 70
+          ? "Aşırı alım bölgesinde."
+          : i.rsi <= 30
+            ? "Aşırı satım bölgesinde."
+            : i.rsi >= 50
+              ? "50 seviyesinin üzerinde ve momentum pozitif."
+              : "50 seviyesinin altında ve momentum zayıf."),
+      macdComment:
+        i.macdHistogram >= 0
+          ? "MACD histogramı pozitif; momentum tarafında yükseliş yönlü baskı bulunuyor."
+          : "MACD histogramı negatif; momentum tarafında düşüş yönlü baskı bulunuyor.",
+      emaComment:
+        currentPrice > i.ema20 &&
+        currentPrice > i.ema50 &&
+        currentPrice > i.ema200
+          ? "Fiyat EMA20, EMA50 ve EMA200 üzerinde; trend yapısı teknik olarak pozitif."
+          : currentPrice < i.ema20 &&
+              currentPrice < i.ema50 &&
+              currentPrice < i.ema200
+            ? "Fiyat EMA20, EMA50 ve EMA200 altında; trend yapısı teknik olarak negatif."
+            : "Fiyat EMA seviyeleri arasında; trend görünümü karışık.",
+      bollingerComment:
+        currentPrice > i.bollingerUpper
+          ? "Fiyat Bollinger üst bandının üzerinde; güçlü momentumla birlikte aşırı uzama riski takip edilmeli."
+          : currentPrice < i.bollingerLower
+            ? "Fiyat Bollinger alt bandının altında; satış baskısı güçlü ancak tepki ihtimali takip edilmeli."
+            : "Fiyat Bollinger bantları içinde hareket ediyor.",
+      adxComment:
+        i.adx >= 25
+          ? `ADX ${i.adx.toFixed(2)} seviyesinde; trend gücü belirgin.`
+          : `ADX ${i.adx.toFixed(2)} seviyesinde; trend gücü sınırlı.`,
+      volumeComment:
+        i.volumeRatio >= 1
+          ? `Hacim ortalamanın %${(i.volumeRatio * 100).toFixed(0)} seviyesinde ve fiyat hareketini destekliyor olabilir.`
+          : `Hacim ortalamanın %${(i.volumeRatio * 100).toFixed(0)} seviyesinde; hareketin hacim teyidi zayıf.`,
+      combinedComment:
+        "RSI, MACD, EMA, Bollinger Bands, ADX ve hacim birlikte değerlendirilmelidir. " +
+        `Mevcut hesaplamalara göre teknik görünüm ${direction} yönünde değerlendiriliyor; ` +
+        "ancak göstergelerin tamamı aynı yönde sinyal vermiyorsa teyit beklemek gerekir.",
+      riskNote:
+        "Bu değerlendirme teknik göstergelere dayalı senaryodur. " +
+        "Ani haber akışı, yüksek volatilite ve hacim değişimleri teknik görünümü değiştirebilir.",
+    };
   }
 
   return result;
