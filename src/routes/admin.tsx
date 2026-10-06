@@ -28,6 +28,7 @@ type Profile = {
   trial_started_at: string | null;
   trial_ends_at: string | null;
   trial_used: boolean;
+  last_sign_in_at: string | null; // YENİ EKLENDİ
 };
 
 type UserTier = "admin" | "premium" | "trial" | "free";
@@ -55,6 +56,23 @@ function getTrialDaysLeft(profile: Profile): number | null {
   const msLeft = new Date(profile.trial_ends_at).getTime() - Date.now();
   if (msLeft <= 0) return null;
   return Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+}
+
+// YENİ EKLENDİ: Son girişi insan okunur formata çevir
+function formatLastSignIn(dateStr: string | null): string {
+  if (!dateStr) return "Hiç giriş yapmadı";
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMins < 1) return "Az önce";
+  if (diffMins < 60) return `${diffMins} dk önce`;
+  if (diffHours < 24) return `${diffHours} saat önce`;
+  if (diffDays < 7) return `${diffDays} gün önce`;
+  return date.toLocaleDateString("tr-TR");
 }
 
 function tierBadge(tier: UserTier) {
@@ -86,8 +104,9 @@ function tierBadge(tier: UserTier) {
   }
 }
 
+// SELECT_FIELDS'e last_sign_in_at EKLENDİ
 const SELECT_FIELDS =
-  "id, email, role, membership, is_banned, created_at, trial_started_at, trial_ends_at, trial_used";
+  "id, email, role, membership, is_banned, created_at, trial_started_at, trial_ends_at, trial_used, last_sign_in_at";
 
 // ==========================================================
 // ANA BİLEŞEN
@@ -545,6 +564,7 @@ function AdminPage() {
                     <th className="px-3 py-2">Rol</th>
                     <th className="px-3 py-2">Durum</th>
                     <th className="px-3 py-2">Kayıt</th>
+                    <th className="px-3 py-2">Son Giriş</th>
                     <th className="px-3 py-2 text-right">Aksiyonlar</th>
                   </tr>
                 </thead>
@@ -556,6 +576,7 @@ function AdminPage() {
                     const badge = tierBadge(tier);
                     const daysLeft =
                       tier === "trial" ? getTrialDaysLeft(u) : null;
+                    const lastSignIn = formatLastSignIn(u.last_sign_in_at);
 
                     return (
                       <tr
@@ -615,6 +636,11 @@ function AdminPage() {
                         </td>
                         <td className="px-3 py-2 text-[10px] text-muted-foreground">
                           {new Date(u.created_at).toLocaleDateString("tr-TR")}
+                        </td>
+                        <td className="px-3 py-2 text-[10px] text-muted-foreground">
+                          <span className={u.last_sign_in_at ? "text-foreground" : "text-muted-foreground/60"}>
+                            {lastSignIn}
+                          </span>
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex flex-wrap items-center justify-end gap-1">
