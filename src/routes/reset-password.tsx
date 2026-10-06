@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { validatePassword } from "@/lib/password-validator";
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
@@ -29,10 +30,13 @@ function ResetPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (password.length < 6) {
-      toast.error("Şifre en az 6 karakter olmalı");
+    // ŞİFRE GÜÇ KONTROLÜ
+    const validation = validatePassword(password);
+    if (!validation.isValid) {
+      toast.error(validation.errors[0] ?? "Şifre kurallara uymuyor");
       return;
     }
+
     if (password !== passwordConfirm) {
       toast.error("Şifreler eşleşmiyor");
       return;
@@ -77,11 +81,14 @@ function ResetPasswordPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="En az 6 karakter"
+                placeholder="En az 8 karakter"
                 className="mt-1 w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring"
                 required
-                minLength={6}
+                minLength={8}
               />
+
+              {/* ŞİFRE GÜÇ GÖSTERGESİ */}
+              {password.length > 0 && <PasswordStrength password={password} />}
             </div>
 
             <div>
@@ -93,7 +100,7 @@ function ResetPasswordPage() {
                 placeholder="Şifreyi tekrar girin"
                 className="mt-1 w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring"
                 required
-                minLength={6}
+                minLength={8}
               />
             </div>
 
@@ -106,6 +113,73 @@ function ResetPasswordPage() {
             </button>
           </form>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ==========================================================
+// ŞİFRE GÜÇ GÖSTERGESİ
+// ==========================================================
+
+function PasswordStrength({ password }: { password: string }) {
+  const validation = validatePassword(password);
+
+  const colors = {
+    zayıf: "bg-bear",
+    orta: "bg-warn",
+    güçlü: "bg-bull",
+    mükemmel: "bg-primary",
+  };
+
+  return (
+    <div className="mt-2 space-y-2">
+      {/* Progress bar */}
+      <div className="h-1 overflow-hidden rounded-full bg-secondary">
+        <div
+          className={`h-full transition-all ${colors[validation.strength]}`}
+          style={{ width: `${validation.score}%` }}
+        />
+      </div>
+
+      {/* Güç etiketi */}
+      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        {validation.strength === "zayıf" && "🔴 Zayıf"}
+        {validation.strength === "orta" && "🟡 Orta"}
+        {validation.strength === "güçlü" && "🟢 Güçlü"}
+        {validation.strength === "mükemmel" && "✨ Mükemmel"}
+      </p>
+
+      {/* Kurallar */}
+      <div className="grid grid-cols-2 gap-1 text-[10px]">
+        <div
+          className={
+            validation.checks.minLength ? "text-bull" : "text-muted-foreground"
+          }
+        >
+          {validation.checks.minLength ? "✅" : "○"} En az 8 karakter
+        </div>
+        <div
+          className={
+            validation.checks.hasUpper ? "text-bull" : "text-muted-foreground"
+          }
+        >
+          {validation.checks.hasUpper ? "✅" : "○"} 1 büyük harf
+        </div>
+        <div
+          className={
+            validation.checks.hasLower ? "text-bull" : "text-muted-foreground"
+          }
+        >
+          {validation.checks.hasLower ? "✅" : "○"} 1 küçük harf
+        </div>
+        <div
+          className={
+            validation.checks.hasNumber ? "text-bull" : "text-muted-foreground"
+          }
+        >
+          {validation.checks.hasNumber ? "✅" : "○"} 1 rakam
+        </div>
       </div>
     </div>
   );
