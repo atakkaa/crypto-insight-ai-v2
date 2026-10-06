@@ -664,8 +664,6 @@ function calculateFormationAlert(
       ? pattern.confidence
       : 0;
 
-  // Çok düşük güvenli veya nötr formasyonlarda
-  // otomatik alarm üretmiyoruz.
   if (
     pattern.bias === "nötr" ||
     confidence < 70 ||
@@ -743,8 +741,6 @@ function calculateFormationAlert(
       ? currentClose > breakoutLevel
       : currentClose < breakoutLevel;
 
-  // Hacim teyidi: mevcut hacim, 20 mumluk ortalamanın
-  // en az 1.5 katı olmalı.
   const volumeConfirmed =
     indicatorValues.volumeRatio >= 1.5;
 
@@ -802,19 +798,20 @@ export async function runChartAnalysis(input: {
   interval: string;
   candles: AnalyzeCandle[];
   news?: NewsContextItem[] | undefined;
+  timeframe?: "long" | "short" | undefined;
 }): Promise<ChartAnalysis> {
   /*
-   * EMA200 hesaplamasının daha sağlıklı olması için mümkün
-   * olduğunca fazla mum kullanıyoruz.
-   *
-   * API'den maksimum 400 mum geldiği için son 400 mumu
-   * kullanıyoruz.
+   * Kısa vadeli analiz için son 30 mumu, uzun vadeli için
+   * son 400 mumu kullanıyoruz.
    */
-  const candles = input.candles.slice(-400);
+  const isShortTerm = input.timeframe === "short";
+  const candles = isShortTerm
+    ? input.candles.slice(-30)
+    : input.candles.slice(-400);
 
-  if (candles.length < 20) {
+  if (candles.length < (isShortTerm ? 20 : 30)) {
     throw new Error(
-      "İndikatör analizi için yeterli mum verisi bulunamadı.",
+      `İndikatör analizi için yeterli mum verisi bulunamadı (en az ${isShortTerm ? 20 : 30} mum gerekli).`,
     );
   }
 
@@ -848,8 +845,8 @@ export async function runChartAnalysis(input: {
   // 2. AI'YA GÖNDERİLECEK MUM VERİSİ
   // ----------------------------------------------------------
 
-  const analysisCandles =
-    candles.slice(-180);
+  // Kısa vadeli analizde tüm mumları, uzun vadeli analizde son 180 mumu kullan
+  const analysisCandles = isShortTerm ? candles : candles.slice(-180);
 
   const compact = analysisCandles
     .map(
@@ -1067,6 +1064,7 @@ JSON dışında hiçbir açıklama yazma.
 Sembol: ${input.symbol}
 Piyasa: ${input.market}
 Zaman dilimi: ${input.interval}
+Analiz tipi: ${isShortTerm ? "KISA VADELİ (20-30 mum)" : "UZUN VADELİ (200+ mum)"}
 
 MUM VERİLERİ
 (index|zaman|açılış|yüksek|düşük|kapanış|hacim)
@@ -1201,9 +1199,6 @@ Kurallar:
     },
   ]);
   } catch (error) {
-    // AI kotası/gateway geçici olarak kullanılamasa bile
-    // deterministik teknik ve formasyon motorunun sonucu
-    // grafiğe gönderilmeye devam eder.
     const primary = formationEngine.primary;
     const fallbackLines = primary?.lines ?? [];
     const fallbackName = primary?.name ?? "Formasyon tespit edilmedi";
@@ -1245,15 +1240,9 @@ Kurallar:
     void error;
   }
 
-
   // ----------------------------------------------------------
   // 5.1. FORMASYON ÇİZGİLERİNİN KAYNAĞINI SABİTLE
   // ----------------------------------------------------------
-  // Formasyon çizgileri Gemini tarafından çizilmez.
-  // Ana kaynak her zaman deterministik formation-engine olur.
-  // Böylece AI başarılı olsa bile kendi çizgilerini grafiğe
-  // dayatamaz; AI yalnızca yorum katmanı olarak kalır.
-  // AI başarısızsa da aynı motor sonucu kullanılmaya devam eder.
 
   const motorPrimary = formationEngine.primary;
   const motorLines = motorPrimary?.lines ?? [];
@@ -1269,18 +1258,6 @@ Kurallar:
   // ----------------------------------------------------------
   // 6. FORMASYON + HACİM UYARISI
   // ----------------------------------------------------------
-
-  /*
-   * Alarmın kritik kısmını Gemini'ye bırakmıyoruz.
-   * Formasyonun kırılımı ve hacim teyidi burada,
-   * gerçek hesaplanan veriler üzerinden deterministik
-   * olarak kontrol ediliyor.
-   *
-   * Böylece:
-   * - yükseliş formasyonu + yukarı kırılım + güçlü hacim = AL
-   * - düşüş formasyonu + aşağı kırılım + güçlü hacim = SAT
-   * - hacim yetersizse = BEKLE
-   */
 
   const formationAlert =
     calculateFormationAlert(
@@ -1298,14 +1275,6 @@ Kurallar:
   // ----------------------------------------------------------
   // 7. FRONTEND GRAFİĞİ İÇİN HESAPLANMIŞ SERİLERİ KORU
   // ----------------------------------------------------------
-
-  /*
-   * Gemini'nin indicatorValues değerlerini değiştirmesine
-   * güvenmek yerine gerçek hesaplanan değerleri kullanıyoruz.
-   *
-   * Böylece ekrandaki indikatör grafikleri ile AI'ya gönderilen
-   * veriler aynı matematiksel kaynaktan gelir.
-   */
 
   result.indicatorValues =
     indicatorData.values;
@@ -1447,9 +1416,6 @@ Kurallar:
   // ----------------------------------------------------------
   // 8.1. AI ÇIKTI TUTARLILIK KONTROLÜ (GUARD)
   // ----------------------------------------------------------
-  // AI, direction="yükseliş" derken summary metninde "düşüş"
-  // yazmış olabilir. Bu durumda güvenli fallback'e geçilir.
-  // Böylece rozet ile metin arasındaki çelişki engellenir.
 
   if (result.indicatorAnalysis) {
     const dir = result.indicatorAnalysis.direction;

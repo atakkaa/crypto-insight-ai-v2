@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AssetInfoPanel } from "@/components/AssetInfoPanel";
 import { CandleChart } from "@/components/CandleChart";
@@ -957,7 +957,13 @@ function Dashboard() {
   const [formationChats, setFormationChats] = useState<FormationChatStore>({});
   const [formationEvaluationOpen, setFormationEvaluationOpen] = useState<Record<string, boolean>>({});
   const [showFormationCloseDialog, setShowFormationCloseDialog] = useState(false);
-
+  // ==========================================================
+  // KISA VADELİ ANALİZ STATE'LERİ
+  // ==========================================================
+  const [shortTermAnalysis, setShortTermAnalysis] = useState<DashboardAnalysis | null>(null);
+  const [shortTermAnalyzing, setShortTermAnalyzing] = useState(false);
+  const [showShortTerm, setShowShortTerm] = useState(false);
+  const shortTermCacheKey = `formasyon-ai-short-term-v1`;
   const runAnalysis = useServerFn(analyzeChart);
   const loadStock = useServerFn(getStockCandles);
   const loadAssetInfo = useServerFn(getAssetInfo);
@@ -1801,7 +1807,110 @@ function Dashboard() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSymbol, interval, market, candles.length > 0, newsSignature]);
+  // ==========================================================
+  // KISA VADELİ ANALİZ - LOCALSTORAGE'DAN YÜKLE
+  // ==========================================================
+  useEffect(() => {
+    if (!activeSymbol) return;
+    try {
+      const raw = window.localStorage.getItem(shortTermCacheKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, DashboardAnalysis>;
+      const key = `${market}:${activeSymbol}:${interval}`;
+      if (parsed[key]) {
+        setShortTermAnalysis(parsed[key]);
+        setShowShortTerm(true);
+      } else {
+        setShortTermAnalysis(null);
+        setShowShortTerm(false);
+      }
+    } catch {
+      // Bozuk kayıt varsa uygulamanın çalışmasını engelleme
+    }
+  }, [activeSymbol, market, interval, shortTermCacheKey]);
 
+  // ==========================================================
+  // KISA VADELİ ANALİZ - ÇALIŞTIR
+  // ==========================================================
+  async function runShortTermAnalysis() {
+    if (candles.length < 20) {
+      toast.error("Kısa vadeli analiz için en az 20 mum gerekli.");
+      return;
+    }
+
+    setShortTermAnalyzing(true);
+    setShowShortTerm(true);
+
+    try {
+      // Son 30 mumu al
+      const shortCandles = candles.slice(-30);
+      
+      const result = await runAnalysis({
+        data: {
+          symbol: activeSymbol,
+          market: market === "crypto" ? "kripto" : `hisse/${MARKET_LABELS[market]}`,
+          interval,
+          candles: shortCandles.map(({ time, open, high, low, close, volume }) => ({
+            time, open, high, low, close, volume,
+          })),
+          news: relevantNews,
+          timeframe: "short",
+        },
+      });
+
+      const nextAnalysis = result.analysis as DashboardAnalysis | null;
+      setShortTermAnalysis(nextAnalysis);
+
+      // localStorage'a kaydet
+      try {
+        const raw = window.localStorage.getItem(shortTermCacheKey);
+        const parsed = raw ? (JSON.parse(raw) as Record<string, DashboardAnalysis>) : {};
+        const key = `${market}:${activeSymbol}:${interval}`;
+        if (nextAnalysis) {
+          parsed[key] = nextAnalysis;
+          window.localStorage.setItem(shortTermCacheKey, JSON.stringify(parsed));
+        }
+      } catch {
+        // localStorage hatası sessizce yut
+      }
+
+      toast.success("✅ Kısa vadeli analiz tamamlandı");
+    } catch {
+      toast.error("Kısa vadeli analiz yapılamadı.");
+    } finally {
+      setShortTermAnalyzing(false);
+    }
+  }
+
+  // ==========================================================
+  // KISA VADELİ ANALİZ - SADECE BU SEMBOLÜ TEMİZLE
+  // ==========================================================
+  function clearShortTermForCurrentSymbol() {
+    try {
+      const raw = window.localStorage.getItem(shortTermCacheKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, DashboardAnalysis>;
+      const key = `${market}:${activeSymbol}:${interval}`;
+      delete parsed[key];
+      window.localStorage.setItem(shortTermCacheKey, JSON.stringify(parsed));
+      setShortTermAnalysis(null);
+      setShowShortTerm(false);
+      toast.success("Bu sembolün kısa vadeli analizi temizlendi.");
+    } catch {
+      toast.error("Temizleme başarısız.");
+    }
+  }
+
+  // ==========================================================
+  // KISA VADELİ ANALİZ - TÜMÜNÜ TEMİZLE
+  // ==========================================================
+  function clearAllShortTermAnalyses() {
+    if (!window.confirm("Tüm kısa vadeli analizler silinsin mi?")) return;
+    window.localStorage.removeItem(shortTermCacheKey);
+    setShortTermAnalysis(null);
+    setShowShortTerm(false);
+    toast.success("Tüm kısa vadeli analizler temizlendi.");
+  }
   // === GİRİŞ YAPMAMIŞ KULLANICIYA WELCOME EKRANI ===
   if (!user) {
     return <WelcomeGate />;
@@ -2318,7 +2427,37 @@ function Dashboard() {
                   )}
                 </div>
               </div>
+              {/* KISA VADELİ ANALİZ BUTONU */}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void runShortTermAnalysis()}
+                  disabled={shortTermAnalyzing || candles.length < 20}
+                  className="rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
+                >
+                  {shortTermAnalyzing
+                    ? "⏳ Analiz ediliyor..."
+                    : "📉 Kısa Vadeli (20-30 Mum) Formasyon Değerlendir"}
+                </button>
 
+                {shortTermAnalysis && (
+                  <button
+                    type="button"
+                    onClick={() => clearShortTermForCurrentSymbol()}
+                    className="rounded-md border border-destructive/30 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10"
+                  >
+                    🗑️ Bu Sembolü Temizle
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => clearAllShortTermAnalyses()}
+                  className="ml-auto rounded-md border border-border px-3 py-1.5 text-xs font-bold hover:bg-secondary"
+                >
+                  🗑️ Tüm Kısa Vadeli Analizleri Temizle
+                </button>
+              </div>
               <div className="mt-3 overflow-hidden rounded-md bg-card p-2">
                 <CandleChart
                   candles={candles}
@@ -2388,7 +2527,135 @@ function Dashboard() {
                 </div>
               </div>
             )}
+            {/* UZUN VADELİ ANALİZ AÇILIR PENCERE */}
+            <details className="panel p-4" open>
+              <summary className="cursor-pointer text-sm font-bold">
+                📊 Uzun Vadeli Analiz (200+ Mum)
+              </summary>
+              <div className="mt-3 space-y-3">
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-xs font-bold text-muted-foreground">FORMASYON MOTORU</p>
+                  <p className="mt-1 text-sm">
+                    <span
+                      className={
+                        analysis?.pattern.bias === "yükseliş"
+                          ? "text-bull font-bold"
+                          : analysis?.pattern.bias === "düşüş"
+                            ? "text-bear font-bold"
+                            : "text-muted-foreground font-bold"
+                      }
+                    >
+                      {analysis?.pattern.name ?? "Formasyon tespit edilmedi"} → {analysis?.pattern.bias ?? "nötr"}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {analysis?.pattern.bias === "düşüş"
+                      ? "Fiyat uzun vadede düşüş formasyonu içinde hareket ediyor."
+                      : analysis?.pattern.bias === "yükseliş"
+                        ? "Fiyat uzun vadede yükseliş formasyonu içinde."
+                        : "Formasyon nötr."}
+                  </p>
+                </div>
 
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-xs font-bold text-muted-foreground">İNDİKATÖR MOTORU</p>
+                  <p className="mt-1 text-sm">
+                    <span
+                      className={
+                        analysis?.indicatorAnalysis?.direction === "yükseliş"
+                          ? "text-bull font-bold"
+                          : analysis?.indicatorAnalysis?.direction === "düşüş"
+                            ? "text-bear font-bold"
+                            : "text-muted-foreground font-bold"
+                      }
+                    >
+                      {analysis?.indicatorAnalysis?.direction ?? "kararsız"} (%{analysis?.indicatorAnalysis?.confidence ?? 0})
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {analysis?.indicatorAnalysis?.summary ?? "İndikatör yorumu bekleniyor."}
+                  </p>
+                </div>
+
+                {analysis?.pattern.bias !== analysis?.indicatorAnalysis?.direction &&
+                  analysis?.pattern.bias !== "nötr" &&
+                  analysis?.indicatorAnalysis?.direction &&
+                  analysis?.indicatorAnalysis?.direction !== "kararsız" && (
+                    <div className="rounded-lg border border-warn/40 bg-warn/10 p-3">
+                      <p className="text-xs font-bold text-warn">⚠️ ÇELİŞKİ TESPİT EDİLDİ</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Formasyon motoru "{analysis?.pattern.bias}" derken, indikatör motoru "{analysis?.indicatorAnalysis?.direction}" diyor. 
+                        Bu, farklı zaman dilimlerinden kaynaklanıyor olabilir. Kısa vadeli analiz için yukarıdaki butona basın.
+                      </p>
+                    </div>
+                  )}
+              </div>
+            </details>
+
+            {/* KISA VADELİ ANALİZ AÇILIR PENCERE */}
+            {showShortTerm && (
+              <details className="panel p-4" open>
+                <summary className="cursor-pointer text-sm font-bold">
+                  📉 Kısa Vadeli Analiz (20-30 Mum)
+                  {shortTermAnalyzing && <span className="ml-2 text-xs text-muted-foreground">Yükleniyor...</span>}
+                </summary>
+                <div className="mt-3 space-y-3">
+                  {shortTermAnalyzing ? (
+                    <p className="text-sm text-muted-foreground">Kısa vadeli analiz yapılıyor...</p>
+                  ) : shortTermAnalysis ? (
+                    <>
+                      <div className="rounded-lg border border-border bg-card p-3">
+                        <p className="text-xs font-bold text-muted-foreground">FORMASYON MOTORU (20-30 MUM)</p>
+                        <p className="mt-1 text-sm">
+                          <span
+                            className={
+                              shortTermAnalysis.pattern.bias === "yükseliş"
+                                ? "text-bull font-bold"
+                                : shortTermAnalysis.pattern.bias === "düşüş"
+                                  ? "text-bear font-bold"
+                                  : "text-muted-foreground font-bold"
+                            }
+                          >
+                            {shortTermAnalysis.pattern.name} → {shortTermAnalysis.pattern.bias}
+                          </span>
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-border bg-card p-3">
+                        <p className="text-xs font-bold text-muted-foreground">İNDİKATÖR MOTORU (20-30 MUM)</p>
+                        <p className="mt-1 text-sm">
+                          <span
+                            className={
+                              shortTermAnalysis.indicatorAnalysis?.direction === "yükseliş"
+                                ? "text-bull font-bold"
+                                : shortTermAnalysis.indicatorAnalysis?.direction === "düşüş"
+                                  ? "text-bear font-bold"
+                                  : "text-muted-foreground font-bold"
+                            }
+                          >
+                            {shortTermAnalysis.indicatorAnalysis?.direction} (%{shortTermAnalysis.indicatorAnalysis?.confidence})
+                          </span>
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {shortTermAnalysis.indicatorAnalysis?.summary}
+                        </p>
+                      </div>
+
+                      {shortTermAnalysis.pattern.bias === shortTermAnalysis.indicatorAnalysis?.direction && (
+  <div className="rounded-lg border border-bull/40 bg-bull/10 p-3">
+    <p className="text-xs font-bold text-bull">✅ UYUMLU SONUÇ</p>
+    <p className="mt-1 text-xs text-muted-foreground">
+      Kısa vadede formasyon ve indikatörler aynı yönü gösteriyor: <strong>{shortTermAnalysis.pattern.bias}</strong>.
+    </p>
+  </div>
+)}
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Analiz yapılamadı.</p>
+                  )}
+                </div>
+              </details>
+            )}
             <FormationAlertPanel
               symbol={activeSymbol}
               analysis={analysis}

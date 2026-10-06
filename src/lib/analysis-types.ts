@@ -294,3 +294,8 @@ export type ChartAnalysis = {
    */
   formationEngine?: FormationEngineResult | null;
 };
+/**
+ * Kısa vadeli (20-30 mum) analiz için kullanılan zaman dilimi tipi.
+ * "long" = 200 mum (varsayılan), "short" = 20-30 mum.
+ */
+export type AnalysisTimeframe = "long" | "short";
