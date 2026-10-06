@@ -39,6 +39,31 @@ function AuthPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // ==========================================
+  // YENİ EKLENEN: 10 DAKİKA KİLİT MEKANİZMASI
+  // ==========================================
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+
+  // Sayfa yenilendiğinde kilidin devam etmesi için localStorage kontrolü
+  useEffect(() => {
+    const savedLockout = localStorage.getItem("login_lockout_until");
+    const savedAttempts = localStorage.getItem("login_failed_attempts");
+
+    if (savedLockout) {
+      const lockTime = parseInt(savedLockout, 10);
+      if (Date.now() < lockTime) {
+        setLockoutUntil(lockTime);
+      } else {
+        // Süre dolmuşsa temizle
+        localStorage.removeItem("login_lockout_until");
+        localStorage.removeItem("login_failed_attempts");
+      }
+    }
+    if (savedAttempts) setFailedAttempts(parseInt(savedAttempts, 10));
+  }, []);
+  // ==========================================
+
   useEffect(() => {
     if (session) void navigate({ to: "/" });
   }, [session, navigate]);
@@ -73,11 +98,48 @@ function AuthPage() {
         );
       }
     } else {
+      // ==========================================
+      // YENİ EKLENEN: GİRİŞ KONTROLÜ VE KİLİT YÖNETİMİ
+      // ==========================================
+      
+      // 1. Kilit kontrolü
+      if (lockoutUntil && Date.now() < lockoutUntil) {
+        const kalanSaniye = Math.ceil((lockoutUntil - Date.now()) / 1000);
+        const kalanDakika = Math.ceil(kalanSaniye / 60);
+        setError(`Çok fazla hatalı deneme. Lütfen ${kalanDakika} dakika sonra tekrar deneyin.`);
+        setBusy(false);
+        return;
+      }
+
+      // 2. Supabase giriş denemesi
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-      if (signInError) setError(signInError.message);
+
+      if (signInError) {
+        // 3. Hatalı girişte sayacı artır
+        const yeniHataSayisi = failedAttempts + 1;
+        setFailedAttempts(yeniHataSayisi);
+        localStorage.setItem("login_failed_attempts", yeniHataSayisi.toString());
+
+        if (yeniHataSayisi >= 5) {
+          // 4. 5 hatalı denemede 10 dakika kilitle
+          const onDakikaSonra = Date.now() + 10 * 60 * 1000; // 10 dakika
+          setLockoutUntil(onDakikaSonra);
+          localStorage.setItem("login_lockout_until", onDakikaSonra.toString());
+          setError("Çok fazla hatalı deneme yaptınız. Hesabınız 10 dakika boyunca kilitlendi.");
+        } else {
+          setError(`${signInError.message} (Kalan deneme hakkınız: ${5 - yeniHataSayisi})`);
+        }
+      } else {
+        // 5. Başarılı girişte sayacı sıfırla
+        setFailedAttempts(0);
+        setLockoutUntil(null);
+        localStorage.removeItem("login_failed_attempts");
+        localStorage.removeItem("login_lockout_until");
+      }
+      // ==========================================
     }
 
     setBusy(false);
@@ -194,14 +256,16 @@ function AuthPage() {
 
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || (lockoutUntil !== null && Date.now() < lockoutUntil)}
             className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
           >
             {busy
               ? "Gönderiliyor..."
-              : mode === "signin"
-                ? "Giriş yap"
-                : "Kayıt ol"}
+              : lockoutUntil !== null && Date.now() < lockoutUntil
+                ? `Kilitli (${Math.ceil((lockoutUntil - Date.now()) / 60000)} dk)`
+                : mode === "signin"
+                  ? "Giriş yap"
+                  : "Kayıt ol"}
           </button>
         </form>
 
