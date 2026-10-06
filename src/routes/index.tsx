@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
@@ -918,6 +918,7 @@ function FormationAlertPanel({
 const EMPTY_USER_DRAWING_LINES: import("@/components/CandleChart").TradingViewLine[] = [];
 const EMPTY_FORMATION_MESSAGES: FormationChatMessage[] = [];
 function Dashboard() {
+  const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { isAdmin } = useAdmin();
     const { tierInfo } = useUserTier();
@@ -1088,6 +1089,41 @@ function Dashboard() {
       }
     })();
   }, [user]);
+    // Kullanıcı giriş yapınca push aboneliği oluştur
+  useEffect(() => {
+    if (!user) return;
+
+    void (async () => {
+      const granted = await requestPushPermission();
+      if (granted) {
+        await subscribeToPush(user.id);
+      }
+    })();
+  }, [user]);
+
+  // ==========================================================
+  // ONBOARDING KONTROLÜ - YENİ EKLENEN
+  // ==========================================================
+  useEffect(() => {
+    if (!user) return;
+
+    void (async () => {
+      const { data, error } = await (supabase as any)
+        .from("profiles")
+        .select("has_seen_onboarding")
+        .eq("id", user.id)
+        .single();
+
+      if (error) {
+        console.error("Onboarding kontrolü hatası:", error);
+        return;
+      }
+
+      if (data && data.has_seen_onboarding === false) {
+        void navigate({ to: "/onboarding" });
+      }
+    })();
+  }, [user, navigate]);
 
   useEffect(() => {
     if (!routeSearch.s) return;
