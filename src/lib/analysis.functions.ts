@@ -35,6 +35,7 @@ const AnalyzeInput = z.object({
   interval: z.string().min(1).max(10),
   candles: z.array(CandleSchema).min(20).max(400),
   news: z.array(NewsContextSchema).max(6).optional(),
+  timeframe: z.enum(["long", "short"]).optional(),
 });
 
 // ============================================================
@@ -118,12 +119,14 @@ async function saveToCache(
 export const analyzeChart = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => AnalyzeInput.parse(data))
   .handler(async ({ data }) => {
-    const { symbol, market, interval } = data;
+    const { symbol, market, interval, timeframe } = data;
 
-    // 1. ÖNCE CACHE'E BAK
-    const cached = await getCachedAnalysis(market, symbol, interval);
-    if (cached) {
-      return { analysis: cached, error: null as string | null };
+    // 1. ÖNCE CACHE'E BAK (Kısa vadeli analizler için cache kullanmıyoruz)
+    if (timeframe !== "short") {
+      const cached = await getCachedAnalysis(market, symbol, interval);
+      if (cached) {
+        return { analysis: cached, error: null as string | null };
+      }
     }
 
     // 2. CACHE YOK → ESKİ YÖNTEM (hesapla)
@@ -133,10 +136,15 @@ export const analyzeChart = createServerFn({ method: "POST" })
     const { GatewayError } = await import("./ai-gateway.server");
 
     try {
-      const result = await runChartAnalysis(data);
+      const result = await runChartAnalysis({
+        ...data,
+        timeframe: timeframe ?? "long",
+      });
 
-      // 3. SONUCU CACHE'E YAZ (arka planda, fire-and-forget)
-      void saveToCache(market, symbol, interval, result);
+      // 3. SONUCU CACHE'E YAZ (sadece uzun vadeli analizler için)
+      if (timeframe !== "short") {
+        void saveToCache(market, symbol, interval, result);
+      }
 
       return { analysis: result, error: null as string | null };
     } catch (error) {
