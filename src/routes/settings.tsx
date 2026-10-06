@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -25,8 +25,25 @@ function SettingsPage() {
 
   const [local, setLocal] = useState<DndSettings | null>(null);
   const [trialStarting, setTrialStarting] = useState(false);
+  const [globalShortTermEnabled, setGlobalShortTermEnabled] = useState<boolean | null>(null);
+  const [globalToggling, setGlobalToggling] = useState(false);
 
   const current = local ?? settings;
+
+  // Global kısa vadeli bildirim ayarını çek
+  useEffect(() => {
+    if (!user) return;
+    void (supabase as any)
+      .from("profiles")
+      .select("short_term_global_enabled")
+      .eq("id", user.id)
+      .single()
+      .then((response: { data: { short_term_global_enabled: boolean } | null; error: unknown }) => {
+        if (response.data) {
+          setGlobalShortTermEnabled(response.data.short_term_global_enabled ?? true);
+        }
+      });
+  }, [user]);
 
   function update<K extends keyof DndSettings>(key: K, value: DndSettings[K]) {
     setLocal({ ...current, [key]: value });
@@ -78,6 +95,28 @@ function SettingsPage() {
       toast.error("Bağlantı hatası");
     }
     setTrialStarting(false);
+  }
+
+  async function handleToggleGlobalShortTerm() {
+    if (!user || globalShortTermEnabled === null) return;
+    setGlobalToggling(true);
+    const newVal = !globalShortTermEnabled;
+    const { error } = await (supabase as any)
+      .from("profiles")
+      .update({ short_term_global_enabled: newVal })
+      .eq("id", user.id);
+
+    if (error) {
+      toast.error("Ayar güncellenemedi");
+    } else {
+      setGlobalShortTermEnabled(newVal);
+      toast.success(
+        newVal
+          ? "✅ Global kısa vadeli bildirimler açıldı"
+          : "🔕 Global kısa vadeli bildirimler kapatıldı",
+      );
+    }
+    setGlobalToggling(false);
   }
 
   if (authLoading || loading) {
@@ -436,58 +475,53 @@ function SettingsPage() {
             </>
           )}
         </section>
-                {/* KISA VADELİ GLOBAL BİLDİRİMLER */}
-        {tierInfo && (tierInfo.tier === "premium" || tierInfo.tier === "trial" || tierInfo.tier === "admin") && (
-          <section className="panel p-5">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h2 className="text-lg font-bold">📉 Kısa Vadeli Global Bildirimler</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Premium özelliği: Tüm piyasada (kripto + hisse) <strong>çok yüksek güvenli</strong> (%85+) 
-                  20-30 mumluk formasyon fırsatlarını bildirir. Kendi takip ettiğiniz varlıklar her zaman bildirilir.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!current) return;
-                  void (async () => {
-                    const newVal = !(current as any).short_term_global_enabled;
-                    await (supabase as any)
-                      .from("profiles")
-                      .update({ short_term_global_enabled: newVal })
-                      .eq("id", user.id);
-                    toast.success(
-                      newVal
-                        ? "✅ Global kısa vadeli bildirimler açıldı"
-                        : "🔕 Global kısa vadeli bildirimler kapatıldı",
-                    );
-                    setLocal(null);
-                    window.location.reload();
-                  })();
-                }}
-                className={`relative ml-4 h-7 w-14 shrink-0 rounded-full transition-colors ${
-                  (current as any)?.short_term_global_enabled !== false ? "bg-amber-500" : "bg-secondary"
-                }`}
-              >
-                <span
-                  className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
-                    (current as any)?.short_term_global_enabled !== false ? "left-8" : "left-1"
+
+        {/* KISA VADELİ GLOBAL BİLDİRİMLER */}
+        {tierInfo &&
+          (tierInfo.tier === "premium" ||
+            tierInfo.tier === "trial" ||
+            tierInfo.tier === "admin") && (
+            <section className="panel p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h2 className="text-lg font-bold">
+                    📉 Kısa Vadeli Global Bildirimler
+                  </h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Premium özelliği: Tüm piyasada (kripto + hisse){" "}
+                    <strong>çok yüksek güvenli</strong> (%85+) 20-30 mumluk
+                    formasyon fırsatlarını bildirir. Kendi takip ettiğiniz
+                    varlıklar her zaman bildirilir.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={globalToggling || globalShortTermEnabled === null}
+                  onClick={() => void handleToggleGlobalShortTerm()}
+                  className={`relative ml-4 h-7 w-14 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+                    globalShortTermEnabled ? "bg-amber-500" : "bg-secondary"
                   }`}
-                />
-              </button>
-            </div>
-            {(current as any)?.short_term_global_enabled !== false && (
-              <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-                <p className="text-[11px] leading-5 text-amber-500">
-                  ⚠️ <strong>Bilgi:</strong> Bu özellik açık olduğunda, tüm piyasada tespit edilen 
-                  yüksek güvenli kısa vadeli formasyon fırsatları size bildirilir. Çok sık bildirim 
-                  almamak için sadece <strong>%85 ve üzeri güvenli</strong> formasyonlar gönderilir.
-                </p>
+                >
+                  <span
+                    className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
+                      globalShortTermEnabled ? "left-8" : "left-1"
+                    }`}
+                  />
+                </button>
               </div>
-            )}
-          </section>
-        )}
+              {globalShortTermEnabled && (
+                <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                  <p className="text-[11px] leading-5 text-amber-500">
+                    ⚠️ <strong>Bilgi:</strong> Bu özellik açık olduğunda, tüm
+                    piyasada tespit edilen yüksek güvenli kısa vadeli formasyon
+                    fırsatları size bildirilir. Çok sık bildirim almamak için
+                    sadece <strong>%85 ve üzeri güvenli</strong> formasyonlar
+                    gönderilir.
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
 
         {/* KAYDET */}
         <section className="panel flex flex-wrap items-center justify-between gap-3 p-4">
