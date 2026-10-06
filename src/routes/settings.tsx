@@ -18,6 +18,69 @@ export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
+// Kısa vadeli formasyon tipleri
+type ShortTermPatterns = {
+  ikili_dip: boolean;
+  ikili_tepe: boolean;
+  yukselen_ucgen: boolean;
+  dusen_ucgen: boolean;
+  obo: boolean;
+  ters_obo: boolean;
+};
+
+const DEFAULT_PATTERNS: ShortTermPatterns = {
+  ikili_dip: true,
+  ikili_tepe: true,
+  yukselen_ucgen: true,
+  dusen_ucgen: true,
+  obo: true,
+  ters_obo: true,
+};
+
+const PATTERN_LABELS: Array<{
+  key: keyof ShortTermPatterns;
+  emoji: string;
+  name: string;
+  description: string;
+}> = [
+  {
+    key: "ikili_dip",
+    emoji: "📉",
+    name: "İkili Dip",
+    description: "Yükseliş formasyonu — iki dip aynı seviyede",
+  },
+  {
+    key: "ikili_tepe",
+    emoji: "📈",
+    name: "İkili Tepe",
+    description: "Düşüş formasyonu — iki tepe aynı seviyede",
+  },
+  {
+    key: "yukselen_ucgen",
+    emoji: "🔺",
+    name: "Yükselen Üçgen",
+    description: "Yükseliş formasyonu — yatay direnç + yükselen dip",
+  },
+  {
+    key: "dusen_ucgen",
+    emoji: "🔻",
+    name: "Düşen Üçgen",
+    description: "Düşüş formasyonu — düşen direnç + yatay destek",
+  },
+  {
+    key: "obo",
+    emoji: "👤",
+    name: "Omuz-Baş-Omuz",
+    description: "Düşüş formasyonu — klasik OBO",
+  },
+  {
+    key: "ters_obo",
+    emoji: "🙃",
+    name: "Ters OBO",
+    description: "Yükseliş formasyonu — ters omuz-baş-omuz",
+  },
+];
+
 function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
   const { settings, loading, saving, save } = useDndSettings();
@@ -27,6 +90,8 @@ function SettingsPage() {
   const [trialStarting, setTrialStarting] = useState(false);
   const [globalShortTermEnabled, setGlobalShortTermEnabled] = useState<boolean | null>(null);
   const [globalToggling, setGlobalToggling] = useState(false);
+  const [shortTermPatterns, setShortTermPatterns] = useState<ShortTermPatterns | null>(null);
+  const [patternsSaving, setPatternsSaving] = useState(false);
 
   const current = local ?? settings;
 
@@ -35,12 +100,13 @@ function SettingsPage() {
     if (!user) return;
     void (supabase as any)
       .from("profiles")
-      .select("short_term_global_enabled")
+      .select("short_term_global_enabled, short_term_patterns")
       .eq("id", user.id)
       .single()
-      .then((response: { data: { short_term_global_enabled: boolean } | null; error: unknown }) => {
+      .then((response: { data: { short_term_global_enabled: boolean; short_term_patterns: ShortTermPatterns } | null; error: unknown }) => {
         if (response.data) {
           setGlobalShortTermEnabled(response.data.short_term_global_enabled ?? true);
+          setShortTermPatterns(response.data.short_term_patterns ?? DEFAULT_PATTERNS);
         }
       });
   }, [user]);
@@ -117,6 +183,30 @@ function SettingsPage() {
       );
     }
     setGlobalToggling(false);
+  }
+
+  async function handleTogglePattern(key: keyof ShortTermPatterns) {
+    if (!user || !shortTermPatterns) return;
+    const newPatterns = { ...shortTermPatterns, [key]: !shortTermPatterns[key] };
+    setShortTermPatterns(newPatterns);
+    setPatternsSaving(true);
+    const { error } = await (supabase as any)
+      .from("profiles")
+      .update({ short_term_patterns: newPatterns })
+      .eq("id", user.id);
+    setPatternsSaving(false);
+
+    if (error) {
+      toast.error("Ayar güncellenemedi");
+      setShortTermPatterns(shortTermPatterns);
+    } else {
+      const label = PATTERN_LABELS.find((p) => p.key === key);
+      toast.success(
+        newPatterns[key]
+          ? `✅ ${label?.name} açıldı`
+          : `🔕 ${label?.name} kapatıldı`,
+      );
+    }
   }
 
   if (authLoading || loading) {
@@ -517,6 +607,71 @@ function SettingsPage() {
                     fırsatları size bildirilir. Çok sık bildirim almamak için
                     sadece <strong>%85 ve üzeri güvenli</strong> formasyonlar
                     gönderilir.
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
+
+        {/* KISA VADELİ FORMASYON SEÇİMİ */}
+        {tierInfo &&
+          (tierInfo.tier === "premium" ||
+            tierInfo.tier === "trial" ||
+            tierInfo.tier === "admin") && (
+            <section className="panel p-5">
+              <h2 className="text-lg font-bold">
+                📉 Kısa Vadeli Formasyon Seçimi
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Hangi formasyonlar için bildirim almak istediğinizi seçin.
+                Kapattığınız formasyonlar için <strong>bildirim gelmez</strong>.
+              </p>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {PATTERN_LABELS.map((pattern) => {
+                  const enabled = shortTermPatterns?.[pattern.key] ?? true;
+                  return (
+                    <button
+                      key={pattern.key}
+                      type="button"
+                      disabled={patternsSaving}
+                      onClick={() => void handleTogglePattern(pattern.key)}
+                      className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors disabled:opacity-50 ${
+                        enabled
+                          ? "border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10"
+                          : "border-border bg-card hover:bg-secondary/50"
+                      }`}
+                    >
+                      <span className="text-2xl">{pattern.emoji}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-bold">{pattern.name}</p>
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                              enabled
+                                ? "bg-amber-500 text-white"
+                                : "bg-secondary text-muted-foreground"
+                            }`}
+                          >
+                            {enabled ? "AÇIK" : "KAPALI"}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
+                          {pattern.description}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {shortTermPatterns && Object.values(shortTermPatterns).every((v) => !v) && (
+                <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+                  <p className="text-[11px] font-bold text-destructive">
+                    ⚠️ Tüm formasyonlar kapalı!
+                  </p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Hiçbir kısa vadeli bildirim almayacaksınız. En az bir formasyonu açın.
                   </p>
                 </div>
               )}

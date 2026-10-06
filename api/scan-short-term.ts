@@ -40,6 +40,8 @@ type ProfileRow = {
   role: string;
   membership: string;
   trial_ends_at: string | null;
+  short_term_patterns: UserShortTermPatterns | null;
+  short_term_global_enabled?: boolean;
 };
 
 type DetectedPattern = {
@@ -52,6 +54,37 @@ type DetectedPattern = {
   target: number | null;
   invalidation: number | null;
 };
+
+// Kullanıcının seçtiği formasyonlar
+type UserShortTermPatterns = {
+  ikili_dip: boolean;
+  ikili_tepe: boolean;
+  yukselen_ucgen: boolean;
+  dusen_ucgen: boolean;
+  obo: boolean;
+  ters_obo: boolean;
+};
+
+const DEFAULT_USER_PATTERNS: UserShortTermPatterns = {
+  ikili_dip: true,
+  ikili_tepe: true,
+  yukselen_ucgen: true,
+  dusen_ucgen: true,
+  obo: true,
+  ters_obo: true,
+};
+
+// Formasyon adı → kullanıcı tercihi anahtarı
+function patternNameToKey(name: string): keyof UserShortTermPatterns | null {
+  const lower = name.toLowerCase();
+  if (lower.includes("ikili dip")) return "ikili_dip";
+  if (lower.includes("ikili tepe")) return "ikili_tepe";
+  if (lower.includes("yükselen üçgen") || lower.includes("yukselen ucgen")) return "yukselen_ucgen";
+  if (lower.includes("düşen üçgen") || lower.includes("dusen ucgen")) return "dusen_ucgen";
+  if (lower.includes("ters obo")) return "ters_obo";
+  if (lower.includes("obo") || lower.includes("omuz")) return "obo";
+  return null;
+}
 
 // Popüler varlık listeleri (global tarama için)
 const CRYPTO_TOP_50 = [
@@ -79,6 +112,7 @@ const US_TOP_30 = [
   "COST.US", "NFLX.US", "AMD.US", "CRM.US", "QCOM.US", "CSCO.US", "IBM.US",
   "NOW.US", "PLTR.US", "MU.US", "AMAT.US", "TXN.US", "INTU.US", "CAT.US", "BA.US",
 ];
+
 // ==========================================================
 // İNDİKATÖR HESAPLAMALARI
 // ==========================================================
@@ -198,8 +232,6 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
   const patterns: DetectedPattern[] = [];
   if (candles.length < 30) return patterns;
   const closes = candles.map((c) => c.close);
-  const highs = candles.map((c) => c.high);
-  const lows = candles.map((c) => c.low);
   const n = candles.length;
 
   // İkili Dip
@@ -366,16 +398,24 @@ async function scanShortTermForPremium() {
   const userIds: string[] = [...new Set(tracking.map((r) => r.user_id))];
   if (userIds.length === 0) return { scanned: [], created: 0, tracked: 0, filtered: 0 };
 
-  const profiles = (await supabaseSelect("profiles", `select=id,role,membership,trial_ends_at&id=in.(${userIds.join(",")})`)) as ProfileRow[];
+  const profiles = (await supabaseSelect("profiles", `select=id,role,membership,trial_ends_at,short_term_patterns&id=in.(${userIds.join(",")})`)) as ProfileRow[];
 
   const paidUserIds = new Set<string>();
+  const userPatterns = new Map<string, UserShortTermPatterns>();
+
   for (const p of profiles) {
     const role = String(p.role ?? "user");
     const membership = String(p.membership ?? "free");
     const trialEndsAt = p.trial_ends_at;
-    if (role === "admin" || membership === "premium") paidUserIds.add(p.id);
-    else if (membership === "trial" && trialEndsAt) {
-      if (new Date(trialEndsAt).getTime() >= Date.now()) paidUserIds.add(p.id);
+
+    if (role === "admin" || membership === "premium") {
+      paidUserIds.add(p.id);
+      userPatterns.set(p.id, p.short_term_patterns ?? DEFAULT_USER_PATTERNS);
+    } else if (membership === "trial" && trialEndsAt) {
+      if (new Date(trialEndsAt).getTime() >= Date.now()) {
+        paidUserIds.add(p.id);
+        userPatterns.set(p.id, p.short_term_patterns ?? DEFAULT_USER_PATTERNS);
+      }
     }
   }
 
@@ -423,7 +463,16 @@ async function scanShortTermForPremium() {
       const targetPrice = best.target ?? (best.bias === "yükseliş" ? lastClose * 1.05 : lastClose * 0.95);
       const reason = `${best.name} (%${best.confidence}) · RSI: ${indicators.rsi.toFixed(1)} · MACD: ${indicators.macdHistogram.toFixed(4)} · Hacim: ${(indicators.volumeRatio * 100).toFixed(0)}%`;
 
+      // Formasyon adı → kullanıcı tercihi anahtarı
+      const patternKey = patternNameToKey(best.name);
+
       for (const userId of [...new Set(target.users)]) {
+        // Kullanıcının bu formasyonu almak isteyip istemediğini kontrol et
+        if (patternKey) {
+          const userPattern = userPatterns.get(userId) ?? DEFAULT_USER_PATTERNS;
+          if (!userPattern[patternKey]) continue;
+        }
+
         const recent = await supabaseSelect("short_term_notifications", `select=id&user_id=eq.${userId}&market=eq.${target.market}&symbol=eq.${encodeURIComponent(target.symbol)}&pattern_bias=eq.${encodeURIComponent(best.bias)}&created_at=gt.${since}&limit=1`);
         if (recent.length > 0) continue;
 
@@ -449,18 +498,18 @@ async function scanShortTermForPremium() {
 async function scanGlobalShortTerm() {
   const allSymbols: Array<{ market: string; symbol: string }> = [];
 
-  // Tüm listeleri ekle
   for (const s of CRYPTO_TOP_50) allSymbols.push({ market: "crypto", symbol: s });
   for (const s of BIST_TOP_30) allSymbols.push({ market: "bist", symbol: s });
   for (const s of US_TOP_30) allSymbols.push({ market: "us", symbol: s });
 
-  // Global bildirimleri açan kullanıcıları çek
   const usersRaw = await supabaseSelect(
     "profiles",
-    `select=id,role,membership,trial_ends_at,short_term_global_enabled&short_term_global_enabled=eq.true`,
+    `select=id,role,membership,trial_ends_at,short_term_global_enabled,short_term_patterns&short_term_global_enabled=eq.true`,
   );
 
   const eligibleUsers: string[] = [];
+  const userPatterns = new Map<string, UserShortTermPatterns>();
+
   for (const u of usersRaw) {
     const role = String(u.role ?? "user");
     const membership = String(u.membership ?? "free");
@@ -468,8 +517,12 @@ async function scanGlobalShortTerm() {
 
     if (role === "admin" || membership === "premium") {
       eligibleUsers.push(u.id);
+      userPatterns.set(u.id, u.short_term_patterns ?? DEFAULT_USER_PATTERNS);
     } else if (membership === "trial" && trialEndsAt) {
-      if (new Date(trialEndsAt).getTime() >= Date.now()) eligibleUsers.push(u.id);
+      if (new Date(trialEndsAt).getTime() >= Date.now()) {
+        eligibleUsers.push(u.id);
+        userPatterns.set(u.id, u.short_term_patterns ?? DEFAULT_USER_PATTERNS);
+      }
     }
   }
 
@@ -497,7 +550,6 @@ async function scanGlobalShortTerm() {
 
       const best = patterns.reduce((max, p) => (p.confidence > max.confidence ? p : max), patterns[0]!);
 
-      // GLOBAL İÇİN ÇOK SIKI FİLTRE (≥85 güven, en az 2 indikatör, hacim teyidi)
       if (best.confidence < 85) continue;
       if (best.bias === "nötr") continue;
 
@@ -515,8 +567,15 @@ async function scanGlobalShortTerm() {
       const targetPrice = best.target ?? (best.bias === "yükseliş" ? lastClose * 1.05 : lastClose * 0.95);
       const reason = `${best.name} (%${best.confidence}) · RSI: ${indicators.rsi.toFixed(1)} · MACD: ${indicators.macdHistogram.toFixed(4)} · Hacim: ${(indicators.volumeRatio * 100).toFixed(0)}% · GLOBAL`;
 
+      const patternKey = patternNameToKey(best.name);
+
       for (const userId of eligibleUsers) {
-        // Dedupe
+        // Kullanıcının bu formasyonu almak isteyip istemediğini kontrol et
+        if (patternKey) {
+          const userPattern = userPatterns.get(userId) ?? DEFAULT_USER_PATTERNS;
+          if (!userPattern[patternKey]) continue;
+        }
+
         const recent = await supabaseSelect(
           "short_term_notifications",
           `select=id&user_id=eq.${userId}&market=eq.${target.market}&symbol=eq.${encodeURIComponent(target.symbol)}&pattern_bias=eq.${encodeURIComponent(best.bias)}&created_at=gt.${since}&limit=1`,
@@ -546,6 +605,7 @@ async function scanGlobalShortTerm() {
 
   return { globalScanned, globalCreated, globalUsers: eligibleUsers.length };
 }
+
 // ==========================================================
 // HANDLER
 // ==========================================================
@@ -561,7 +621,7 @@ export default async function handler(request: RequestLike, response: ResponseLi
     if (request.method !== "GET" && request.method !== "POST") {
       return response.status(405).json({ success: false, error: "Sadece GET/POST" });
     }
-        console.log("🔍 Kısa vadeli tarama başladı...");
+    console.log("🔍 Kısa vadeli tarama başladı...");
     const result = await scanShortTermForPremium();
     console.log(`✅ Kullanıcı odaklı tamamlandı:`, result);
 
