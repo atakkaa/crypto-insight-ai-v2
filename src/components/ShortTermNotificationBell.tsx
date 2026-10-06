@@ -196,6 +196,18 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                 notifications.map((n) => {
                   const biasEmoji = n.pattern_bias === "yükseliş" ? "🟢" : "🔴";
                   const biasColor = n.pattern_bias === "yükseliş" ? "text-bull" : "text-bear";
+                  const rewardPercent =
+                    n.entry != null && n.target != null && n.entry !== 0
+                      ? ((n.target - n.entry) / n.entry) * 100
+                      : null;
+                  const riskPercent =
+                    n.entry != null && n.stop != null && n.entry !== 0
+                      ? ((n.stop - n.entry) / n.entry) * 100
+                      : null;
+                  const riskReward =
+                    rewardPercent != null && riskPercent != null && riskPercent !== 0
+                      ? Math.abs(rewardPercent / riskPercent)
+                      : null;
                   return (
                     <button
                       key={n.id}
@@ -247,14 +259,32 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                             <div className="flex flex-col">
                               <span className="text-muted-foreground">Hedef</span>
                               <span className="num font-bold text-bull">{n.target.toFixed(4)}</span>
+                              {rewardPercent != null && (
+                                <span className="text-[9px] text-bull">
+                                  +{rewardPercent.toFixed(2)}%
+                                </span>
+                              )}
                             </div>
                           )}
                           {n.stop != null && (
                             <div className="flex flex-col">
                               <span className="text-muted-foreground">Stop</span>
                               <span className="num font-bold text-bear">{n.stop.toFixed(4)}</span>
+                              {riskPercent != null && (
+                                <span className="text-[9px] text-bear">
+                                  {riskPercent.toFixed(2)}%
+                                </span>
+                              )}
                             </div>
                           )}
+                        </div>
+                      )}
+
+                      {/* Risk/Ödül */}
+                      {riskReward != null && (
+                        <div className="mt-1 rounded border border-border/60 bg-secondary/20 px-2 py-1 text-[10px]">
+                          <span className="text-muted-foreground">R/R: </span>
+                          <span className="font-bold">1:{riskReward.toFixed(2)}</span>
                         </div>
                       )}
 
