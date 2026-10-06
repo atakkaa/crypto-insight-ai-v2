@@ -38,7 +38,7 @@ function OnboardingPage() {
       title: "Hazırsınız!",
       desc: "Hemen keşfetmeye başlayın. İyi analizler!",
     },
-  ] as const; // <-- HATA ÇÖZÜMÜ: Sabit dizi olarak işaretle
+  ] as const;
 
   async function finishOnboarding() {
     if (!user) {
@@ -50,6 +50,10 @@ function OnboardingPage() {
       .from("profiles")
       .update({ has_seen_onboarding: true })
       .eq("id", user.id);
+
+    // 🎯 TURU BAŞLATMAK İÇİN LOCALSTORAGE'A BAYRAK KOY
+    window.localStorage.setItem("formasyon-ai-start-tour", "1");
+
     setBusy(false);
     void navigate({ to: "/" });
   }
@@ -64,7 +68,6 @@ function OnboardingPage() {
         <h1 className="mt-4 text-2xl font-bold">{current.title}</h1>
         <p className="mt-3 text-sm text-muted-foreground">{current.desc}</p>
 
-        {/* Adım göstergesi */}
         <div className="mt-6 flex justify-center gap-2">
           {steps.map((_, i) => (
             <span

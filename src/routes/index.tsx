@@ -1,3 +1,4 @@
+import { Joyride, STATUS, type EventData } from "react-joyride";
 import { toast } from "sonner";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -918,6 +919,10 @@ function FormationAlertPanel({
 const EMPTY_USER_DRAWING_LINES: import("@/components/CandleChart").TradingViewLine[] = [];
 const EMPTY_FORMATION_MESSAGES: FormationChatMessage[] = [];
 function Dashboard() {
+    // ==========================================================
+  // ONBOARDING TURU STATE
+  // ==========================================================
+  const [runTour, setRunTour] = useState(false);
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { isAdmin } = useAdmin();
@@ -1911,6 +1916,17 @@ function Dashboard() {
     setShowShortTerm(false);
     toast.success("Tüm kısa vadeli analizler temizlendi.");
   }
+    // ==========================================================
+  // ONBOARDING TURU BAŞLATMA
+  // ==========================================================
+  useEffect(() => {
+    const shouldStart = window.localStorage.getItem("formasyon-ai-start-tour");
+    if (shouldStart === "1") {
+      window.localStorage.removeItem("formasyon-ai-start-tour");
+      // Kısa bir gecikmeyle turu başlat (sayfanın yüklenmesini bekle)
+      setTimeout(() => setRunTour(true), 1500);
+    }
+  }, []);
   // === GİRİŞ YAPMAMIŞ KULLANICIYA WELCOME EKRANI ===
   if (!user) {
     return <WelcomeGate />;
@@ -1919,6 +1935,93 @@ function Dashboard() {
   return (
     <>
       <div className="min-h-screen">
+                {/* ========================================================== */}
+        {/* ONBOARDING TOOLTIP TURU */}
+        {/* ========================================================== */}
+        <Joyride
+          run={runTour}
+          steps={[
+            {
+              target: "body",
+              placement: "bottom",
+              content: (
+                <div>
+                  <h3 className="text-lg font-bold">🚀 Formasyon AI'ya Hoş Geldiniz!</h3>
+                  <p className="mt-2 text-sm">
+                    Size uygulamayı kısaca tanıtalım. 5 adımda neler yapabileceğinizi göreceksiniz.
+                  </p>
+                </div>
+              ),
+            },
+            {
+              target: "nav.market-tabs",
+              content: (
+                <div>
+                  <h3 className="font-bold">📊 Piyasa Seçimi</h3>
+                  <p className="mt-1 text-sm">
+                    Buradan KRİPTO, BIST, ABD, ASYA ve AVRUPA piyasalarını seçebilirsin.
+                  </p>
+                </div>
+              ),
+              placement: "bottom",
+            },
+            {
+              target: ".favorites-panel",
+              content: (
+                <div>
+                  <h3 className="font-bold">⭐ Favori Listesi</h3>
+                  <p className="mt-1 text-sm">
+                    Beğendiğin varlıkları favorilere ekle, tek ekrandan takip et.
+                  </p>
+                </div>
+              ),
+              placement: "right",
+            },
+            {
+              target: ".short-term-button",
+              content: (
+                <div>
+                  <h3 className="font-bold">📉 Kısa Vadeli Analiz</h3>
+                  <p className="mt-1 text-sm">
+                    Kısa vadeli (20-30 mum) formasyon analizi için bu butona bas.
+                  </p>
+                </div>
+              ),
+              placement: "bottom",
+            },
+            {
+              target: ".notification-bell",
+              content: (
+                <div>
+                  <h3 className="font-bold">🔔 Bildirimler</h3>
+                  <p className="mt-1 text-sm">
+                    Önemli formasyon ve haber bildirimlerini buradan alırsın.
+                  </p>
+                </div>
+              ),
+              placement: "bottom",
+            },
+          ]}
+          continuous
+          styles={{
+          tooltip: {
+    borderRadius: 12,
+    backgroundColor: "#ffffff",
+    color: "#1f2937",
+  },
+  buttonPrimary: {
+    backgroundColor: "#f59e0b",
+    color: "#ffffff",
+  },
+}}
+          locale={{
+            back: "Geri",
+            close: "Kapat",
+            last: "Bitir",
+            next: "İleri",
+            skip: "Atla",
+          }}
+        />
         <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
             <span className="num text-sm font-bold uppercase tracking-[0.2em] text-primary">Formasyon AI</span>
@@ -2033,8 +2136,8 @@ function Dashboard() {
 
         <main className="mx-auto grid max-w-7xl gap-4 px-4 py-4 lg:grid-cols-[280px_minmax(0,1fr)_340px]">
           <aside className="panel h-fit p-4">
-            <div className="grid grid-cols-5 gap-1 rounded-lg bg-secondary p-1">
-              {(Object.keys(MARKET_LABELS) as Market[]).map((m) => (
+            <div className="market-tabs grid grid-cols-5 gap-1 rounded-lg bg-secondary p-1">
+            {(Object.keys(MARKET_LABELS) as Market[]).map((m) => (
                 <button
                   key={m}
                   onClick={() => {
