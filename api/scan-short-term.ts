@@ -53,6 +53,32 @@ type DetectedPattern = {
   invalidation: number | null;
 };
 
+// Popüler varlık listeleri (global tarama için)
+const CRYPTO_TOP_50 = [
+  "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT",
+  "AVAXUSDT", "DOTUSDT", "LINKUSDT", "MATICUSDT", "TRXUSDT", "LTCUSDT", "BCHUSDT",
+  "ATOMUSDT", "UNIUSDT", "AAVEUSDT", "FILUSDT", "NEARUSDT", "ICPUSDT",
+  "APTUSDT", "ARBUSDT", "OPUSDT", "SUIUSDT", "TONUSDT", "SHIBUSDT", "PEPEUSDT",
+  "WIFUSDT", "BONKUSDT", "INJUSDT", "SEIUSDT", "TIAUSDT", "RUNEUSDT", "FETUSDT",
+  "RENDERUSDT", "JUPUSDT", "PYTHUSDT", "STRKUSDT", "WLDUSDT", "ORDIUSDT",
+  "ENAUSDT", "ETHFIUSDT", "REZUSDT", "OMNIUSDT", "SAGAUSDT", "TNSRUSDT", "WUSDT",
+  "ZECUSDT", "DASHUSDT", "COMPUSDT",
+];
+
+const BIST_TOP_30 = [
+  "THYAO.IS", "ASELS.IS", "TUPRS.IS", "BIMAS.IS", "GARAN.IS", "AKBNK.IS",
+  "ISCTR.IS", "YKBNK.IS", "KCHOL.IS", "SAHOL.IS", "SISE.IS", "EREGL.IS",
+  "PETKM.IS", "FROTO.IS", "TOASO.IS", "TAVHL.IS", "TCELL.IS", "MGROS.IS",
+  "ENKAI.IS", "HEKTS.IS", "SASA.IS", "PGSUS.IS", "AEFES.IS", "ULKER.IS",
+  "DOAS.IS", "KOZAL.IS", "KRDMD.IS", "ALARK.IS", "CCOLA.IS", "OYAKC.IS",
+];
+
+const US_TOP_30 = [
+  "AAPL.US", "MSFT.US", "NVDA.US", "AMZN.US", "GOOGL.US", "META.US", "AVGO.US",
+  "TSLA.US", "JPM.US", "WMT.US", "ORCL.US", "LLY.US", "V.US", "MA.US", "XOM.US",
+  "COST.US", "NFLX.US", "AMD.US", "CRM.US", "QCOM.US", "CSCO.US", "IBM.US",
+  "NOW.US", "PLTR.US", "MU.US", "AMAT.US", "TXN.US", "INTU.US", "CAT.US", "BA.US",
+];
 // ==========================================================
 // İNDİKATÖR HESAPLAMALARI
 // ==========================================================
@@ -417,6 +443,110 @@ async function scanShortTermForPremium() {
 }
 
 // ==========================================================
+// GLOBAL TARAMA (Tüm piyasa)
+// ==========================================================
+
+async function scanGlobalShortTerm() {
+  const allSymbols: Array<{ market: string; symbol: string }> = [];
+
+  // Tüm listeleri ekle
+  for (const s of CRYPTO_TOP_50) allSymbols.push({ market: "crypto", symbol: s });
+  for (const s of BIST_TOP_30) allSymbols.push({ market: "bist", symbol: s });
+  for (const s of US_TOP_30) allSymbols.push({ market: "us", symbol: s });
+
+  // Global bildirimleri açan kullanıcıları çek
+  const usersRaw = await supabaseSelect(
+    "profiles",
+    `select=id,role,membership,trial_ends_at,short_term_global_enabled&short_term_global_enabled=eq.true`,
+  );
+
+  const eligibleUsers: string[] = [];
+  for (const u of usersRaw) {
+    const role = String(u.role ?? "user");
+    const membership = String(u.membership ?? "free");
+    const trialEndsAt = u.trial_ends_at as string | null;
+
+    if (role === "admin" || membership === "premium") {
+      eligibleUsers.push(u.id);
+    } else if (membership === "trial" && trialEndsAt) {
+      if (new Date(trialEndsAt).getTime() >= Date.now()) eligibleUsers.push(u.id);
+    }
+  }
+
+  if (eligibleUsers.length === 0) {
+    return { globalScanned: 0, globalCreated: 0, globalUsers: 0 };
+  }
+
+  const since = new Date(Date.now() - 6 * 3600_000).toISOString();
+  const fearGreed = await fetchFearGreed();
+
+  let globalCreated = 0;
+  let globalScanned = 0;
+
+  for (const target of allSymbols) {
+    try {
+      let candles: Candle[] = [];
+      if (target.market === "crypto") candles = await fetchCryptoCandles(target.symbol);
+      else candles = await fetchStockCandles(target.symbol);
+      if (candles.length < 20) continue;
+
+      const shortCandles = candles.slice(-30);
+      const indicators = calculateIndicatorData(shortCandles);
+      const patterns = detectPatterns(shortCandles);
+      if (patterns.length === 0) continue;
+
+      const best = patterns.reduce((max, p) => (p.confidence > max.confidence ? p : max), patterns[0]!);
+
+      // GLOBAL İÇİN ÇOK SIKI FİLTRE (≥85 güven, en az 2 indikatör, hacim teyidi)
+      if (best.confidence < 85) continue;
+      if (best.bias === "nötr") continue;
+
+      const sameDirCount = [
+        best.bias === "yükseliş" ? indicators.rsi > 50 : indicators.rsi < 50,
+        best.bias === "yükseliş" ? indicators.macdHistogram > 0 : indicators.macdHistogram < 0,
+      ].filter(Boolean).length;
+      if (sameDirCount < 2) continue;
+      if (indicators.volumeRatio < 1.5) continue;
+      if (target.market === "crypto" && fearGreed && (fearGreed.value >= 90 || fearGreed.value <= 10)) continue;
+
+      globalScanned += 1;
+      const lastClose = shortCandles[shortCandles.length - 1]?.close ?? 0;
+      const stop = best.invalidation ?? (best.bias === "yükseliş" ? lastClose * 0.97 : lastClose * 1.03);
+      const targetPrice = best.target ?? (best.bias === "yükseliş" ? lastClose * 1.05 : lastClose * 0.95);
+      const reason = `${best.name} (%${best.confidence}) · RSI: ${indicators.rsi.toFixed(1)} · MACD: ${indicators.macdHistogram.toFixed(4)} · Hacim: ${(indicators.volumeRatio * 100).toFixed(0)}% · GLOBAL`;
+
+      for (const userId of eligibleUsers) {
+        // Dedupe
+        const recent = await supabaseSelect(
+          "short_term_notifications",
+          `select=id&user_id=eq.${userId}&market=eq.${target.market}&symbol=eq.${encodeURIComponent(target.symbol)}&pattern_bias=eq.${encodeURIComponent(best.bias)}&created_at=gt.${since}&limit=1`,
+        );
+        if (recent.length > 0) continue;
+
+        const ok = await supabaseInsert("short_term_notifications", {
+          user_id: userId,
+          market: target.market,
+          symbol: target.symbol,
+          pattern_name: best.name,
+          pattern_bias: best.bias,
+          confidence: best.confidence,
+          signal_score: best.confidence,
+          entry: lastClose,
+          stop,
+          target: targetPrice,
+          reason,
+          fear_greed: fearGreed?.value ?? null,
+        });
+        if (ok) globalCreated += 1;
+      }
+    } catch (err) {
+      console.error(`Global tarama hatası (${target.symbol}):`, err);
+    }
+  }
+
+  return { globalScanned, globalCreated, globalUsers: eligibleUsers.length };
+}
+// ==========================================================
 // HANDLER
 // ==========================================================
 
@@ -431,10 +561,21 @@ export default async function handler(request: RequestLike, response: ResponseLi
     if (request.method !== "GET" && request.method !== "POST") {
       return response.status(405).json({ success: false, error: "Sadece GET/POST" });
     }
-    console.log("🔍 Kısa vadeli tarama başladı...");
+        console.log("🔍 Kısa vadeli tarama başladı...");
     const result = await scanShortTermForPremium();
-    console.log(`✅ Tamamlandı:`, result);
-    return response.status(200).json({ success: true, message: "Tamamlandı.", ...result, timestamp: new Date().toISOString() });
+    console.log(`✅ Kullanıcı odaklı tamamlandı:`, result);
+
+    console.log("🌍 Global tarama başladı...");
+    const globalResult = await scanGlobalShortTerm();
+    console.log(`✅ Global tamamlandı:`, globalResult);
+
+    return response.status(200).json({
+      success: true,
+      message: "Tamamlandı.",
+      ...result,
+      ...globalResult,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Bilinmeyen hata";
     console.error("Hata:", error);
