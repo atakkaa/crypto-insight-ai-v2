@@ -28,6 +28,7 @@ function ShortTermNotificationsPage() {
   const [search, setSearch] = useState("");
   const [biasFilter, setBiasFilter] = useState<"all" | "yükseliş" | "düşüş">("all");
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "7days">("all");
+  const [timeframeFilter, setTimeframeFilter] = useState<"all" | "15m" | "1h" | "4h" | "1d">("all");
   const [detailNotification, setDetailNotification] = useState<ShortTermNotification | null>(null);
 
   // 1. İlk yüklemede bildirimleri çek
@@ -77,6 +78,11 @@ function ShortTermNotificationsPage() {
       list = list.filter((n) => n.pattern_bias === biasFilter);
     }
 
+    // Zaman dilimi filtresi
+    if (timeframeFilter !== "all") {
+      list = list.filter((n) => n.timeframe === timeframeFilter);
+    }
+
     // Tarih filtresi
     if (dateFilter === "today") {
       const startOfDay = new Date();
@@ -92,7 +98,7 @@ function ShortTermNotificationsPage() {
     }
 
     return list;
-  }, [notifications, search, biasFilter, dateFilter]);
+  }, [notifications, search, biasFilter, dateFilter, timeframeFilter]);
 
   // 4. İstatistikler
   const stats = useMemo(() => {
@@ -100,7 +106,11 @@ function ShortTermNotificationsPage() {
     const unread = notifications.filter((n) => !n.read).length;
     const bullish = notifications.filter((n) => n.pattern_bias === "yükseliş").length;
     const bearish = notifications.filter((n) => n.pattern_bias === "düşüş").length;
-    return { total, unread, bullish, bearish };
+    const tf15m = notifications.filter((n) => n.timeframe === "15m").length;
+    const tf1h = notifications.filter((n) => n.timeframe === "1h").length;
+    const tf4h = notifications.filter((n) => n.timeframe === "4h").length;
+    const tf1d = notifications.filter((n) => n.timeframe === "1d").length;
+    return { total, unread, bullish, bearish, tf15m, tf1h, tf4h, tf1d };
   }, [notifications]);
 
   // 5. Bildirime tıklama
@@ -234,6 +244,26 @@ function ShortTermNotificationsPage() {
             </div>
           </div>
 
+          {/* ZAMAN DİLİMİ İSTATİSTİKLERİ */}
+          <div className="mt-3 grid gap-2 sm:grid-cols-4">
+            <div className="rounded-md border border-border/60 bg-secondary/30 p-2 text-center">
+              <p className="text-[10px] text-muted-foreground">15 Dakika</p>
+              <p className="num text-sm font-bold text-amber-500">{stats.tf15m}</p>
+            </div>
+            <div className="rounded-md border border-border/60 bg-secondary/30 p-2 text-center">
+              <p className="text-[10px] text-muted-foreground">1 Saat</p>
+              <p className="num text-sm font-bold text-amber-500">{stats.tf1h}</p>
+            </div>
+            <div className="rounded-md border border-border/60 bg-secondary/30 p-2 text-center">
+              <p className="text-[10px] text-muted-foreground">4 Saat</p>
+              <p className="num text-sm font-bold text-amber-500">{stats.tf4h}</p>
+            </div>
+            <div className="rounded-md border border-border/60 bg-secondary/30 p-2 text-center">
+              <p className="text-[10px] text-muted-foreground">1 Gün</p>
+              <p className="num text-sm font-bold text-amber-500">{stats.tf1d}</p>
+            </div>
+          </div>
+
           {/* FİLTRELER */}
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <input
@@ -242,6 +272,17 @@ function ShortTermNotificationsPage() {
               placeholder="Sembol veya formasyon ara..."
               className="min-w-[200px] flex-1 rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring"
             />
+            <select
+              value={timeframeFilter}
+              onChange={(e) => setTimeframeFilter(e.target.value as typeof timeframeFilter)}
+              className="rounded-md border border-input bg-card px-3 py-2 text-xs font-bold outline-none"
+            >
+              <option value="all">Tüm Zamanlar</option>
+              <option value="15m">📊 15 Dakika</option>
+              <option value="1h">📊 1 Saat</option>
+              <option value="4h">📊 4 Saat</option>
+              <option value="1d">📊 1 Gün</option>
+            </select>
             <select
               value={biasFilter}
               onChange={(e) => setBiasFilter(e.target.value as typeof biasFilter)}
@@ -304,6 +345,7 @@ function ShortTermNotificationsPage() {
               {filtered.map((n) => {
                 const biasEmoji = n.pattern_bias === "yükseliş" ? "🟢" : "🔴";
                 const biasColor = n.pattern_bias === "yükseliş" ? "text-bull" : "text-bear";
+                const tfLabel = n.timeframe ? n.timeframe.toUpperCase() : "1H";
                 return (
                   <button
                     key={n.id}
@@ -316,7 +358,7 @@ function ShortTermNotificationsPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-500">
-                          📉 KISA VADELİ
+                          📉 KISA VADELİ ({tfLabel})
                         </span>
                         <span className={`num text-sm font-bold ${biasColor}`}>
                           {biasEmoji} {n.symbol.replace(/USDT$/, "").replace(/\.(IS|US)$/, "")}

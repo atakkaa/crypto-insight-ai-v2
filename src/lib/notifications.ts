@@ -31,14 +31,14 @@ export type Notification = {
   ai_confidence?: number | null;
   ai_source?: string | null;
   ai_generated_at?: string | null;
-  // === YENİ: GİRİŞ/HEDEF/STOP/RR/S/R ===
+  // === GİRİŞ/HEDEF/STOP/RR/S/R ===
   ai_entry_zone?: string | null;
   ai_target?: string | null;
   ai_stop_loss?: string | null;
   ai_risk_reward?: string | null;
   ai_support?: string | null;
   ai_resistance?: string | null;
-    fear_greed?: number | null;
+  fear_greed?: number | null;
   // === DİĞER ===
   is_global?: boolean | null;
   notification_type?: string | null;
@@ -203,6 +203,7 @@ export function severityColorClass(severity: NotificationSeverity): string {
       return "bg-secondary text-secondary-foreground";
   }
 }
+
 // =====================================================
 // KISA VADELİ BİLDİRİMLER (short_term_notifications)
 // =====================================================
@@ -223,6 +224,7 @@ export type ShortTermNotification = {
   fear_greed: number | null;
   created_at: string;
   read: boolean;
+  timeframe: string | null; // "15m" | "1h" | "4h" | "1d"
 };
 
 export async function fetchShortTermNotifications(

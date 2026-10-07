@@ -1,9 +1,4 @@
-// api/scan-short-term.ts — Kısa Vadeli (20-30 Mum) Premium Tarama (Self-Contained)
-// 16 formasyon desteği ile — Tüm formasyon isimleri Türkçe.
-
-// ==========================================================
-// ENV
-// ==========================================================
+// api/scan-short-term.ts — Kısa Vadeli Premium Tarama (Çoklu Zaman Dilimi + Paralel İşleme)
 
 const ENV = (globalThis as any).process?.env ?? {};
 const SUPABASE_URL = String(ENV.SUPABASE_URL ?? "");
@@ -56,7 +51,6 @@ type DetectedPattern = {
   invalidation: number | null;
 };
 
-// Kullanıcının seçtiği formasyonlar (16 formasyon)
 type UserShortTermPatterns = {
   ikili_dip: boolean;
   ikili_tepe: boolean;
@@ -95,7 +89,6 @@ const DEFAULT_USER_PATTERNS: UserShortTermPatterns = {
   simetrik_ucgen: true,
 };
 
-// Formasyon adı → kullanıcı tercihi anahtarı
 function patternNameToKey(name: string): keyof UserShortTermPatterns | null {
   const lower = name.toLowerCase();
   if (lower.includes("ikili dip")) return "ikili_dip";
@@ -117,32 +110,32 @@ function patternNameToKey(name: string): keyof UserShortTermPatterns | null {
   return null;
 }
 
-// Popüler varlık listeleri (global tarama için)
-const CRYPTO_TOP_50 = [
-  "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT",
-  "AVAXUSDT", "DOTUSDT", "LINKUSDT", "MATICUSDT", "TRXUSDT", "LTCUSDT", "BCHUSDT",
-  "ATOMUSDT", "UNIUSDT", "AAVEUSDT", "FILUSDT", "NEARUSDT", "ICPUSDT",
-  "APTUSDT", "ARBUSDT", "OPUSDT", "SUIUSDT", "TONUSDT", "SHIBUSDT", "PEPEUSDT",
-  "WIFUSDT", "BONKUSDT", "INJUSDT", "SEIUSDT", "TIAUSDT", "RUNEUSDT", "FETUSDT",
-  "RENDERUSDT", "JUPUSDT", "PYTHUSDT", "STRKUSDT", "WLDUSDT", "ORDIUSDT",
-  "ENAUSDT", "ETHFIUSDT", "REZUSDT", "OMNIUSDT", "SAGAUSDT", "TNSRUSDT", "WUSDT",
-  "ZECUSDT", "DASHUSDT", "COMPUSDT",
-];
+// ==========================================================
+// ZAMAN DİLİMİNE GÖRE VARLIK LİSTELERİ (OPTİMİZASYON)
+// ==========================================================
 
-const BIST_TOP_30 = [
-  "THYAO.IS", "ASELS.IS", "TUPRS.IS", "BIMAS.IS", "GARAN.IS", "AKBNK.IS",
-  "ISCTR.IS", "YKBNK.IS", "KCHOL.IS", "SAHOL.IS", "SISE.IS", "EREGL.IS",
-  "PETKM.IS", "FROTO.IS", "TOASO.IS", "TAVHL.IS", "TCELL.IS", "MGROS.IS",
-  "ENKAI.IS", "HEKTS.IS", "SASA.IS", "PGSUS.IS", "AEFES.IS", "ULKER.IS",
-  "DOAS.IS", "KOZAL.IS", "KRDMD.IS", "ALARK.IS", "CCOLA.IS", "OYAKC.IS",
-];
-
-const US_TOP_30 = [
-  "AAPL.US", "MSFT.US", "NVDA.US", "AMZN.US", "GOOGL.US", "META.US", "AVGO.US",
-  "TSLA.US", "JPM.US", "WMT.US", "ORCL.US", "LLY.US", "V.US", "MA.US", "XOM.US",
-  "COST.US", "NFLX.US", "AMD.US", "CRM.US", "QCOM.US", "CSCO.US", "IBM.US",
-  "NOW.US", "PLTR.US", "MU.US", "AMAT.US", "TXN.US", "INTU.US", "CAT.US", "BA.US",
-];
+const TF_SYMBOLS: Record<string, { crypto: string[]; bist: string[]; us: string[] }> = {
+  "15m": {
+    crypto: ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "DOTUSDT", "LINKUSDT", "MATICUSDT", "TRXUSDT", "LTCUSDT", "ATOMUSDT", "UNIUSDT", "NEARUSDT", "APTUSDT", "ARBUSDT", "OPUSDT", "SUIUSDT"],
+    bist: ["THYAO.IS", "ASELS.IS", "GARAN.IS", "AKBNK.IS", "EREGL.IS"],
+    us: ["AAPL.US", "MSFT.US", "NVDA.US", "TSLA.US", "AMZN.US"],
+  },
+  "1h": {
+    crypto: ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "DOTUSDT", "LINKUSDT", "MATICUSDT", "TRXUSDT", "LTCUSDT", "BCHUSDT", "ATOMUSDT", "UNIUSDT", "AAVEUSDT", "NEARUSDT", "APTUSDT", "ARBUSDT", "OPUSDT", "SUIUSDT", "TONUSDT", "SHIBUSDT", "PEPEUSDT", "INJUSDT", "SEIUSDT", "TIAUSDT", "RUNEUSDT", "FETUSDT"],
+    bist: ["THYAO.IS", "ASELS.IS", "TUPRS.IS", "BIMAS.IS", "GARAN.IS", "AKBNK.IS", "ISCTR.IS", "YKBNK.IS", "KCHOL.IS", "SAHOL.IS"],
+    us: ["AAPL.US", "MSFT.US", "NVDA.US", "AMZN.US", "GOOGL.US", "META.US", "TSLA.US", "JPM.US", "WMT.US", "ORCL.US"],
+  },
+  "4h": {
+    crypto: ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "DOTUSDT", "LINKUSDT", "MATICUSDT", "TRXUSDT", "LTCUSDT", "ATOMUSDT", "UNIUSDT", "NEARUSDT", "APTUSDT", "ARBUSDT", "OPUSDT", "SUIUSDT"],
+    bist: ["THYAO.IS", "ASELS.IS", "GARAN.IS", "AKBNK.IS", "EREGL.IS"],
+    us: ["AAPL.US", "MSFT.US", "NVDA.US", "TSLA.US", "AMZN.US"],
+  },
+  "1d": {
+    crypto: ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "DOTUSDT", "LINKUSDT", "MATICUSDT", "TRXUSDT", "LTCUSDT", "ATOMUSDT", "UNIUSDT", "NEARUSDT", "APTUSDT", "ARBUSDT", "OPUSDT", "SUIUSDT"],
+    bist: ["THYAO.IS", "ASELS.IS", "GARAN.IS", "AKBNK.IS", "EREGL.IS"],
+    us: ["AAPL.US", "MSFT.US", "NVDA.US", "TSLA.US", "AMZN.US"],
+  },
+};
 
 // ==========================================================
 // İNDİKATÖR HESAPLAMALARI
@@ -256,7 +249,7 @@ function calculateIndicatorData(candles: Candle[]) {
 }
 
 // ==========================================================
-// FORMASYON TESPİTİ (16 FORMASYON - TÜRKÇE)
+// FORMASYON TESPİTİ (16 FORMASYON)
 // ==========================================================
 
 function detectPatterns(candles: Candle[]): DetectedPattern[] {
@@ -265,581 +258,309 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
   const closes = candles.map((c) => c.close);
   const n = candles.length;
   const lastClose = closes[n - 1] ?? 0;
-
   const recentHighs = candles.slice(-30).map((c) => c.high);
   const recentLows = candles.slice(-30).map((c) => c.low);
 
-  // ==========================================================
-  // 1. İKİLİ DİP (Bullish Double Bottom)
-  // ==========================================================
+  // 1. İkili Dip
   try {
     const minLow = Math.min(...recentLows);
     const minIdx = recentLows.indexOf(minLow);
     if (minIdx >= 0 && minIdx < 15) {
       const secondMin = Math.min(...recentLows.slice(15));
-      if (Math.abs(minLow - secondMin) / minLow < 0.03 && secondMin > minLow * 0.97) {
-        if (lastClose > minLow * 1.02) {
-          const neckline = Math.max(...recentHighs.slice(minIdx, 15));
-          const target = neckline + (neckline - minLow);
-          patterns.push({
-            name: "İkili Dip",
-            bias: "yükseliş",
-            confidence: 78,
-            reasons: [
-              `İki dip aynı seviyede: ${minLow.toFixed(4)}, ${secondMin.toFixed(4)}`,
-              `Fiyat dip üzerinde: ${lastClose.toFixed(4)} > ${minLow.toFixed(4)}`,
-              `Boyun çizgisi: ${neckline.toFixed(4)}`,
-            ],
-            support: minLow,
-            resistance: neckline,
-            target: target,
-            invalidation: minLow * 0.98,
-          });
-        }
+      if (Math.abs(minLow - secondMin) / minLow < 0.03 && secondMin > minLow * 0.97 && lastClose > minLow * 1.02) {
+        const neckline = Math.max(...recentHighs.slice(minIdx, 15));
+        patterns.push({
+          name: "İkili Dip", bias: "yükseliş", confidence: 78,
+          reasons: [`İki dip aynı seviyede`, `Boyun: ${neckline.toFixed(4)}`],
+          support: minLow, resistance: neckline, target: neckline + (neckline - minLow), invalidation: minLow * 0.98,
+        });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 2. İKİLİ TEPE (Bearish Double Top)
-  // ==========================================================
+  // 2. İkili Tepe
   try {
     const maxHigh = Math.max(...recentHighs);
     const maxIdx = recentHighs.indexOf(maxHigh);
     if (maxIdx >= 0 && maxIdx < 15) {
       const secondMax = Math.max(...recentHighs.slice(15));
-      if (Math.abs(maxHigh - secondMax) / maxHigh < 0.03 && secondMax < maxHigh * 1.03) {
-        if (lastClose < maxHigh * 0.98) {
-          const neckline = Math.min(...recentLows.slice(maxIdx, 15));
-          const target = neckline - (maxHigh - neckline);
-          patterns.push({
-            name: "İkili Tepe",
-            bias: "düşüş",
-            confidence: 78,
-            reasons: [
-              `İki tepe aynı seviyede: ${maxHigh.toFixed(4)}, ${secondMax.toFixed(4)}`,
-              `Fiyat tepe altında: ${lastClose.toFixed(4)} < ${maxHigh.toFixed(4)}`,
-              `Boyun çizgisi: ${neckline.toFixed(4)}`,
-            ],
-            support: neckline,
-            resistance: maxHigh,
-            target: target,
-            invalidation: maxHigh * 1.02,
-          });
-        }
+      if (Math.abs(maxHigh - secondMax) / maxHigh < 0.03 && maxHigh * 0.97 < secondMax && lastClose < maxHigh * 0.98) {
+        const neckline = Math.min(...recentLows.slice(maxIdx, 15));
+        patterns.push({
+          name: "İkili Tepe", bias: "düşüş", confidence: 78,
+          reasons: [`İki tepe aynı seviyede`, `Boyun: ${neckline.toFixed(4)}`],
+          support: neckline, resistance: maxHigh, target: neckline - (maxHigh - neckline), invalidation: maxHigh * 1.02,
+        });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 3. YÜKSELEN ÜÇGEN (Ascending Triangle - Bullish)
-  // ==========================================================
+  // 3. Yükselen Üçgen
   try {
     const firstHigh = Math.max(...recentHighs.slice(0, 15));
     const secondHigh = Math.max(...recentHighs.slice(15));
     const firstLow = Math.min(...recentLows.slice(0, 15));
     const secondLow = Math.min(...recentLows.slice(15));
-
-    const isHorizontalResistance = Math.abs(firstHigh - secondHigh) / firstHigh < 0.02;
-    const isRisingDip = secondLow > firstLow * 1.02;
-
-    if (isHorizontalResistance && isRisingDip && lastClose > secondHigh * 0.99) {
-      const target = firstHigh + (firstHigh - firstLow);
+    if (Math.abs(firstHigh - secondHigh) / firstHigh < 0.02 && secondLow > firstLow * 1.02 && lastClose > secondHigh * 0.99) {
       patterns.push({
-        name: "Yükselen Üçgen",
-        bias: "yükseliş",
-        confidence: 80,
-        reasons: [
-          `Yatay direnç: ${firstHigh.toFixed(4)}`,
-          `Yükselen dip: ${firstLow.toFixed(4)} → ${secondLow.toFixed(4)}`,
-          `Fiyat direnci kırmak üzere`,
-        ],
-        support: firstLow,
-        resistance: firstHigh,
-        target: target,
-        invalidation: secondLow * 0.98,
+        name: "Yükselen Üçgen", bias: "yükseliş", confidence: 80,
+        reasons: [`Yatay direnç: ${firstHigh.toFixed(4)}`, `Yükselen dip`],
+        support: firstLow, resistance: firstHigh, target: firstHigh + (firstHigh - firstLow), invalidation: secondLow * 0.98,
       });
     }
   } catch {}
 
-  // ==========================================================
-  // 4. DÜŞEN ÜÇGEN (Descending Triangle - Bearish)
-  // ==========================================================
+  // 4. Düşen Üçgen
   try {
     const firstHigh = Math.max(...recentHighs.slice(0, 15));
     const secondHigh = Math.max(...recentHighs.slice(15));
     const firstLow = Math.min(...recentLows.slice(0, 15));
     const secondLow = Math.min(...recentLows.slice(15));
-
-    const isFallingResistance = secondHigh < firstHigh * 0.98;
-    const isHorizontalSupport = Math.abs(firstLow - secondLow) / firstLow < 0.02;
-
-    if (isFallingResistance && isHorizontalSupport && lastClose < secondLow * 1.01) {
-      const target = firstLow - (firstHigh - firstLow);
+    if (secondHigh < firstHigh * 0.98 && Math.abs(firstLow - secondLow) / firstLow < 0.02 && lastClose < secondLow * 1.01) {
       patterns.push({
-        name: "Düşen Üçgen",
-        bias: "düşüş",
-        confidence: 80,
-        reasons: [
-          `Düşen direnç: ${firstHigh.toFixed(4)} → ${secondHigh.toFixed(4)}`,
-          `Yatay destek: ${firstLow.toFixed(4)}`,
-          `Fiyat desteği kırmak üzere`,
-        ],
-        support: firstLow,
-        resistance: firstHigh,
-        target: target,
-        invalidation: secondHigh * 1.02,
+        name: "Düşen Üçgen", bias: "düşüş", confidence: 80,
+        reasons: [`Düşen direnç`, `Yatay destek: ${firstLow.toFixed(4)}`],
+        support: firstLow, resistance: firstHigh, target: firstLow - (firstHigh - firstLow), invalidation: secondHigh * 1.02,
       });
     }
   } catch {}
 
-  // ==========================================================
-  // 5. OBO (Omuz-Baş-Omuz - Bearish Head and Shoulders)
-  // ==========================================================
+  // 5. OBO
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
       const l = candles.slice(-40).map((c) => c.low);
-      
-      const leftShoulder = Math.max(...h.slice(0, 12));
+      const ls = Math.max(...h.slice(0, 12));
       const head = Math.max(...h.slice(12, 26));
-      const rightShoulder = Math.max(...h.slice(26, 40));
-      
-      const isHeadHighest = head > leftShoulder * 1.02 && head > rightShoulder * 1.02;
-      const isShouldersEqual = Math.abs(leftShoulder - rightShoulder) / leftShoulder < 0.03;
-      
-      if (isHeadHighest && isShouldersEqual) {
+      const rs = Math.max(...h.slice(26, 40));
+      if (head > ls * 1.02 && head > rs * 1.02 && Math.abs(ls - rs) / ls < 0.03) {
         const neckline = Math.min(...l.slice(12, 26));
-        const target = neckline - (head - neckline);
-        
         patterns.push({
-          name: "Omuz-Baş-Omuz",
-          bias: "düşüş",
-          confidence: 85,
-          reasons: [
-            `Sol omuz: ${leftShoulder.toFixed(4)}`,
-            `Baş: ${head.toFixed(4)}`,
-            `Sağ omuz: ${rightShoulder.toFixed(4)}`,
-            `Boyun çizgisi: ${neckline.toFixed(4)}`,
-          ],
-          support: neckline,
-          resistance: head,
-          target: target,
-          invalidation: head * 1.02,
+          name: "Omuz-Baş-Omuz", bias: "düşüş", confidence: 85,
+          reasons: [`Sol: ${ls.toFixed(4)}, Baş: ${head.toFixed(4)}, Sağ: ${rs.toFixed(4)}`],
+          support: neckline, resistance: head, target: neckline - (head - neckline), invalidation: head * 1.02,
         });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 6. TERS OBO (Inverted Head and Shoulders - Bullish)
-  // ==========================================================
+  // 6. Ters OBO
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
       const l = candles.slice(-40).map((c) => c.low);
-      
-      const leftShoulder = Math.min(...l.slice(0, 12));
+      const ls = Math.min(...l.slice(0, 12));
       const head = Math.min(...l.slice(12, 26));
-      const rightShoulder = Math.min(...l.slice(26, 40));
-      
-      const isHeadLowest = head < leftShoulder * 0.98 && head < rightShoulder * 0.98;
-      const isShouldersEqual = Math.abs(leftShoulder - rightShoulder) / leftShoulder < 0.03;
-      
-      if (isHeadLowest && isShouldersEqual) {
+      const rs = Math.min(...l.slice(26, 40));
+      if (head < ls * 0.98 && head < rs * 0.98 && Math.abs(ls - rs) / ls < 0.03) {
         const neckline = Math.max(...h.slice(12, 26));
-        const target = neckline + (neckline - head);
-        
         patterns.push({
-          name: "Ters OBO",
-          bias: "yükseliş",
-          confidence: 85,
-          reasons: [
-            `Sol omuz: ${leftShoulder.toFixed(4)}`,
-            `Baş: ${head.toFixed(4)}`,
-            `Sağ omuz: ${rightShoulder.toFixed(4)}`,
-            `Boyun çizgisi: ${neckline.toFixed(4)}`,
-          ],
-          support: head,
-          resistance: neckline,
-          target: target,
-          invalidation: head * 0.98,
+          name: "Ters OBO", bias: "yükseliş", confidence: 85,
+          reasons: [`Sol: ${ls.toFixed(4)}, Baş: ${head.toFixed(4)}, Sağ: ${rs.toFixed(4)}`],
+          support: head, resistance: neckline, target: neckline + (neckline - head), invalidation: head * 0.98,
         });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 7. ÜÇLÜ DİP (Triple Bottom - Bullish)
-  // ==========================================================
+  // 7. Üçlü Dip
   try {
     if (candles.length >= 45) {
       const l = candles.slice(-45).map((c) => c.low);
       const h = candles.slice(-45).map((c) => c.high);
-      
-      const dip1 = Math.min(...l.slice(0, 15));
-      const dip2 = Math.min(...l.slice(15, 30));
-      const dip3 = Math.min(...l.slice(30, 45));
-      
-      const allEqual = 
-        Math.abs(dip1 - dip2) / dip1 < 0.03 &&
-        Math.abs(dip2 - dip3) / dip2 < 0.03;
-      
-      if (allEqual && lastClose > dip1 * 1.02) {
+      const d1 = Math.min(...l.slice(0, 15));
+      const d2 = Math.min(...l.slice(15, 30));
+      const d3 = Math.min(...l.slice(30, 45));
+      if (Math.abs(d1 - d2) / d1 < 0.03 && Math.abs(d2 - d3) / d2 < 0.03 && lastClose > d1 * 1.02) {
         const neckline = Math.max(...h.slice(0, 45));
-        const target = neckline + (neckline - dip1);
-        
         patterns.push({
-          name: "Üçlü Dip",
-          bias: "yükseliş",
-          confidence: 82,
-          reasons: [
-            `Üç dip aynı seviyede: ${dip1.toFixed(4)}, ${dip2.toFixed(4)}, ${dip3.toFixed(4)}`,
-            `Boyun çizgisi: ${neckline.toFixed(4)}`,
-          ],
-          support: dip1,
-          resistance: neckline,
-          target: target,
-          invalidation: dip1 * 0.98,
+          name: "Üçlü Dip", bias: "yükseliş", confidence: 82,
+          reasons: [`Üç dip aynı seviyede`],
+          support: d1, resistance: neckline, target: neckline + (neckline - d1), invalidation: d1 * 0.98,
         });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 8. ÜÇLÜ TEPE (Triple Top - Bearish)
-  // ==========================================================
+  // 8. Üçlü Tepe
   try {
     if (candles.length >= 45) {
       const h = candles.slice(-45).map((c) => c.high);
       const l = candles.slice(-45).map((c) => c.low);
-      
-      const top1 = Math.max(...h.slice(0, 15));
-      const top2 = Math.max(...h.slice(15, 30));
-      const top3 = Math.max(...h.slice(30, 45));
-      
-      const allEqual = 
-        Math.abs(top1 - top2) / top1 < 0.03 &&
-        Math.abs(top2 - top3) / top2 < 0.03;
-      
-      if (allEqual && lastClose < top1 * 0.98) {
+      const t1 = Math.max(...h.slice(0, 15));
+      const t2 = Math.max(...h.slice(15, 30));
+      const t3 = Math.max(...h.slice(30, 45));
+      if (Math.abs(t1 - t2) / t1 < 0.03 && Math.abs(t2 - t3) / t2 < 0.03 && lastClose < t1 * 0.98) {
         const neckline = Math.min(...l.slice(0, 45));
-        const target = neckline - (top1 - neckline);
-        
         patterns.push({
-          name: "Üçlü Tepe",
-          bias: "düşüş",
-          confidence: 82,
-          reasons: [
-            `Üç tepe aynı seviyede: ${top1.toFixed(4)}, ${top2.toFixed(4)}, ${top3.toFixed(4)}`,
-            `Boyun çizgisi: ${neckline.toFixed(4)}`,
-          ],
-          support: neckline,
-          resistance: top1,
-          target: target,
-          invalidation: top1 * 1.02,
+          name: "Üçlü Tepe", bias: "düşüş", confidence: 82,
+          reasons: [`Üç tepe aynı seviyede`],
+          support: neckline, resistance: t1, target: neckline - (t1 - neckline), invalidation: t1 * 1.02,
         });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 9. YÜKSELEN KAMA (Rising Wedge - Bearish)
-  // ==========================================================
+  // 9. Yükselen Kama
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
       const l = candles.slice(-40).map((c) => c.low);
-      
-      const leftHighs = Math.max(...h.slice(0, 20));
-      const rightHighs = Math.max(...h.slice(20, 40));
-      const leftLows = Math.min(...l.slice(0, 20));
-      const rightLows = Math.min(...l.slice(20, 40));
-      
-      const risingResistance = rightHighs > leftHighs;
-      const risingSupport = rightLows > leftLows;
-      const narrowing = (rightHighs - rightLows) < (leftHighs - leftLows) * 0.7;
-      
-      if (risingResistance && risingSupport && narrowing && lastClose < rightLows * 1.01) {
-        const target = rightLows - (rightHighs - rightLows);
+      const lh = Math.max(...h.slice(0, 20));
+      const rh = Math.max(...h.slice(20, 40));
+      const ll = Math.min(...l.slice(0, 20));
+      const rl = Math.min(...l.slice(20, 40));
+      if (rh > lh && rl > ll && (rh - rl) < (lh - ll) * 0.7 && lastClose < rl * 1.01) {
         patterns.push({
-          name: "Yükselen Kama",
-          bias: "düşüş",
-          confidence: 78,
-          reasons: [
-            `Yükselen direnç: ${leftHighs.toFixed(4)} → ${rightHighs.toFixed(4)}`,
-            `Yükselen destek: ${leftLows.toFixed(4)} → ${rightLows.toFixed(4)}`,
-            `Daralan kama + düşüş kırılımı`,
-          ],
-          support: rightLows,
-          resistance: rightHighs,
-          target: target,
-          invalidation: rightHighs * 1.02,
+          name: "Yükselen Kama", bias: "düşüş", confidence: 78,
+          reasons: [`Yükselen kama + düşüş kırılımı`],
+          support: rl, resistance: rh, target: rl - (rh - rl), invalidation: rh * 1.02,
         });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 10. DÜŞEN KAMA (Falling Wedge - Bullish)
-  // ==========================================================
+  // 10. Düşen Kama
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
       const l = candles.slice(-40).map((c) => c.low);
-      
-      const leftHighs = Math.max(...h.slice(0, 20));
-      const rightHighs = Math.max(...h.slice(20, 40));
-      const leftLows = Math.min(...l.slice(0, 20));
-      const rightLows = Math.min(...l.slice(20, 40));
-      
-      const fallingResistance = rightHighs < leftHighs;
-      const fallingSupport = rightLows < leftLows;
-      const narrowing = (rightHighs - rightLows) < (leftHighs - leftLows) * 0.7;
-      
-      if (fallingResistance && fallingSupport && narrowing && lastClose > rightHighs * 0.99) {
-        const target = rightHighs + (rightHighs - rightLows);
+      const lh = Math.max(...h.slice(0, 20));
+      const rh = Math.max(...h.slice(20, 40));
+      const ll = Math.min(...l.slice(0, 20));
+      const rl = Math.min(...l.slice(20, 40));
+      if (rh < lh && rl < ll && (rh - rl) < (lh - ll) * 0.7 && lastClose > rh * 0.99) {
         patterns.push({
-          name: "Düşen Kama",
-          bias: "yükseliş",
-          confidence: 78,
-          reasons: [
-            `Düşen direnç: ${leftHighs.toFixed(4)} → ${rightHighs.toFixed(4)}`,
-            `Düşen destek: ${leftLows.toFixed(4)} → ${rightLows.toFixed(4)}`,
-            `Daralan kama + yükseliş kırılımı`,
-          ],
-          support: rightLows,
-          resistance: rightHighs,
-          target: target,
-          invalidation: rightLows * 0.98,
+          name: "Düşen Kama", bias: "yükseliş", confidence: 78,
+          reasons: [`Düşen kama + yükseliş kırılımı`],
+          support: rl, resistance: rh, target: rh + (rh - rl), invalidation: rl * 0.98,
         });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 11. BOĞA BAYRAĞI (Bullish Flag - Bullish)
-  // ==========================================================
+  // 11. Boğa Bayrağı
   try {
     if (candles.length >= 30) {
       const h = candles.slice(-30).map((c) => c.high);
       const l = candles.slice(-30).map((c) => c.low);
-      
-      const firstSegment = closes.slice(0, 10);
-      const firstRise = (firstSegment[9] ?? 0) - (firstSegment[0] ?? 0);
-      const isStrongRise = firstRise > 0 && firstRise / (firstSegment[0] ?? 1) > 0.05;
-      
-      const flagHighs = h.slice(10, 25);
-      const flagLows = l.slice(10, 25);
-      const flagHighSlope = (flagHighs[flagHighs.length - 1] ?? 0) - (flagHighs[0] ?? 0);
-      const flagLowSlope = (flagLows[flagLows.length - 1] ?? 0) - (flagLows[0] ?? 0);
-      const isFlag = flagHighSlope < 0 && flagLowSlope < 0;
-      
-      if (isStrongRise && isFlag && lastClose > (flagHighs[flagHighs.length - 1] ?? 0)) {
-        const flagHeight = (flagHighs[0] ?? 0) - (flagLows[0] ?? 0);
-        const target = lastClose + flagHeight;
+      const first = closes.slice(0, 10);
+      const rise = (first[9] ?? 0) - (first[0] ?? 0);
+      const strongRise = rise > 0 && rise / (first[0] ?? 1) > 0.05;
+      const fh = h.slice(10, 25);
+      const fl = l.slice(10, 25);
+      const isFlag = (fh[fh.length - 1] ?? 0) < (fh[0] ?? 0) && (fl[fl.length - 1] ?? 0) < (fl[0] ?? 0);
+      if (strongRise && isFlag && lastClose > (fh[fh.length - 1] ?? 0)) {
+        const flagH = (fh[0] ?? 0) - (fl[0] ?? 0);
         patterns.push({
-          name: "Boğa Bayrağı",
-          bias: "yükseliş",
-          confidence: 80,
-          reasons: [
-            `Güçlü yükseliş: +${((firstRise / (firstSegment[0] ?? 1)) * 100).toFixed(2)}%`,
-            `Bayrak konsolidasyonu tamamlandı`,
-            `Hedef: +${((flagHeight / lastClose) * 100).toFixed(2)}%`,
-          ],
-          support: flagLows[flagLows.length - 1] ?? null,
-          resistance: flagHighs[0] ?? null,
-          target: target,
-          invalidation: (flagLows[flagLows.length - 1] ?? 0) * 0.98,
+          name: "Boğa Bayrağı", bias: "yükseliş", confidence: 80,
+          reasons: [`Güçlü yükseliş + bayrak`],
+          support: fl[fl.length - 1] ?? null, resistance: fh[0] ?? null, target: lastClose + flagH, invalidation: (fl[fl.length - 1] ?? 0) * 0.98,
         });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 12. AYI BAYRAĞI (Bearish Flag - Bearish)
-  // ==========================================================
+  // 12. Ayı Bayrağı
   try {
     if (candles.length >= 30) {
       const h = candles.slice(-30).map((c) => c.high);
       const l = candles.slice(-30).map((c) => c.low);
-      
-      const firstSegment = closes.slice(0, 10);
-      const firstDrop = (firstSegment[0] ?? 0) - (firstSegment[9] ?? 0);
-      const isStrongDrop = firstDrop > 0 && firstDrop / (firstSegment[0] ?? 1) > 0.05;
-      
-      const flagHighs = h.slice(10, 25);
-      const flagLows = l.slice(10, 25);
-      const flagHighSlope = (flagHighs[flagHighs.length - 1] ?? 0) - (flagHighs[0] ?? 0);
-      const flagLowSlope = (flagLows[flagLows.length - 1] ?? 0) - (flagLows[0] ?? 0);
-      const isFlag = flagHighSlope > 0 && flagLowSlope > 0;
-      
-      if (isStrongDrop && isFlag && lastClose < (flagLows[flagLows.length - 1] ?? 0)) {
-        const flagHeight = (flagHighs[0] ?? 0) - (flagLows[0] ?? 0);
-        const target = lastClose - flagHeight;
+      const first = closes.slice(0, 10);
+      const drop = (first[0] ?? 0) - (first[9] ?? 0);
+      const strongDrop = drop > 0 && drop / (first[0] ?? 1) > 0.05;
+      const fh = h.slice(10, 25);
+      const fl = l.slice(10, 25);
+      const isFlag = (fh[fh.length - 1] ?? 0) > (fh[0] ?? 0) && (fl[fl.length - 1] ?? 0) > (fl[0] ?? 0);
+      if (strongDrop && isFlag && lastClose < (fl[fl.length - 1] ?? 0)) {
+        const flagH = (fh[0] ?? 0) - (fl[0] ?? 0);
         patterns.push({
-          name: "Ayı Bayrağı",
-          bias: "düşüş",
-          confidence: 80,
-          reasons: [
-            `Güçlü düşüş: -${((firstDrop / (firstSegment[0] ?? 1)) * 100).toFixed(2)}%`,
-            `Bayrak konsolidasyonu tamamlandı`,
-            `Hedef: -${((flagHeight / lastClose) * 100).toFixed(2)}%`,
-          ],
-          support: flagLows[0] ?? null,
-          resistance: flagHighs[flagHighs.length - 1] ?? null,
-          target: target,
-          invalidation: (flagHighs[flagHighs.length - 1] ?? 0) * 1.02,
+          name: "Ayı Bayrağı", bias: "düşüş", confidence: 80,
+          reasons: [`Güçlü düşüş + bayrak`],
+          support: fl[0] ?? null, resistance: fh[fh.length - 1] ?? null, target: lastClose - flagH, invalidation: (fh[fh.length - 1] ?? 0) * 1.02,
         });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 13. BOĞA FLAMASI (Bullish Pennant - Bullish)
-  // ==========================================================
+  // 13. Boğa Flaması
   try {
     if (candles.length >= 30) {
-      const firstSegment = closes.slice(0, 10);
-      const firstRise = (firstSegment[9] ?? 0) - (firstSegment[0] ?? 0);
-      const isStrongRise = firstRise > 0 && firstRise / (firstSegment[0] ?? 1) > 0.05;
-      
+      const first = closes.slice(0, 10);
+      const rise = (first[9] ?? 0) - (first[0] ?? 0);
+      const strongRise = rise > 0 && rise / (first[0] ?? 1) > 0.05;
       const h = candles.slice(-30).map((c) => c.high);
       const l = candles.slice(-30).map((c) => c.low);
-      const pennantHighs = h.slice(10, 25);
-      const pennantLows = l.slice(10, 25);
-      
-      const firstHalfRange = (Math.max(...pennantHighs.slice(0, 7)) - Math.min(...pennantLows.slice(0, 7)));
-      const secondHalfRange = (Math.max(...pennantHighs.slice(7)) - Math.min(...pennantLows.slice(7)));
-      const isNarrowing = secondHalfRange < firstHalfRange * 0.6;
-      
-      if (isStrongRise && isNarrowing && lastClose > (Math.max(...pennantHighs) ?? 0)) {
-        const target = lastClose + firstRise * 0.8;
+      const ph = h.slice(10, 25);
+      const pl = l.slice(10, 25);
+      const r1 = (Math.max(...ph.slice(0, 7)) - Math.min(...pl.slice(0, 7)));
+      const r2 = (Math.max(...ph.slice(7)) - Math.min(...pl.slice(7)));
+      if (strongRise && r2 < r1 * 0.6 && lastClose > (Math.max(...ph) ?? 0)) {
         patterns.push({
-          name: "Boğa Flaması",
-          bias: "yükseliş",
-          confidence: 78,
-          reasons: [
-            `Güçlü yükseliş: +${((firstRise / (firstSegment[0] ?? 1)) * 100).toFixed(2)}%`,
-            `Simetrik üçgen flaması`,
-            `Kırılım yukarı`,
-          ],
-          support: Math.min(...pennantLows) ?? null,
-          resistance: Math.max(...pennantHighs) ?? null,
-          target: target,
-          invalidation: (Math.min(...pennantLows) ?? 0) * 0.98,
+          name: "Boğa Flaması", bias: "yükseliş", confidence: 78,
+          reasons: [`Güçlü yükseliş + flama`],
+          support: Math.min(...pl) ?? null, resistance: Math.max(...ph) ?? null, target: lastClose + rise * 0.8, invalidation: (Math.min(...pl) ?? 0) * 0.98,
         });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 14. AYI FLAMASI (Bearish Pennant - Bearish)
-  // ==========================================================
+  // 14. Ayı Flaması
   try {
     if (candles.length >= 30) {
-      const firstSegment = closes.slice(0, 10);
-      const firstDrop = (firstSegment[0] ?? 0) - (firstSegment[9] ?? 0);
-      const isStrongDrop = firstDrop > 0 && firstDrop / (firstSegment[0] ?? 1) > 0.05;
-      
+      const first = closes.slice(0, 10);
+      const drop = (first[0] ?? 0) - (first[9] ?? 0);
+      const strongDrop = drop > 0 && drop / (first[0] ?? 1) > 0.05;
       const h = candles.slice(-30).map((c) => c.high);
       const l = candles.slice(-30).map((c) => c.low);
-      const pennantHighs = h.slice(10, 25);
-      const pennantLows = l.slice(10, 25);
-      
-      const firstHalfRange = (Math.max(...pennantHighs.slice(0, 7)) - Math.min(...pennantLows.slice(0, 7)));
-      const secondHalfRange = (Math.max(...pennantHighs.slice(7)) - Math.min(...pennantLows.slice(7)));
-      const isNarrowing = secondHalfRange < firstHalfRange * 0.6;
-      
-      if (isStrongDrop && isNarrowing && lastClose < (Math.min(...pennantLows) ?? 0)) {
-        const target = lastClose - firstDrop * 0.8;
+      const ph = h.slice(10, 25);
+      const pl = l.slice(10, 25);
+      const r1 = (Math.max(...ph.slice(0, 7)) - Math.min(...pl.slice(0, 7)));
+      const r2 = (Math.max(...ph.slice(7)) - Math.min(...pl.slice(7)));
+      if (strongDrop && r2 < r1 * 0.6 && lastClose < (Math.min(...pl) ?? 0)) {
         patterns.push({
-          name: "Ayı Flaması",
-          bias: "düşüş",
-          confidence: 78,
-          reasons: [
-            `Güçlü düşüş: -${((firstDrop / (firstSegment[0] ?? 1)) * 100).toFixed(2)}%`,
-            `Simetrik üçgen flaması`,
-            `Kırılım aşağı`,
-          ],
-          support: Math.min(...pennantLows) ?? null,
-          resistance: Math.max(...pennantHighs) ?? null,
-          target: target,
-          invalidation: (Math.max(...pennantHighs) ?? 0) * 1.02,
+          name: "Ayı Flaması", bias: "düşüş", confidence: 78,
+          reasons: [`Güçlü düşüş + flama`],
+          support: Math.min(...pl) ?? null, resistance: Math.max(...ph) ?? null, target: lastClose - drop * 0.8, invalidation: (Math.max(...ph) ?? 0) * 1.02,
         });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 15. FİNCAN-KULP (Cup and Handle - Bullish)
-  // ==========================================================
+  // 15. Fincan-Kulp
   try {
     if (candles.length >= 50) {
       const h = candles.slice(-50).map((c) => c.high);
       const l = candles.slice(-50).map((c) => c.low);
-      
-      const cupLeft = Math.max(...h.slice(0, 5));
-      const cupBottom = Math.min(...l.slice(10, 30));
-      const cupRight = Math.max(...h.slice(30, 35));
-      
-      const isCupShape = 
-        cupLeft > cupBottom * 1.03 && 
-        cupRight > cupBottom * 1.03 &&
-        Math.abs(cupLeft - cupRight) / cupLeft < 0.05;
-      
-      const handleLow = Math.min(...l.slice(35, 50));
-      const handleDepth = (cupRight - handleLow) / cupRight;
-      const isHandle = handleDepth < 0.3 && handleDepth > 0.05;
-      
-      if (isCupShape && isHandle && lastClose > cupRight) {
-        const cupDepth = cupRight - cupBottom;
-        const target = lastClose + cupDepth;
+      const cl = Math.max(...h.slice(0, 5));
+      const cb = Math.min(...l.slice(10, 30));
+      const cr = Math.max(...h.slice(30, 35));
+      const isCup = cl > cb * 1.03 && cr > cb * 1.03 && Math.abs(cl - cr) / cl < 0.05;
+      const hl = Math.min(...l.slice(35, 50));
+      const hd = (cr - hl) / cr;
+      const isHandle = hd < 0.3 && hd > 0.05;
+      if (isCup && isHandle && lastClose > cr) {
         patterns.push({
-          name: "Fincan-Kulp",
-          bias: "yükseliş",
-          confidence: 82,
-          reasons: [
-            `Fincan: ${cupLeft.toFixed(4)} → ${cupBottom.toFixed(4)} → ${cupRight.toFixed(4)}`,
-            `Kulp derinliği: ${(handleDepth * 100).toFixed(1)}%`,
-            `Kırılım yukarı`,
-          ],
-          support: cupBottom,
-          resistance: cupRight,
-          target: target,
-          invalidation: handleLow * 0.98,
+          name: "Fincan-Kulp", bias: "yükseliş", confidence: 82,
+          reasons: [`Fincan + kulp tamamlandı`],
+          support: cb, resistance: cr, target: lastClose + (cr - cb), invalidation: hl * 0.98,
         });
       }
     }
   } catch {}
 
-  // ==========================================================
-  // 16. SİMETRİK ÜÇGEN (Symmetrical Triangle)
-  // ==========================================================
+  // 16. Simetrik Üçgen
   try {
     if (candles.length >= 30) {
-      const firstHigh = Math.max(...recentHighs.slice(0, 15));
-      const secondHigh = Math.max(...recentHighs.slice(15));
-      const firstLow = Math.min(...recentLows.slice(0, 15));
-      const secondLow = Math.min(...recentLows.slice(15));
-      
-      const fallingResistance = secondHigh < firstHigh * 0.99;
-      const risingSupport = secondLow > firstLow * 1.01;
-      
-      if (fallingResistance && risingSupport) {
+      const fh = Math.max(...recentHighs.slice(0, 15));
+      const sh = Math.max(...recentHighs.slice(15));
+      const fl = Math.min(...recentLows.slice(0, 15));
+      const sl = Math.min(...recentLows.slice(15));
+      if (sh < fh * 0.99 && sl > fl * 1.01) {
         patterns.push({
-          name: "Simetrik Üçgen",
-          bias: "nötr",
-          confidence: 72,
-          reasons: [
-            `Düşen direnç: ${firstHigh.toFixed(4)} → ${secondHigh.toFixed(4)}`,
-            `Yükselen destek: ${firstLow.toFixed(4)} → ${secondLow.toFixed(4)}`,
-            `Kırılım yönü belirsiz`,
-          ],
-          support: secondLow,
-          resistance: secondHigh,
-          target: null,
-          invalidation: null,
+          name: "Simetrik Üçgen", bias: "nötr", confidence: 72,
+          reasons: [`Düşen direnç + yükselen destek`, `Kırılım yönü belirsiz`],
+          support: sl, resistance: sh, target: null, invalidation: null,
         });
       }
     }
@@ -853,28 +574,32 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
 // ==========================================================
 
 async function fetchCryptoCandles(symbol: string, interval = "1h"): Promise<Candle[]> {
-  const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=150`);
-  if (!res.ok) return [];
-  const raw = (await res.json()) as unknown[][];
-  return raw.map((k) => ({
-    time: Number(k[0]), open: Number(k[1]), high: Number(k[2]), low: Number(k[3]), close: Number(k[4]), volume: Number(k[5]),
-  }));
+  try {
+    const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=150`);
+    if (!res.ok) return [];
+    const raw = (await res.json()) as unknown[][];
+    return raw.map((k) => ({
+      time: Number(k[0]), open: Number(k[1]), high: Number(k[2]), low: Number(k[3]), close: Number(k[4]), volume: Number(k[5]),
+    }));
+  } catch { return []; }
 }
 
 async function fetchStockCandles(symbol: string): Promise<Candle[]> {
-  const res = await fetch(`https://stooq.com/q/d/l/?s=${encodeURIComponent(symbol.toLowerCase())}&i=d`, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!res.ok) return [];
-  const csv = await res.text();
-  const lines = csv.trim().split("\n");
-  if (lines.length < 3) return [];
-  const out: Candle[] = [];
-  for (const line of lines.slice(1)) {
-    const [date, open, high, low, close, volume] = line.split(",");
-    if (!date || !close) continue;
-    const c: Candle = { time: new Date(date).getTime(), open: Number(open), high: Number(high), low: Number(low), close: Number(close), volume: Number(volume ?? 0) };
-    if (Number.isFinite(c.close)) out.push(c);
-  }
-  return out.slice(-160);
+  try {
+    const res = await fetch(`https://stooq.com/q/d/l/?s=${encodeURIComponent(symbol.toLowerCase())}&i=d`, { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!res.ok) return [];
+    const csv = await res.text();
+    const lines = csv.trim().split("\n");
+    if (lines.length < 3) return [];
+    const out: Candle[] = [];
+    for (const line of lines.slice(1)) {
+      const [date, open, high, low, close, volume] = line.split(",");
+      if (!date || !close) continue;
+      const c: Candle = { time: new Date(date).getTime(), open: Number(open), high: Number(high), low: Number(low), close: Number(close), volume: Number(volume ?? 0) };
+      if (Number.isFinite(c.close)) out.push(c);
+    }
+    return out.slice(-160);
+  } catch { return []; }
 }
 
 async function fetchFearGreed() {
@@ -916,11 +641,21 @@ async function supabaseInsert(table: string, data: any): Promise<boolean> {
   } catch { return false; }
 }
 
+function getDedupeHoursForTf(tf: string): number {
+  switch (tf) {
+    case "15m": return 1;
+    case "1h": return 4;
+    case "4h": return 12;
+    case "1d": return 24;
+    default: return 4;
+  }
+}
+
 // ==========================================================
-// ANA FONKSİYON
+// ANA FONKSİYON (KULLANICI ODAKLI)
 // ==========================================================
 
-async function scanShortTermForPremium() {
+async function scanShortTermForPremium(timeframe: string) {
   const tracking = (await supabaseSelect("short_term_tracking", "select=user_id,market,symbol&limit=500")) as TrackingRow[];
   if (tracking.length === 0) return { scanned: [], created: 0, tracked: 0, filtered: 0 };
 
@@ -958,76 +693,83 @@ async function scanShortTermForPremium() {
   }
 
   const targets = [...groups.values()].slice(0, 20);
-  const since = new Date(Date.now() - 4 * 3600_000).toISOString();
+  const dedupeHours = getDedupeHoursForTf(timeframe);
+  const since = new Date(Date.now() - dedupeHours * 3600_000).toISOString();
   const fearGreed = await fetchFearGreed();
   let created = 0;
   const scanned: string[] = [];
 
-  for (const target of targets) {
-    try {
-      let candles: Candle[] = [];
-      if (target.market === "crypto") candles = await fetchCryptoCandles(target.symbol, "1h");
-      else candles = await fetchStockCandles(target.symbol);
-      if (candles.length < 20) continue;
+  // Paralel işleme (aynı anda 5 varlık)
+  const CONCURRENCY = 5;
+  for (let i = 0; i < targets.length; i += CONCURRENCY) {
+    const batch = targets.slice(i, i + CONCURRENCY);
+    await Promise.all(batch.map(async (target) => {
+      try {
+        let candles: Candle[] = [];
+        if (target.market === "crypto") candles = await fetchCryptoCandles(target.symbol, timeframe);
+        else candles = await fetchStockCandles(target.symbol);
+        if (candles.length < 20) return;
 
-      const shortCandles = candles.slice(-30);
-      const indicators = calculateIndicatorData(shortCandles);
-      const patterns = detectPatterns(shortCandles);
-      scanned.push(target.symbol);
-      if (patterns.length === 0) continue;
+        const shortCandles = candles.slice(-30);
+        const indicators = calculateIndicatorData(shortCandles);
+        const patterns = detectPatterns(shortCandles);
+        scanned.push(target.symbol);
+        if (patterns.length === 0) return;
 
-      const best = patterns.reduce((max, p) => (p.confidence > max.confidence ? p : max), patterns[0]!);
-      if (best.confidence < 75) continue;
+        const best = patterns.reduce((max, p) => (p.confidence > max.confidence ? p : max), patterns[0]!);
+        if (best.confidence < 75) return;
 
-      const sameDirCount = [
-        best.bias === "yükseliş" ? indicators.rsi > 50 : indicators.rsi < 50,
-        best.bias === "yükseliş" ? indicators.macdHistogram > 0 : indicators.macdHistogram < 0,
-      ].filter(Boolean).length;
-      if (sameDirCount < 1) continue;
-      if (indicators.volumeRatio < 1.2) continue;
-      if (target.market === "crypto" && fearGreed && (fearGreed.value >= 85 || fearGreed.value <= 15)) continue;
+        const sameDirCount = [
+          best.bias === "yükseliş" ? indicators.rsi > 50 : indicators.rsi < 50,
+          best.bias === "yükseliş" ? indicators.macdHistogram > 0 : indicators.macdHistogram < 0,
+        ].filter(Boolean).length;
+        if (sameDirCount < 1) return;
+        if (indicators.volumeRatio < 1.2) return;
+        if (target.market === "crypto" && fearGreed && (fearGreed.value >= 85 || fearGreed.value <= 15)) return;
 
-      const lastClose = shortCandles[shortCandles.length - 1]?.close ?? 0;
-      const stop = best.invalidation ?? (best.bias === "yükseliş" ? lastClose * 0.97 : lastClose * 1.03);
-      const targetPrice = best.target ?? (best.bias === "yükseliş" ? lastClose * 1.05 : lastClose * 0.95);
-      const reason = `${best.name} (%${best.confidence}) · RSI: ${indicators.rsi.toFixed(1)} · MACD: ${indicators.macdHistogram.toFixed(4)} · Hacim: ${(indicators.volumeRatio * 100).toFixed(0)}%`;
+        const lastClose = shortCandles[shortCandles.length - 1]?.close ?? 0;
+        const stop = best.invalidation ?? (best.bias === "yükseliş" ? lastClose * 0.97 : lastClose * 1.03);
+        const targetPrice = best.target ?? (best.bias === "yükseliş" ? lastClose * 1.05 : lastClose * 0.95);
+        const reason = `${best.name} (%${best.confidence}) · RSI: ${indicators.rsi.toFixed(1)} · MACD: ${indicators.macdHistogram.toFixed(4)} · Hacim: ${(indicators.volumeRatio * 100).toFixed(0)}% · ${timeframe.toUpperCase()}`;
 
-      const patternKey = patternNameToKey(best.name);
+        const patternKey = patternNameToKey(best.name);
 
-      for (const userId of [...new Set(target.users)]) {
-        if (patternKey) {
-          const userPattern = userPatterns.get(userId) ?? DEFAULT_USER_PATTERNS;
-          if (!userPattern[patternKey]) continue;
+        for (const userId of [...new Set(target.users)]) {
+          if (patternKey) {
+            const userPattern = userPatterns.get(userId) ?? DEFAULT_USER_PATTERNS;
+            if (!userPattern[patternKey]) continue;
+          }
+
+          const recent = await supabaseSelect("short_term_notifications", `select=id&user_id=eq.${userId}&market=eq.${target.market}&symbol=eq.${encodeURIComponent(target.symbol)}&pattern_bias=eq.${encodeURIComponent(best.bias)}&timeframe=eq.${timeframe}&created_at=gt.${since}&limit=1`);
+          if (recent.length > 0) continue;
+
+          const ok = await supabaseInsert("short_term_notifications", {
+            user_id: userId, market: target.market, symbol: target.symbol,
+            pattern_name: best.name, pattern_bias: best.bias,
+            confidence: best.confidence, signal_score: best.confidence,
+            entry: lastClose, stop, target: targetPrice, reason,
+            fear_greed: fearGreed?.value ?? null,
+            timeframe,
+          });
+          if (ok) created += 1;
         }
-
-        const recent = await supabaseSelect("short_term_notifications", `select=id&user_id=eq.${userId}&market=eq.${target.market}&symbol=eq.${encodeURIComponent(target.symbol)}&pattern_bias=eq.${encodeURIComponent(best.bias)}&created_at=gt.${since}&limit=1`);
-        if (recent.length > 0) continue;
-
-        const ok = await supabaseInsert("short_term_notifications", {
-          user_id: userId, market: target.market, symbol: target.symbol,
-          pattern_name: best.name, pattern_bias: best.bias,
-          confidence: best.confidence, signal_score: best.confidence,
-          entry: lastClose, stop, target: targetPrice, reason,
-          fear_greed: fearGreed?.value ?? null,
-        });
-        if (ok) created += 1;
-      }
-    } catch (err) { console.error(`Hata (${target.symbol}):`, err); }
+      } catch (err) { console.error(`Hata (${target.symbol}):`, err); }
+    }));
   }
 
   return { scanned, created, tracked: groups.size, filtered: filteredRows.length };
 }
 
 // ==========================================================
-// GLOBAL TARAMA (Tüm piyasa)
+// GLOBAL TARAMA (PARALEL İŞLEME)
 // ==========================================================
 
-async function scanGlobalShortTerm() {
+async function scanGlobalShortTerm(timeframe: string) {
+  const tfSymbols = TF_SYMBOLS[timeframe] ?? TF_SYMBOLS["1h"]!;
   const allSymbols: Array<{ market: string; symbol: string }> = [];
-
-  for (const s of CRYPTO_TOP_50) allSymbols.push({ market: "crypto", symbol: s });
-  for (const s of BIST_TOP_30) allSymbols.push({ market: "bist", symbol: s });
-  for (const s of US_TOP_30) allSymbols.push({ market: "us", symbol: s });
+  for (const s of tfSymbols.crypto) allSymbols.push({ market: "crypto", symbol: s });
+  for (const s of tfSymbols.bist) allSymbols.push({ market: "bist", symbol: s });
+  for (const s of tfSymbols.us) allSymbols.push({ market: "us", symbol: s });
 
   const usersRaw = await supabaseSelect(
     "profiles",
@@ -1057,76 +799,83 @@ async function scanGlobalShortTerm() {
     return { globalScanned: 0, globalCreated: 0, globalUsers: 0 };
   }
 
-  const since = new Date(Date.now() - 6 * 3600_000).toISOString();
+  const dedupeHours = getDedupeHoursForTf(timeframe) * 1.5;
+  const since = new Date(Date.now() - dedupeHours * 3600_000).toISOString();
   const fearGreed = await fetchFearGreed();
 
   let globalCreated = 0;
   let globalScanned = 0;
 
-  for (const target of allSymbols) {
-    try {
-      let candles: Candle[] = [];
-      if (target.market === "crypto") candles = await fetchCryptoCandles(target.symbol, "1h");
-      else candles = await fetchStockCandles(target.symbol);
-      if (candles.length < 20) continue;
+  // Paralel işleme (aynı anda 10 varlık)
+  const CONCURRENCY = 10;
+  for (let i = 0; i < allSymbols.length; i += CONCURRENCY) {
+    const batch = allSymbols.slice(i, i + CONCURRENCY);
+    await Promise.all(batch.map(async (target) => {
+      try {
+        let candles: Candle[] = [];
+        if (target.market === "crypto") candles = await fetchCryptoCandles(target.symbol, timeframe);
+        else candles = await fetchStockCandles(target.symbol);
+        if (candles.length < 20) return;
 
-      const shortCandles = candles.slice(-30);
-      const indicators = calculateIndicatorData(shortCandles);
-      const patterns = detectPatterns(shortCandles);
-      if (patterns.length === 0) continue;
+        const shortCandles = candles.slice(-30);
+        const indicators = calculateIndicatorData(shortCandles);
+        const patterns = detectPatterns(shortCandles);
+        if (patterns.length === 0) return;
 
-      const best = patterns.reduce((max, p) => (p.confidence > max.confidence ? p : max), patterns[0]!);
+        const best = patterns.reduce((max, p) => (p.confidence > max.confidence ? p : max), patterns[0]!);
 
-      if (best.confidence < 85) continue;
-      if (best.bias === "nötr") continue;
+        if (best.confidence < 85) return;
+        if (best.bias === "nötr") return;
 
-      const sameDirCount = [
-        best.bias === "yükseliş" ? indicators.rsi > 50 : indicators.rsi < 50,
-        best.bias === "yükseliş" ? indicators.macdHistogram > 0 : indicators.macdHistogram < 0,
-      ].filter(Boolean).length;
-      if (sameDirCount < 2) continue;
-      if (indicators.volumeRatio < 1.5) continue;
-      if (target.market === "crypto" && fearGreed && (fearGreed.value >= 90 || fearGreed.value <= 10)) continue;
+        const sameDirCount = [
+          best.bias === "yükseliş" ? indicators.rsi > 50 : indicators.rsi < 50,
+          best.bias === "yükseliş" ? indicators.macdHistogram > 0 : indicators.macdHistogram < 0,
+        ].filter(Boolean).length;
+        if (sameDirCount < 2) return;
+        if (indicators.volumeRatio < 1.5) return;
+        if (target.market === "crypto" && fearGreed && (fearGreed.value >= 90 || fearGreed.value <= 10)) return;
 
-      globalScanned += 1;
-      const lastClose = shortCandles[shortCandles.length - 1]?.close ?? 0;
-      const stop = best.invalidation ?? (best.bias === "yükseliş" ? lastClose * 0.97 : lastClose * 1.03);
-      const targetPrice = best.target ?? (best.bias === "yükseliş" ? lastClose * 1.05 : lastClose * 0.95);
-      const reason = `${best.name} (%${best.confidence}) · RSI: ${indicators.rsi.toFixed(1)} · MACD: ${indicators.macdHistogram.toFixed(4)} · Hacim: ${(indicators.volumeRatio * 100).toFixed(0)}% · GLOBAL`;
+        globalScanned += 1;
+        const lastClose = shortCandles[shortCandles.length - 1]?.close ?? 0;
+        const stop = best.invalidation ?? (best.bias === "yükseliş" ? lastClose * 0.97 : lastClose * 1.03);
+        const targetPrice = best.target ?? (best.bias === "yükseliş" ? lastClose * 1.05 : lastClose * 0.95);
+        const reason = `${best.name} (%${best.confidence}) · RSI: ${indicators.rsi.toFixed(1)} · MACD: ${indicators.macdHistogram.toFixed(4)} · Hacim: ${(indicators.volumeRatio * 100).toFixed(0)}% · ${timeframe.toUpperCase()} · GLOBAL`;
 
-      const patternKey = patternNameToKey(best.name);
+        const patternKey = patternNameToKey(best.name);
 
-      for (const userId of eligibleUsers) {
-        if (patternKey) {
-          const userPattern = userPatterns.get(userId) ?? DEFAULT_USER_PATTERNS;
-          if (!userPattern[patternKey]) continue;
+        for (const userId of eligibleUsers) {
+          if (patternKey) {
+            const userPattern = userPatterns.get(userId) ?? DEFAULT_USER_PATTERNS;
+            if (!userPattern[patternKey]) continue;
+          }
+
+          const recent = await supabaseSelect(
+            "short_term_notifications",
+            `select=id&user_id=eq.${userId}&market=eq.${target.market}&symbol=eq.${encodeURIComponent(target.symbol)}&pattern_bias=eq.${encodeURIComponent(best.bias)}&timeframe=eq.${timeframe}&created_at=gt.${since}&limit=1`,
+          );
+          if (recent.length > 0) continue;
+
+          const ok = await supabaseInsert("short_term_notifications", {
+            user_id: userId,
+            market: target.market,
+            symbol: target.symbol,
+            pattern_name: best.name,
+            pattern_bias: best.bias,
+            confidence: best.confidence,
+            signal_score: best.confidence,
+            entry: lastClose,
+            stop,
+            target: targetPrice,
+            reason,
+            fear_greed: fearGreed?.value ?? null,
+            timeframe,
+          });
+          if (ok) globalCreated += 1;
         }
-
-        const recent = await supabaseSelect(
-          "short_term_notifications",
-          `select=id&user_id=eq.${userId}&market=eq.${target.market}&symbol=eq.${encodeURIComponent(target.symbol)}&pattern_bias=eq.${encodeURIComponent(best.bias)}&created_at=gt.${since}&limit=1`,
-        );
-        if (recent.length > 0) continue;
-
-        const ok = await supabaseInsert("short_term_notifications", {
-          user_id: userId,
-          market: target.market,
-          symbol: target.symbol,
-          pattern_name: best.name,
-          pattern_bias: best.bias,
-          confidence: best.confidence,
-          signal_score: best.confidence,
-          entry: lastClose,
-          stop,
-          target: targetPrice,
-          reason,
-          fear_greed: fearGreed?.value ?? null,
-        });
-        if (ok) globalCreated += 1;
+      } catch (err) {
+        console.error(`Global tarama hatası (${target.symbol}):`, err);
       }
-    } catch (err) {
-      console.error(`Global tarama hatası (${target.symbol}):`, err);
-    }
+    }));
   }
 
   return { globalScanned, globalCreated, globalUsers: eligibleUsers.length };
@@ -1147,17 +896,23 @@ export default async function handler(request: RequestLike, response: ResponseLi
     if (request.method !== "GET" && request.method !== "POST") {
       return response.status(405).json({ success: false, error: "Sadece GET/POST" });
     }
-    console.log("🔍 Kısa vadeli tarama başladı...");
-    const result = await scanShortTermForPremium();
-    console.log(`✅ Kullanıcı odaklı tamamlandı:`, result);
 
-    console.log("🌍 Global tarama başladı...");
-    const globalResult = await scanGlobalShortTerm();
-    console.log(`✅ Global tamamlandı:`, globalResult);
+    const tfRaw = String(request.query?.["tf"] ?? "1h").toLowerCase();
+    const allowedTfs = ["15m", "1h", "4h", "1d"];
+    const timeframe = allowedTfs.includes(tfRaw) ? tfRaw : "1h";
+
+    console.log(`🔍 Kısa vadeli tarama başladı (${timeframe})...`);
+    const result = await scanShortTermForPremium(timeframe);
+    console.log(`✅ Kullanıcı odaklı tamamlandı (${timeframe}):`, result);
+
+    console.log(`🌍 Global tarama başladı (${timeframe})...`);
+    const globalResult = await scanGlobalShortTerm(timeframe);
+    console.log(`✅ Global tamamlandı (${timeframe}):`, globalResult);
 
     return response.status(200).json({
       success: true,
-      message: "Tamamlandı.",
+      message: `Tamamlandı (${timeframe}).`,
+      timeframe,
       ...result,
       ...globalResult,
       timestamp: new Date().toISOString(),
