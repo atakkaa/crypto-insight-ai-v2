@@ -234,9 +234,10 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
   const closes = candles.map((c) => c.close);
   const n = candles.length;
 
-  // İkili Dip
+    // İkili Dip
   try {
     const recentLows = candles.slice(-30).map((c) => c.low);
+    const recentHighs = candles.slice(-30).map((c) => c.high);
     const minLow = Math.min(...recentLows);
     const minIdx = recentLows.indexOf(minLow);
     if (minIdx >= 0 && minIdx < 15) {
@@ -244,7 +245,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       if (Math.abs(minLow - secondMin) / minLow < 0.03 && secondMin > minLow * 0.97) {
         const cur = closes[n - 1] ?? 0;
         if (cur > minLow * 1.02) {
-          const neckline = Math.max(...recentLows.slice(minIdx, 15));
+          // Boyun çizgisi: iki dip arasındaki en yüksek nokta
+          const neckline = Math.max(...recentHighs.slice(minIdx, 15));
           patterns.push({
             name: "İkili Dip", bias: "yükseliş", confidence: 75,
             reasons: [`İki dip aynı seviyede (${minLow.toFixed(4)}, ${secondMin.toFixed(4)})`, `Fiyat dip üzerinde`],
@@ -255,9 +257,10 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // İkili Tepe
+    // İkili Tepe
   try {
     const recentHighs = candles.slice(-30).map((c) => c.high);
+    const recentLows = candles.slice(-30).map((c) => c.low);
     const maxHigh = Math.max(...recentHighs);
     const maxIdx = recentHighs.indexOf(maxHigh);
     if (maxIdx >= 0 && maxIdx < 15) {
@@ -265,7 +268,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       if (Math.abs(maxHigh - secondMax) / maxHigh < 0.03) {
         const cur = closes[n - 1] ?? 0;
         if (cur < maxHigh * 0.98) {
-          const neckline = Math.min(...recentHighs.slice(maxIdx, 15));
+          // Boyun çizgisi: iki tepe arasındaki en düşük nokta
+          const neckline = Math.min(...recentLows.slice(maxIdx, 15));
           patterns.push({
             name: "İkili Tepe", bias: "düşüş", confidence: 75,
             reasons: [`İki tepe aynı seviyede`, `Fiyat tepe altında`],
