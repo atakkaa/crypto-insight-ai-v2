@@ -1,4 +1,4 @@
-// api/scan-multi-timeframe.ts — Çoklu Zaman Dilimi Karşılaştırmalı Tarama
+// api/scan-multi-timeframe.ts — Çoklu Zaman Dilimi Karşılaştırmalı Tarama (Grup Desteği ile)
 
 const ENV = (globalThis as any).process?.env ?? {};
 const SUPABASE_URL = String(ENV.SUPABASE_URL ?? "");
@@ -101,7 +101,10 @@ function patternNameToKey(name: string): keyof UserShortTermPatterns | null {
   return null;
 }
 
-// Popüler varlık listeleri
+// ==========================================================
+// TÜM VARLIK LİSTELERİ (50 VARLIK)
+// ==========================================================
+
 const CRYPTO_TOP_30 = [
   "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT",
   "AVAXUSDT", "DOTUSDT", "LINKUSDT", "MATICUSDT", "TRXUSDT", "LTCUSDT", "BCHUSDT",
@@ -120,11 +123,30 @@ const US_TOP_10 = [
   "GOOGL.US", "META.US", "JPM.US", "WMT.US", "NFLX.US",
 ];
 
+// Tüm varlıklar (50 adet)
 const ALL_SYMBOLS: Array<{ market: string; symbol: string }> = [
   ...CRYPTO_TOP_30.map((s) => ({ market: "crypto", symbol: s })),
   ...BIST_TOP_10.map((s) => ({ market: "bist", symbol: s })),
   ...US_TOP_10.map((s) => ({ market: "us", symbol: s })),
 ];
+
+// ==========================================================
+// VARLIKLARI 3 GRUBA BÖL
+// ==========================================================
+
+function getSymbolsForGroup(group: string): Array<{ market: string; symbol: string }> {
+  if (group === "all") return ALL_SYMBOLS;
+
+  const groupSize = Math.ceil(ALL_SYMBOLS.length / 3);
+  const groupIndex = parseInt(group) - 1;
+
+  if (groupIndex < 0 || groupIndex > 2) return ALL_SYMBOLS;
+
+  const start = groupIndex * groupSize;
+  const end = Math.min((groupIndex + 1) * groupSize, ALL_SYMBOLS.length);
+
+  return ALL_SYMBOLS.slice(start, end);
+}
 
 // ==========================================================
 // İNDİKATÖR HESAPLAMALARI
@@ -205,7 +227,7 @@ function calculateIndicatorData(candles: Candle[]) {
 }
 
 // ==========================================================
-// FORMASYON TESPİTİ (Basitleştirilmiş)
+// FORMASYON TESPİTİ
 // ==========================================================
 
 function detectPatterns(candles: Candle[]): DetectedPattern[] {
@@ -217,7 +239,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
   const recentHighs = candles.slice(-30).map((c) => c.high);
   const recentLows = candles.slice(-30).map((c) => c.low);
 
-  // 1. İkili Dip
+  // 1. İkili Dip (Yükseliş)
   try {
     const minLow = Math.min(...recentLows);
     const minIdx = recentLows.indexOf(minLow);
@@ -240,7 +262,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 2. İkili Tepe
+  // 2. İkili Tepe (Düşüş)
   try {
     const maxHigh = Math.max(...recentHighs);
     const maxIdx = recentHighs.indexOf(maxHigh);
@@ -263,7 +285,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 3. Yükselen Üçgen
+  // 3. Yükselen Üçgen (Yükseliş)
   try {
     const firstHigh = Math.max(...recentHighs.slice(0, 15));
     const secondHigh = Math.max(...recentHighs.slice(15));
@@ -280,7 +302,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 4. Düşen Üçgen
+  // 4. Düşen Üçgen (Düşüş)
   try {
     const firstHigh = Math.max(...recentHighs.slice(0, 15));
     const secondHigh = Math.max(...recentHighs.slice(15));
@@ -297,7 +319,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 5. OBO
+  // 5. OBO (Düşüş)
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
@@ -318,7 +340,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 6. Ters OBO
+  // 6. Ters OBO (Yükseliş)
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
@@ -339,7 +361,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 7. Üçlü Dip
+  // 7. Üçlü Dip (Yükseliş)
   try {
     if (candles.length >= 45) {
       const l = candles.slice(-45).map((c) => c.low);
@@ -360,7 +382,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 8. Üçlü Tepe
+  // 8. Üçlü Tepe (Düşüş)
   try {
     if (candles.length >= 45) {
       const h = candles.slice(-45).map((c) => c.high);
@@ -381,7 +403,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 9. Yükselen Kama
+  // 9. Yükselen Kama (Düşüş)
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
@@ -402,7 +424,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 10. Düşen Kama
+  // 10. Düşen Kama (Yükseliş)
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
@@ -423,7 +445,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 11. Boğa Bayrağı
+  // 11. Boğa Bayrağı (Yükseliş)
   try {
     if (candles.length >= 30) {
       const h = candles.slice(-30).map((c) => c.high);
@@ -447,7 +469,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 12. Ayı Bayrağı
+  // 12. Ayı Bayrağı (Düşüş)
   try {
     if (candles.length >= 30) {
       const h = candles.slice(-30).map((c) => c.high);
@@ -547,7 +569,7 @@ async function supabaseInsert(table: string, data: any): Promise<boolean> {
 }
 
 // ==========================================================
-// KARŞILAŞTIRMALI YORUM OLUŞTURMA (KURAL TABANLI)
+// KARŞILAŞTIRMALI YORUM
 // ==========================================================
 
 type TimeframeResult = {
@@ -576,39 +598,25 @@ function generateMultiTfCommentary(results: TimeframeResult[], symbol: string): 
   if (d1) lines.push(`• 1d: ${d1.bias === "yükseliş" ? "🟢" : d1.bias === "düşüş" ? "🔴" : "⚪"} ${d1.pattern} (%${d1.confidence})`);
   lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-  // Karşılaştırma senaryoları
   const biases = [h1?.bias, h4?.bias, d1?.bias].filter(Boolean);
   const allUp = biases.every((b) => b === "yükseliş");
   const allDown = biases.every((b) => b === "düşüş");
 
   if (allUp && biases.length >= 2) {
     lines.push(`💡 YORUM: GÜÇLÜ YÜKSELİŞ SİNYALİ`);
-    lines.push(`${symbol} için tüm vadeler (${biases.length}) yükseliş yönünde uyumlu. Bu, güçlü bir yükseliş trendinin göstergesi olabilir.`);
-    lines.push(`⚠️ Ancak yine de risk yönetimini ihmal etmeyin.`);
+    lines.push(`${symbol} için tüm vadeler yükseliş yönünde uyumlu.`);
   } else if (allDown && biases.length >= 2) {
     lines.push(`💡 YORUM: GÜÇLÜ DÜŞÜŞ SİNYALİ`);
-    lines.push(`${symbol} için tüm vadeler (${biases.length}) düşüş yönünde uyumlu. Bu, güçlü bir düşüş trendinin göstergesi olabilir.`);
-    lines.push(`⚠️ Alım yapmadan önce dikkatli olun.`);
+    lines.push(`${symbol} için tüm vadeler düşüş yönünde uyumlu.`);
   } else if (h1?.bias === "yükseliş" && h4?.bias === "yükseliş" && d1?.bias === "düşüş") {
     lines.push(`💡 YORUM: KISA-ORTA VADELİ TEPKİ`);
-    lines.push(`Kısa (1h) ve orta (4h) vadede yükseliş var, ancak uzun vadede (1d) düşüş hakim.`);
-    lines.push(`Bu, bir tepki yükselişi olabilir. Uzun vadeli trend dönene kadar dikkatli olun.`);
+    lines.push(`Kısa ve orta vadede yükseliş, uzun vadede düşüş. Tepki yükselişi olabilir.`);
   } else if (h1?.bias === "düşüş" && h4?.bias === "düşüş" && d1?.bias === "yükseliş") {
     lines.push(`💡 YORUM: KISA-ORTA VADELİ DÜZELTME`);
-    lines.push(`Kısa (1h) ve orta (4h) vadede düşüş var, ancak uzun vadede (1d) yükseliş hakim.`);
-    lines.push(`Bu, bir düzeltme (pullback) olabilir. Uzun vadeli trend yükseliş olduğu için alım fırsatı olabilir.`);
-  } else if (h1?.bias === "yükseliş" && h4?.bias === "düşüş") {
-    lines.push(`💡 YORUM: ZAYIF TEPKİ`);
-    lines.push(`Kısa vadede (1h) yükseliş var, ancak orta vadede (4h) düşüş hakim.`);
-    lines.push(`Bu, zayıf bir tepki olabilir. Orta vade teyidi bekleyin.`);
-  } else if (h1?.bias === "düşüş" && h4?.bias === "yükseliş") {
-    lines.push(`💡 YORUM: ORTA VADELİ ALIM FIRSATI`);
-    lines.push(`Kısa vadede (1h) düşüş var, ancak orta vadede (4h) yükseliş hakim.`);
-    lines.push(`Bu, orta vadeli bir alım fırsatı olabilir. Kısa vadeli düşüş bitince alım değerlendirilebilir.`);
+    lines.push(`Kısa ve orta vadede düşüş, uzun vadede yükseliş. Düzeltme olabilir.`);
   } else {
     lines.push(`💡 YORUM: KARARSIZ / BELİRSİZ`);
-    lines.push(`${symbol} için zaman dilimleri arasında uyumsuzluk var.`);
-    lines.push(`Net bir sinyal için beklemek daha güvenli olabilir.`);
+    lines.push(`Zaman dilimleri arasında uyumsuzluk var. Net sinyal bekleyin.`);
   }
 
   return lines.join("\n");
@@ -618,8 +626,7 @@ function generateMultiTfCommentary(results: TimeframeResult[], symbol: string): 
 // ANA FONKSİYON
 // ==========================================================
 
-async function scanMultiTimeframe() {
-  // 1. Kullanıcı tercihlerini çek
+async function scanMultiTimeframe(group: string = "all") {
   const usersRaw = await supabaseSelect(
     "profiles",
     `select=id,role,membership,trial_ends_at,short_term_global_enabled,short_term_patterns&short_term_global_enabled=eq.true`,
@@ -650,19 +657,18 @@ async function scanMultiTimeframe() {
 
   const fearGreed = await fetchFearGreed();
   const timeframes = ["1h", "4h", "1d"];
+  const symbols = getSymbolsForGroup(group);
 
   let multiCreated = 0;
   let multiScanned = 0;
 
-  // Paralel işleme
   const CONCURRENCY = 5;
-  for (let i = 0; i < ALL_SYMBOLS.length; i += CONCURRENCY) {
-    const batch = ALL_SYMBOLS.slice(i, i + CONCURRENCY);
+  for (let i = 0; i < symbols.length; i += CONCURRENCY) {
+    const batch = symbols.slice(i, i + CONCURRENCY);
     await Promise.all(batch.map(async (target) => {
       try {
         const tfResults: TimeframeResult[] = [];
 
-        // Her zaman dilimi için tarama
         for (const tf of timeframes) {
           let candles: Candle[] = [];
           if (target.market === "crypto") candles = await fetchCryptoCandles(target.symbol, tf);
@@ -674,10 +680,8 @@ async function scanMultiTimeframe() {
           if (patterns.length === 0) continue;
 
           const best = patterns.reduce((max, p) => (p.confidence > max.confidence ? p : max), patterns[0]!);
-
           const lastClose = shortCandles[shortCandles.length - 1]?.close ?? 0;
 
-          // Target/Stop yön doğrulaması
           let targetPrice = best.target ?? (best.bias === "yükseliş" ? lastClose * 1.05 : lastClose * 0.95);
           let stopPrice = best.invalidation ?? (best.bias === "yükseliş" ? lastClose * 0.97 : lastClose * 1.03);
 
@@ -700,35 +704,28 @@ async function scanMultiTimeframe() {
           });
         }
 
-        if (tfResults.length < 2) return; // En az 2 zaman dilimi gerekli
-
+        if (tfResults.length < 2) return;
         multiScanned += 1;
 
-        // Karşılaştırmalı yorum oluştur
         const commentary = generateMultiTfCommentary(tfResults, target.symbol);
-
-        // Ana zaman dilimi (1h) sonucunu al
         const primary = tfResults.find((r) => r.timeframe === "1h") ?? tfResults[0]!;
-
         if (primary.confidence < 75) return;
 
         const patternKey = patternNameToKey(primary.pattern);
         if (!patternKey) return;
 
-        // Her kullanıcı için bildirim oluştur
         for (const userId of eligibleUsers) {
           const userPattern = userPatterns.get(userId) ?? DEFAULT_USER_PATTERNS;
           if (!userPattern[patternKey]) continue;
 
-          // Dedupe: Aynı sembol için son 6 saatte bildirim gitmişse atla
           const since = new Date(Date.now() - 6 * 3600_000).toISOString();
           const recent = await supabaseSelect(
             "short_term_notifications",
-            `select=id&user_id=eq.${userId}&market=eq.${target.market}&symbol=eq.${encodeURIComponent(target.symbol)}&created_at=gt.${since}&limit=1`,
+            `select=id&user_id=eq.${userId}&market=eq.${target.market}&symbol=eq.${encodeURIComponent(target.symbol)}&timeframe=eq.multi&created_at=gt.${since}&limit=1`,
           );
           if (recent.length > 0) continue;
 
-          const reason = `${primary.pattern} (%${primary.confidence}) · ${primary.bias} · 1H`;
+          const reason = `${primary.pattern} (%${primary.confidence}) · ${primary.bias} · ÇOKLU TF`;
 
           const ok = await supabaseInsert("short_term_notifications", {
             user_id: userId,
@@ -774,13 +771,18 @@ export default async function handler(request: RequestLike, response: ResponseLi
       return response.status(405).json({ success: false, error: "Sadece GET/POST" });
     }
 
-    console.log("🔍 Çoklu zaman dilimi tarama başladı...");
-    const result = await scanMultiTimeframe();
-    console.log(`✅ Çoklu TF tamamlandı:`, result);
+    const groupRaw = String(request.query?.["group"] ?? "all").toLowerCase();
+    const allowedGroups = ["1", "2", "3", "all"];
+    const group = allowedGroups.includes(groupRaw) ? groupRaw : "all";
+
+    console.log(`🔍 Çoklu zaman dilimi tarama başladı (group=${group})...`);
+    const result = await scanMultiTimeframe(group);
+    console.log(`✅ Çoklu TF tamamlandı (group=${group}):`, result);
 
     return response.status(200).json({
       success: true,
-      message: "Çoklu zaman dilimi tarama tamamlandı.",
+      message: `Çoklu zaman dilimi tarama tamamlandı (group=${group}).`,
+      group,
       ...result,
       timestamp: new Date().toISOString(),
     });
