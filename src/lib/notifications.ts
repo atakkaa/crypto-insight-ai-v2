@@ -208,13 +208,23 @@ export function severityColorClass(severity: NotificationSeverity): string {
 // KISA VADELİ BİLDİRİMLER (short_term_notifications)
 // =====================================================
 
+export type TimeframeResult = {
+  timeframe: string;
+  bias: "yükseliş" | "düşüş" | "nötr";
+  pattern: string;
+  confidence: number;
+  entry: number;
+  stop: number;
+  target: number;
+};
+
 export type ShortTermNotification = {
   id: string;
   user_id: string;
   market: string;
   symbol: string;
   pattern_name: string;
-  pattern_bias: string; // "yükseliş" | "düşüş"
+  pattern_bias: string; // "yükseliş" | "düşüş" | "nötr"
   confidence: number;
   signal_score: number;
   entry: number | null;
@@ -224,7 +234,9 @@ export type ShortTermNotification = {
   fear_greed: number | null;
   created_at: string;
   read: boolean;
-  timeframe: string | null; // "15m" | "1h" | "4h" | "1d"
+  timeframe: string | null; // "15m" | "1h" | "4h" | "1d" | "multi"
+  multi_tf_commentary: string | null; // <-- YENİ: Çoklu zaman dilimi karşılaştırma yorumu
+  multi_tf_data: TimeframeResult[] | null; // <-- YENİ: Her zaman diliminin detaylı sonucu
 };
 
 export async function fetchShortTermNotifications(
