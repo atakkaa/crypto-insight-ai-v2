@@ -1,4 +1,5 @@
 // api/scan-short-term.ts — Kısa Vadeli (20-30 Mum) Premium Tarama (Self-Contained)
+// Tüm formasyon isimleri Türkçe olarak gösterilir.
 
 // ==========================================================
 // ENV
@@ -63,6 +64,8 @@ type UserShortTermPatterns = {
   dusen_ucgen: boolean;
   obo: boolean;
   ters_obo: boolean;
+  uclu_dip: boolean;
+  uclu_tepe: boolean;
 };
 
 const DEFAULT_USER_PATTERNS: UserShortTermPatterns = {
@@ -72,6 +75,8 @@ const DEFAULT_USER_PATTERNS: UserShortTermPatterns = {
   dusen_ucgen: true,
   obo: true,
   ters_obo: true,
+  uclu_dip: true,
+  uclu_tepe: true,
 };
 
 // Formasyon adı → kullanıcı tercihi anahtarı
@@ -83,6 +88,8 @@ function patternNameToKey(name: string): keyof UserShortTermPatterns | null {
   if (lower.includes("düşen üçgen") || lower.includes("dusen ucgen")) return "dusen_ucgen";
   if (lower.includes("ters obo")) return "ters_obo";
   if (lower.includes("obo") || lower.includes("omuz")) return "obo";
+  if (lower.includes("üçlü dip") || lower.includes("uclu dip")) return "uclu_dip";
+  if (lower.includes("üçlü tepe") || lower.includes("uclu tepe")) return "uclu_tepe";
   return null;
 }
 
@@ -225,7 +232,7 @@ function calculateIndicatorData(candles: Candle[]) {
 }
 
 // ==========================================================
-// FORMASYON TESPİTİ
+// FORMASYON TESPİTİ (TÜRKÇE İSİMLERLE)
 // ==========================================================
 
 function detectPatterns(candles: Candle[]): DetectedPattern[] {
@@ -233,88 +240,280 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
   if (candles.length < 30) return patterns;
   const closes = candles.map((c) => c.close);
   const n = candles.length;
+  const lastClose = closes[n - 1] ?? 0;
 
-    // İkili Dip
+  const recentHighs = candles.slice(-30).map((c) => c.high);
+  const recentLows = candles.slice(-30).map((c) => c.low);
+
+  // ==========================================================
+  // 1. İKİLİ DİP (Bullish Double Bottom)
+  // ==========================================================
   try {
-    const recentLows = candles.slice(-30).map((c) => c.low);
-    const recentHighs = candles.slice(-30).map((c) => c.high);
     const minLow = Math.min(...recentLows);
     const minIdx = recentLows.indexOf(minLow);
     if (minIdx >= 0 && minIdx < 15) {
       const secondMin = Math.min(...recentLows.slice(15));
       if (Math.abs(minLow - secondMin) / minLow < 0.03 && secondMin > minLow * 0.97) {
-        const cur = closes[n - 1] ?? 0;
-        if (cur > minLow * 1.02) {
-          // Boyun çizgisi: iki dip arasındaki en yüksek nokta
+        if (lastClose > minLow * 1.02) {
           const neckline = Math.max(...recentHighs.slice(minIdx, 15));
+          const target = neckline + (neckline - minLow);
           patterns.push({
-            name: "İkili Dip", bias: "yükseliş", confidence: 75,
-            reasons: [`İki dip aynı seviyede (${minLow.toFixed(4)}, ${secondMin.toFixed(4)})`, `Fiyat dip üzerinde`],
-            support: minLow, resistance: neckline, target: neckline + (neckline - minLow), invalidation: minLow * 0.98,
+            name: "İkili Dip",
+            bias: "yükseliş",
+            confidence: 78,
+            reasons: [
+              `İki dip aynı seviyede: ${minLow.toFixed(4)}, ${secondMin.toFixed(4)}`,
+              `Fiyat dip üzerinde: ${lastClose.toFixed(4)} > ${minLow.toFixed(4)}`,
+              `Boyun çizgisi: ${neckline.toFixed(4)}`,
+            ],
+            support: minLow,
+            resistance: neckline,
+            target: target,
+            invalidation: minLow * 0.98,
           });
         }
       }
     }
   } catch {}
 
-    // İkili Tepe
+  // ==========================================================
+  // 2. İKİLİ TEPE (Bearish Double Top)
+  // ==========================================================
   try {
-    const recentHighs = candles.slice(-30).map((c) => c.high);
-    const recentLows = candles.slice(-30).map((c) => c.low);
     const maxHigh = Math.max(...recentHighs);
     const maxIdx = recentHighs.indexOf(maxHigh);
     if (maxIdx >= 0 && maxIdx < 15) {
       const secondMax = Math.max(...recentHighs.slice(15));
-      if (Math.abs(maxHigh - secondMax) / maxHigh < 0.03) {
-        const cur = closes[n - 1] ?? 0;
-        if (cur < maxHigh * 0.98) {
-          // Boyun çizgisi: iki tepe arasındaki en düşük nokta
+      if (Math.abs(maxHigh - secondMax) / maxHigh < 0.03 && secondMax < maxHigh * 1.03) {
+        if (lastClose < maxHigh * 0.98) {
           const neckline = Math.min(...recentLows.slice(maxIdx, 15));
+          const target = neckline - (maxHigh - neckline);
           patterns.push({
-            name: "İkili Tepe", bias: "düşüş", confidence: 75,
-            reasons: [`İki tepe aynı seviyede`, `Fiyat tepe altında`],
-            support: neckline, resistance: maxHigh, target: neckline - (maxHigh - neckline), invalidation: maxHigh * 1.02,
+            name: "İkili Tepe",
+            bias: "düşüş",
+            confidence: 78,
+            reasons: [
+              `İki tepe aynı seviyede: ${maxHigh.toFixed(4)}, ${secondMax.toFixed(4)}`,
+              `Fiyat tepe altında: ${lastClose.toFixed(4)} < ${maxHigh.toFixed(4)}`,
+              `Boyun çizgisi: ${neckline.toFixed(4)}`,
+            ],
+            support: neckline,
+            resistance: maxHigh,
+            target: target,
+            invalidation: maxHigh * 1.02,
           });
         }
       }
     }
   } catch {}
 
-  // Yükselen Üçgen
+  // ==========================================================
+  // 3. YÜKSELEN ÜÇGEN (Ascending Triangle - Bullish)
+  // ==========================================================
   try {
-    const h = candles.slice(-30).map((c) => c.high);
-    const l = candles.slice(-30).map((c) => c.low);
-    const firstHigh = Math.max(...h.slice(0, 15));
-    const secondHigh = Math.max(...h.slice(15));
-    const firstLow = Math.min(...l.slice(0, 15));
-    const secondLow = Math.min(...l.slice(15));
-    if (Math.abs(firstHigh - secondHigh) / firstHigh < 0.02 && secondLow > firstLow * 1.02) {
-      const cur = closes[n - 1] ?? 0;
-      if (cur > secondHigh * 0.99) {
+    const firstHigh = Math.max(...recentHighs.slice(0, 15));
+    const secondHigh = Math.max(...recentHighs.slice(15));
+    const firstLow = Math.min(...recentLows.slice(0, 15));
+    const secondLow = Math.min(...recentLows.slice(15));
+
+    const isHorizontalResistance = Math.abs(firstHigh - secondHigh) / firstHigh < 0.02;
+    const isRisingDip = secondLow > firstLow * 1.02;
+
+    if (isHorizontalResistance && isRisingDip && lastClose > secondHigh * 0.99) {
+      const target = firstHigh + (firstHigh - firstLow);
+      patterns.push({
+        name: "Yükselen Üçgen",
+        bias: "yükseliş",
+        confidence: 80,
+        reasons: [
+          `Yatay direnç: ${firstHigh.toFixed(4)}`,
+          `Yükselen dip: ${firstLow.toFixed(4)} → ${secondLow.toFixed(4)}`,
+          `Fiyat direnci kırmak üzere`,
+        ],
+        support: firstLow,
+        resistance: firstHigh,
+        target: target,
+        invalidation: secondLow * 0.98,
+      });
+    }
+  } catch {}
+
+  // ==========================================================
+  // 4. DÜŞEN ÜÇGEN (Descending Triangle - Bearish)
+  // ==========================================================
+  try {
+    const firstHigh = Math.max(...recentHighs.slice(0, 15));
+    const secondHigh = Math.max(...recentHighs.slice(15));
+    const firstLow = Math.min(...recentLows.slice(0, 15));
+    const secondLow = Math.min(...recentLows.slice(15));
+
+    const isFallingResistance = secondHigh < firstHigh * 0.98;
+    const isHorizontalSupport = Math.abs(firstLow - secondLow) / firstLow < 0.02;
+
+    if (isFallingResistance && isHorizontalSupport && lastClose < secondLow * 1.01) {
+      const target = firstLow - (firstHigh - firstLow);
+      patterns.push({
+        name: "Düşen Üçgen",
+        bias: "düşüş",
+        confidence: 80,
+        reasons: [
+          `Düşen direnç: ${firstHigh.toFixed(4)} → ${secondHigh.toFixed(4)}`,
+          `Yatay destek: ${firstLow.toFixed(4)}`,
+          `Fiyat desteği kırmak üzere`,
+        ],
+        support: firstLow,
+        resistance: firstHigh,
+        target: target,
+        invalidation: secondHigh * 1.02,
+      });
+    }
+  } catch {}
+
+  // ==========================================================
+  // 5. OBO (Omuz-Baş-Omuz - Bearish Head and Shoulders)
+  // ==========================================================
+  try {
+    if (candles.length >= 40) {
+      const h = candles.slice(-40).map((c) => c.high);
+      const l = candles.slice(-40).map((c) => c.low);
+      
+      const leftShoulder = Math.max(...h.slice(0, 12));
+      const head = Math.max(...h.slice(12, 26));
+      const rightShoulder = Math.max(...h.slice(26, 40));
+      
+      const isHeadHighest = head > leftShoulder * 1.02 && head > rightShoulder * 1.02;
+      const isShouldersEqual = Math.abs(leftShoulder - rightShoulder) / leftShoulder < 0.03;
+      
+      if (isHeadHighest && isShouldersEqual) {
+        const neckline = Math.min(...l.slice(12, 26));
+        const target = neckline - (head - neckline);
+        
         patterns.push({
-          name: "Yükselen Üçgen", bias: "yükseliş", confidence: 80,
-          reasons: [`Yatay direnç ${firstHigh.toFixed(4)}`, `Yükselen dip`],
-          support: firstLow, resistance: firstHigh, target: firstHigh + (firstHigh - firstLow), invalidation: secondLow * 0.98,
+          name: "Omuz-Baş-Omuz",
+          bias: "düşüş",
+          confidence: 85,
+          reasons: [
+            `Sol omuz: ${leftShoulder.toFixed(4)}`,
+            `Baş: ${head.toFixed(4)}`,
+            `Sağ omuz: ${rightShoulder.toFixed(4)}`,
+            `Boyun çizgisi: ${neckline.toFixed(4)}`,
+          ],
+          support: neckline,
+          resistance: head,
+          target: target,
+          invalidation: head * 1.02,
         });
       }
     }
   } catch {}
 
-  // Düşen Üçgen
+  // ==========================================================
+  // 6. TERS OBO (Inverted Head and Shoulders - Bullish)
+  // ==========================================================
   try {
-    const h = candles.slice(-30).map((c) => c.high);
-    const l = candles.slice(-30).map((c) => c.low);
-    const firstHigh = Math.max(...h.slice(0, 15));
-    const secondHigh = Math.max(...h.slice(15));
-    const firstLow = Math.min(...l.slice(0, 15));
-    const secondLow = Math.min(...l.slice(15));
-    if (secondHigh < firstHigh * 0.98 && Math.abs(firstLow - secondLow) / firstLow < 0.02) {
-      const cur = closes[n - 1] ?? 0;
-      if (cur < secondLow * 1.01) {
+    if (candles.length >= 40) {
+      const h = candles.slice(-40).map((c) => c.high);
+      const l = candles.slice(-40).map((c) => c.low);
+      
+      const leftShoulder = Math.min(...l.slice(0, 12));
+      const head = Math.min(...l.slice(12, 26));
+      const rightShoulder = Math.min(...l.slice(26, 40));
+      
+      const isHeadLowest = head < leftShoulder * 0.98 && head < rightShoulder * 0.98;
+      const isShouldersEqual = Math.abs(leftShoulder - rightShoulder) / leftShoulder < 0.03;
+      
+      if (isHeadLowest && isShouldersEqual) {
+        const neckline = Math.max(...h.slice(12, 26));
+        const target = neckline + (neckline - head);
+        
         patterns.push({
-          name: "Düşen Üçgen", bias: "düşüş", confidence: 80,
-          reasons: [`Düşen direnç`, `Yatay destek ${firstLow.toFixed(4)}`],
-          support: firstLow, resistance: firstHigh, target: firstLow - (firstHigh - firstLow), invalidation: secondHigh * 1.02,
+          name: "Ters OBO",
+          bias: "yükseliş",
+          confidence: 85,
+          reasons: [
+            `Sol omuz: ${leftShoulder.toFixed(4)}`,
+            `Baş: ${head.toFixed(4)}`,
+            `Sağ omuz: ${rightShoulder.toFixed(4)}`,
+            `Boyun çizgisi: ${neckline.toFixed(4)}`,
+          ],
+          support: head,
+          resistance: neckline,
+          target: target,
+          invalidation: head * 0.98,
+        });
+      }
+    }
+  } catch {}
+
+  // ==========================================================
+  // 7. ÜÇLÜ DİP (Triple Bottom - Bullish)
+  // ==========================================================
+  try {
+    if (candles.length >= 45) {
+      const l = candles.slice(-45).map((c) => c.low);
+      const h = candles.slice(-45).map((c) => c.high);
+      
+      const dip1 = Math.min(...l.slice(0, 15));
+      const dip2 = Math.min(...l.slice(15, 30));
+      const dip3 = Math.min(...l.slice(30, 45));
+      
+      const allEqual = 
+        Math.abs(dip1 - dip2) / dip1 < 0.03 &&
+        Math.abs(dip2 - dip3) / dip2 < 0.03;
+      
+      if (allEqual && lastClose > dip1 * 1.02) {
+        const neckline = Math.max(...h.slice(0, 45));
+        const target = neckline + (neckline - dip1);
+        
+        patterns.push({
+          name: "Üçlü Dip",
+          bias: "yükseliş",
+          confidence: 82,
+          reasons: [
+            `Üç dip aynı seviyede: ${dip1.toFixed(4)}, ${dip2.toFixed(4)}, ${dip3.toFixed(4)}`,
+            `Boyun çizgisi: ${neckline.toFixed(4)}`,
+          ],
+          support: dip1,
+          resistance: neckline,
+          target: target,
+          invalidation: dip1 * 0.98,
+        });
+      }
+    }
+  } catch {}
+
+  // ==========================================================
+  // 8. ÜÇLÜ TEPE (Triple Top - Bearish)
+  // ==========================================================
+  try {
+    if (candles.length >= 45) {
+      const h = candles.slice(-45).map((c) => c.high);
+      const l = candles.slice(-45).map((c) => c.low);
+      
+      const top1 = Math.max(...h.slice(0, 15));
+      const top2 = Math.max(...h.slice(15, 30));
+      const top3 = Math.max(...h.slice(30, 45));
+      
+      const allEqual = 
+        Math.abs(top1 - top2) / top1 < 0.03 &&
+        Math.abs(top2 - top3) / top2 < 0.03;
+      
+      if (allEqual && lastClose < top1 * 0.98) {
+        const neckline = Math.min(...l.slice(0, 45));
+        const target = neckline - (top1 - neckline);
+        
+        patterns.push({
+          name: "Üçlü Tepe",
+          bias: "düşüş",
+          confidence: 82,
+          reasons: [
+            `Üç tepe aynı seviyede: ${top1.toFixed(4)}, ${top2.toFixed(4)}, ${top3.toFixed(4)}`,
+            `Boyun çizgisi: ${neckline.toFixed(4)}`,
+          ],
+          support: neckline,
+          resistance: top1,
+          target: target,
+          invalidation: top1 * 1.02,
         });
       }
     }
@@ -327,8 +526,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
 // VERİ ÇEKME
 // ==========================================================
 
-async function fetchCryptoCandles(symbol: string): Promise<Candle[]> {
-  const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=1h&limit=150`);
+async function fetchCryptoCandles(symbol: string, interval = "1h"): Promise<Candle[]> {
+  const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=150`);
   if (!res.ok) return [];
   const raw = (await res.json()) as unknown[][];
   return raw.map((k) => ({
@@ -441,7 +640,7 @@ async function scanShortTermForPremium() {
   for (const target of targets) {
     try {
       let candles: Candle[] = [];
-      if (target.market === "crypto") candles = await fetchCryptoCandles(target.symbol);
+      if (target.market === "crypto") candles = await fetchCryptoCandles(target.symbol, "1h");
       else candles = await fetchStockCandles(target.symbol);
       if (candles.length < 20) continue;
 
@@ -467,11 +666,9 @@ async function scanShortTermForPremium() {
       const targetPrice = best.target ?? (best.bias === "yükseliş" ? lastClose * 1.05 : lastClose * 0.95);
       const reason = `${best.name} (%${best.confidence}) · RSI: ${indicators.rsi.toFixed(1)} · MACD: ${indicators.macdHistogram.toFixed(4)} · Hacim: ${(indicators.volumeRatio * 100).toFixed(0)}%`;
 
-      // Formasyon adı → kullanıcı tercihi anahtarı
       const patternKey = patternNameToKey(best.name);
 
       for (const userId of [...new Set(target.users)]) {
-        // Kullanıcının bu formasyonu almak isteyip istemediğini kontrol et
         if (patternKey) {
           const userPattern = userPatterns.get(userId) ?? DEFAULT_USER_PATTERNS;
           if (!userPattern[patternKey]) continue;
@@ -543,7 +740,7 @@ async function scanGlobalShortTerm() {
   for (const target of allSymbols) {
     try {
       let candles: Candle[] = [];
-      if (target.market === "crypto") candles = await fetchCryptoCandles(target.symbol);
+      if (target.market === "crypto") candles = await fetchCryptoCandles(target.symbol, "1h");
       else candles = await fetchStockCandles(target.symbol);
       if (candles.length < 20) continue;
 
@@ -574,7 +771,6 @@ async function scanGlobalShortTerm() {
       const patternKey = patternNameToKey(best.name);
 
       for (const userId of eligibleUsers) {
-        // Kullanıcının bu formasyonu almak isteyip istemediğini kontrol et
         if (patternKey) {
           const userPattern = userPatterns.get(userId) ?? DEFAULT_USER_PATTERNS;
           if (!userPattern[patternKey]) continue;
