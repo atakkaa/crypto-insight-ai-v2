@@ -1,5 +1,5 @@
 // api/scan-short-term.ts — Kısa Vadeli (20-30 Mum) Premium Tarama (Self-Contained)
-// Tüm formasyon isimleri Türkçe olarak gösterilir.
+// 16 formasyon desteği ile — Tüm formasyon isimleri Türkçe.
 
 // ==========================================================
 // ENV
@@ -56,7 +56,7 @@ type DetectedPattern = {
   invalidation: number | null;
 };
 
-// Kullanıcının seçtiği formasyonlar
+// Kullanıcının seçtiği formasyonlar (16 formasyon)
 type UserShortTermPatterns = {
   ikili_dip: boolean;
   ikili_tepe: boolean;
@@ -66,6 +66,14 @@ type UserShortTermPatterns = {
   ters_obo: boolean;
   uclu_dip: boolean;
   uclu_tepe: boolean;
+  yukselen_kama: boolean;
+  dusen_kama: boolean;
+  boga_bayragi: boolean;
+  ayi_bayragi: boolean;
+  boga_flamasi: boolean;
+  ayi_flamasi: boolean;
+  fincan_kulp: boolean;
+  simetrik_ucgen: boolean;
 };
 
 const DEFAULT_USER_PATTERNS: UserShortTermPatterns = {
@@ -77,6 +85,14 @@ const DEFAULT_USER_PATTERNS: UserShortTermPatterns = {
   ters_obo: true,
   uclu_dip: true,
   uclu_tepe: true,
+  yukselen_kama: true,
+  dusen_kama: true,
+  boga_bayragi: true,
+  ayi_bayragi: true,
+  boga_flamasi: true,
+  ayi_flamasi: true,
+  fincan_kulp: true,
+  simetrik_ucgen: true,
 };
 
 // Formasyon adı → kullanıcı tercihi anahtarı
@@ -90,6 +106,14 @@ function patternNameToKey(name: string): keyof UserShortTermPatterns | null {
   if (lower.includes("obo") || lower.includes("omuz")) return "obo";
   if (lower.includes("üçlü dip") || lower.includes("uclu dip")) return "uclu_dip";
   if (lower.includes("üçlü tepe") || lower.includes("uclu tepe")) return "uclu_tepe";
+  if (lower.includes("yükselen kama")) return "yukselen_kama";
+  if (lower.includes("düşen kama")) return "dusen_kama";
+  if (lower.includes("boğa bayrağı")) return "boga_bayragi";
+  if (lower.includes("ayı bayrağı")) return "ayi_bayragi";
+  if (lower.includes("boğa flaması")) return "boga_flamasi";
+  if (lower.includes("ayı flaması")) return "ayi_flamasi";
+  if (lower.includes("fincan") || lower.includes("kulp")) return "fincan_kulp";
+  if (lower.includes("simetrik üçgen")) return "simetrik_ucgen";
   return null;
 }
 
@@ -232,7 +256,7 @@ function calculateIndicatorData(candles: Candle[]) {
 }
 
 // ==========================================================
-// FORMASYON TESPİTİ (TÜRKÇE İSİMLERLE)
+// FORMASYON TESPİTİ (16 FORMASYON - TÜRKÇE)
 // ==========================================================
 
 function detectPatterns(candles: Candle[]): DetectedPattern[] {
@@ -514,6 +538,308 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
           resistance: top1,
           target: target,
           invalidation: top1 * 1.02,
+        });
+      }
+    }
+  } catch {}
+
+  // ==========================================================
+  // 9. YÜKSELEN KAMA (Rising Wedge - Bearish)
+  // ==========================================================
+  try {
+    if (candles.length >= 40) {
+      const h = candles.slice(-40).map((c) => c.high);
+      const l = candles.slice(-40).map((c) => c.low);
+      
+      const leftHighs = Math.max(...h.slice(0, 20));
+      const rightHighs = Math.max(...h.slice(20, 40));
+      const leftLows = Math.min(...l.slice(0, 20));
+      const rightLows = Math.min(...l.slice(20, 40));
+      
+      const risingResistance = rightHighs > leftHighs;
+      const risingSupport = rightLows > leftLows;
+      const narrowing = (rightHighs - rightLows) < (leftHighs - leftLows) * 0.7;
+      
+      if (risingResistance && risingSupport && narrowing && lastClose < rightLows * 1.01) {
+        const target = rightLows - (rightHighs - rightLows);
+        patterns.push({
+          name: "Yükselen Kama",
+          bias: "düşüş",
+          confidence: 78,
+          reasons: [
+            `Yükselen direnç: ${leftHighs.toFixed(4)} → ${rightHighs.toFixed(4)}`,
+            `Yükselen destek: ${leftLows.toFixed(4)} → ${rightLows.toFixed(4)}`,
+            `Daralan kama + düşüş kırılımı`,
+          ],
+          support: rightLows,
+          resistance: rightHighs,
+          target: target,
+          invalidation: rightHighs * 1.02,
+        });
+      }
+    }
+  } catch {}
+
+  // ==========================================================
+  // 10. DÜŞEN KAMA (Falling Wedge - Bullish)
+  // ==========================================================
+  try {
+    if (candles.length >= 40) {
+      const h = candles.slice(-40).map((c) => c.high);
+      const l = candles.slice(-40).map((c) => c.low);
+      
+      const leftHighs = Math.max(...h.slice(0, 20));
+      const rightHighs = Math.max(...h.slice(20, 40));
+      const leftLows = Math.min(...l.slice(0, 20));
+      const rightLows = Math.min(...l.slice(20, 40));
+      
+      const fallingResistance = rightHighs < leftHighs;
+      const fallingSupport = rightLows < leftLows;
+      const narrowing = (rightHighs - rightLows) < (leftHighs - leftLows) * 0.7;
+      
+      if (fallingResistance && fallingSupport && narrowing && lastClose > rightHighs * 0.99) {
+        const target = rightHighs + (rightHighs - rightLows);
+        patterns.push({
+          name: "Düşen Kama",
+          bias: "yükseliş",
+          confidence: 78,
+          reasons: [
+            `Düşen direnç: ${leftHighs.toFixed(4)} → ${rightHighs.toFixed(4)}`,
+            `Düşen destek: ${leftLows.toFixed(4)} → ${rightLows.toFixed(4)}`,
+            `Daralan kama + yükseliş kırılımı`,
+          ],
+          support: rightLows,
+          resistance: rightHighs,
+          target: target,
+          invalidation: rightLows * 0.98,
+        });
+      }
+    }
+  } catch {}
+
+  // ==========================================================
+  // 11. BOĞA BAYRAĞI (Bullish Flag - Bullish)
+  // ==========================================================
+  try {
+    if (candles.length >= 30) {
+      const h = candles.slice(-30).map((c) => c.high);
+      const l = candles.slice(-30).map((c) => c.low);
+      
+      const firstSegment = closes.slice(0, 10);
+      const firstRise = (firstSegment[9] ?? 0) - (firstSegment[0] ?? 0);
+      const isStrongRise = firstRise > 0 && firstRise / (firstSegment[0] ?? 1) > 0.05;
+      
+      const flagHighs = h.slice(10, 25);
+      const flagLows = l.slice(10, 25);
+      const flagHighSlope = (flagHighs[flagHighs.length - 1] ?? 0) - (flagHighs[0] ?? 0);
+      const flagLowSlope = (flagLows[flagLows.length - 1] ?? 0) - (flagLows[0] ?? 0);
+      const isFlag = flagHighSlope < 0 && flagLowSlope < 0;
+      
+      if (isStrongRise && isFlag && lastClose > (flagHighs[flagHighs.length - 1] ?? 0)) {
+        const flagHeight = (flagHighs[0] ?? 0) - (flagLows[0] ?? 0);
+        const target = lastClose + flagHeight;
+        patterns.push({
+          name: "Boğa Bayrağı",
+          bias: "yükseliş",
+          confidence: 80,
+          reasons: [
+            `Güçlü yükseliş: +${((firstRise / (firstSegment[0] ?? 1)) * 100).toFixed(2)}%`,
+            `Bayrak konsolidasyonu tamamlandı`,
+            `Hedef: +${((flagHeight / lastClose) * 100).toFixed(2)}%`,
+          ],
+          support: flagLows[flagLows.length - 1] ?? null,
+          resistance: flagHighs[0] ?? null,
+          target: target,
+          invalidation: (flagLows[flagLows.length - 1] ?? 0) * 0.98,
+        });
+      }
+    }
+  } catch {}
+
+  // ==========================================================
+  // 12. AYI BAYRAĞI (Bearish Flag - Bearish)
+  // ==========================================================
+  try {
+    if (candles.length >= 30) {
+      const h = candles.slice(-30).map((c) => c.high);
+      const l = candles.slice(-30).map((c) => c.low);
+      
+      const firstSegment = closes.slice(0, 10);
+      const firstDrop = (firstSegment[0] ?? 0) - (firstSegment[9] ?? 0);
+      const isStrongDrop = firstDrop > 0 && firstDrop / (firstSegment[0] ?? 1) > 0.05;
+      
+      const flagHighs = h.slice(10, 25);
+      const flagLows = l.slice(10, 25);
+      const flagHighSlope = (flagHighs[flagHighs.length - 1] ?? 0) - (flagHighs[0] ?? 0);
+      const flagLowSlope = (flagLows[flagLows.length - 1] ?? 0) - (flagLows[0] ?? 0);
+      const isFlag = flagHighSlope > 0 && flagLowSlope > 0;
+      
+      if (isStrongDrop && isFlag && lastClose < (flagLows[flagLows.length - 1] ?? 0)) {
+        const flagHeight = (flagHighs[0] ?? 0) - (flagLows[0] ?? 0);
+        const target = lastClose - flagHeight;
+        patterns.push({
+          name: "Ayı Bayrağı",
+          bias: "düşüş",
+          confidence: 80,
+          reasons: [
+            `Güçlü düşüş: -${((firstDrop / (firstSegment[0] ?? 1)) * 100).toFixed(2)}%`,
+            `Bayrak konsolidasyonu tamamlandı`,
+            `Hedef: -${((flagHeight / lastClose) * 100).toFixed(2)}%`,
+          ],
+          support: flagLows[0] ?? null,
+          resistance: flagHighs[flagHighs.length - 1] ?? null,
+          target: target,
+          invalidation: (flagHighs[flagHighs.length - 1] ?? 0) * 1.02,
+        });
+      }
+    }
+  } catch {}
+
+  // ==========================================================
+  // 13. BOĞA FLAMASI (Bullish Pennant - Bullish)
+  // ==========================================================
+  try {
+    if (candles.length >= 30) {
+      const firstSegment = closes.slice(0, 10);
+      const firstRise = (firstSegment[9] ?? 0) - (firstSegment[0] ?? 0);
+      const isStrongRise = firstRise > 0 && firstRise / (firstSegment[0] ?? 1) > 0.05;
+      
+      const h = candles.slice(-30).map((c) => c.high);
+      const l = candles.slice(-30).map((c) => c.low);
+      const pennantHighs = h.slice(10, 25);
+      const pennantLows = l.slice(10, 25);
+      
+      const firstHalfRange = (Math.max(...pennantHighs.slice(0, 7)) - Math.min(...pennantLows.slice(0, 7)));
+      const secondHalfRange = (Math.max(...pennantHighs.slice(7)) - Math.min(...pennantLows.slice(7)));
+      const isNarrowing = secondHalfRange < firstHalfRange * 0.6;
+      
+      if (isStrongRise && isNarrowing && lastClose > (Math.max(...pennantHighs) ?? 0)) {
+        const target = lastClose + firstRise * 0.8;
+        patterns.push({
+          name: "Boğa Flaması",
+          bias: "yükseliş",
+          confidence: 78,
+          reasons: [
+            `Güçlü yükseliş: +${((firstRise / (firstSegment[0] ?? 1)) * 100).toFixed(2)}%`,
+            `Simetrik üçgen flaması`,
+            `Kırılım yukarı`,
+          ],
+          support: Math.min(...pennantLows) ?? null,
+          resistance: Math.max(...pennantHighs) ?? null,
+          target: target,
+          invalidation: (Math.min(...pennantLows) ?? 0) * 0.98,
+        });
+      }
+    }
+  } catch {}
+
+  // ==========================================================
+  // 14. AYI FLAMASI (Bearish Pennant - Bearish)
+  // ==========================================================
+  try {
+    if (candles.length >= 30) {
+      const firstSegment = closes.slice(0, 10);
+      const firstDrop = (firstSegment[0] ?? 0) - (firstSegment[9] ?? 0);
+      const isStrongDrop = firstDrop > 0 && firstDrop / (firstSegment[0] ?? 1) > 0.05;
+      
+      const h = candles.slice(-30).map((c) => c.high);
+      const l = candles.slice(-30).map((c) => c.low);
+      const pennantHighs = h.slice(10, 25);
+      const pennantLows = l.slice(10, 25);
+      
+      const firstHalfRange = (Math.max(...pennantHighs.slice(0, 7)) - Math.min(...pennantLows.slice(0, 7)));
+      const secondHalfRange = (Math.max(...pennantHighs.slice(7)) - Math.min(...pennantLows.slice(7)));
+      const isNarrowing = secondHalfRange < firstHalfRange * 0.6;
+      
+      if (isStrongDrop && isNarrowing && lastClose < (Math.min(...pennantLows) ?? 0)) {
+        const target = lastClose - firstDrop * 0.8;
+        patterns.push({
+          name: "Ayı Flaması",
+          bias: "düşüş",
+          confidence: 78,
+          reasons: [
+            `Güçlü düşüş: -${((firstDrop / (firstSegment[0] ?? 1)) * 100).toFixed(2)}%`,
+            `Simetrik üçgen flaması`,
+            `Kırılım aşağı`,
+          ],
+          support: Math.min(...pennantLows) ?? null,
+          resistance: Math.max(...pennantHighs) ?? null,
+          target: target,
+          invalidation: (Math.max(...pennantHighs) ?? 0) * 1.02,
+        });
+      }
+    }
+  } catch {}
+
+  // ==========================================================
+  // 15. FİNCAN-KULP (Cup and Handle - Bullish)
+  // ==========================================================
+  try {
+    if (candles.length >= 50) {
+      const h = candles.slice(-50).map((c) => c.high);
+      const l = candles.slice(-50).map((c) => c.low);
+      
+      const cupLeft = Math.max(...h.slice(0, 5));
+      const cupBottom = Math.min(...l.slice(10, 30));
+      const cupRight = Math.max(...h.slice(30, 35));
+      
+      const isCupShape = 
+        cupLeft > cupBottom * 1.03 && 
+        cupRight > cupBottom * 1.03 &&
+        Math.abs(cupLeft - cupRight) / cupLeft < 0.05;
+      
+      const handleLow = Math.min(...l.slice(35, 50));
+      const handleDepth = (cupRight - handleLow) / cupRight;
+      const isHandle = handleDepth < 0.3 && handleDepth > 0.05;
+      
+      if (isCupShape && isHandle && lastClose > cupRight) {
+        const cupDepth = cupRight - cupBottom;
+        const target = lastClose + cupDepth;
+        patterns.push({
+          name: "Fincan-Kulp",
+          bias: "yükseliş",
+          confidence: 82,
+          reasons: [
+            `Fincan: ${cupLeft.toFixed(4)} → ${cupBottom.toFixed(4)} → ${cupRight.toFixed(4)}`,
+            `Kulp derinliği: ${(handleDepth * 100).toFixed(1)}%`,
+            `Kırılım yukarı`,
+          ],
+          support: cupBottom,
+          resistance: cupRight,
+          target: target,
+          invalidation: handleLow * 0.98,
+        });
+      }
+    }
+  } catch {}
+
+  // ==========================================================
+  // 16. SİMETRİK ÜÇGEN (Symmetrical Triangle)
+  // ==========================================================
+  try {
+    if (candles.length >= 30) {
+      const firstHigh = Math.max(...recentHighs.slice(0, 15));
+      const secondHigh = Math.max(...recentHighs.slice(15));
+      const firstLow = Math.min(...recentLows.slice(0, 15));
+      const secondLow = Math.min(...recentLows.slice(15));
+      
+      const fallingResistance = secondHigh < firstHigh * 0.99;
+      const risingSupport = secondLow > firstLow * 1.01;
+      
+      if (fallingResistance && risingSupport) {
+        patterns.push({
+          name: "Simetrik Üçgen",
+          bias: "nötr",
+          confidence: 72,
+          reasons: [
+            `Düşen direnç: ${firstHigh.toFixed(4)} → ${secondHigh.toFixed(4)}`,
+            `Yükselen destek: ${firstLow.toFixed(4)} → ${secondLow.toFixed(4)}`,
+            `Kırılım yönü belirsiz`,
+          ],
+          support: secondLow,
+          resistance: secondHigh,
+          target: null,
+          invalidation: null,
         });
       }
     }
