@@ -13,7 +13,6 @@ export function ShortTermNotificationDetailModal({
   onClose,
   onOpenSymbol,
 }: Props) {
-  // ESC tuşuna basınca kapat
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -29,12 +28,12 @@ export function ShortTermNotificationDetailModal({
 
   const n = notification;
 
-  // Yön emojisi ve rengi
-  const biasEmoji = n.pattern_bias === "yükseliş" ? "🟢" : "🔴";
-  const biasColor = n.pattern_bias === "yükseliş" ? "text-bull" : "text-bear";
-  const biasLabel = n.pattern_bias === "yükseliş" ? "YÜKSELİŞ" : "DÜŞÜŞ";
+  const biasEmoji = n.pattern_bias === "yükseliş" ? "🟢" : n.pattern_bias === "düşüş" ? "🔴" : "⚪";
+  const biasColor = n.pattern_bias === "yükseliş" ? "text-bull" : n.pattern_bias === "düşüş" ? "text-bear" : "text-muted-foreground";
+  const biasLabel = n.pattern_bias === "yükseliş" ? "YÜKSELİŞ" : n.pattern_bias === "düşüş" ? "DÜŞÜŞ" : "NÖTR";
+  const isMulti = n.timeframe === "multi";
+  const tfLabel = n.timeframe ? n.timeframe.toUpperCase() : "1H";
 
-  // Fear & Greed yorumu
   const fearGreedLabel = (() => {
     const v = n.fear_greed;
     if (v == null) return null;
@@ -45,7 +44,6 @@ export function ShortTermNotificationDetailModal({
     return "🚀 Aşırı Açgözlülük";
   })();
 
-  // Reason'dan RSI/MACD/Hacim bilgilerini çıkar
   const reasonLower = (n.reason ?? "").toLowerCase();
   const rsiMatch = reasonLower.match(/rsi[:\s]+([\d.]+)/);
   const macdMatch = reasonLower.match(/macd[:\s]+([-\d.]+)/);
@@ -55,7 +53,6 @@ export function ShortTermNotificationDetailModal({
   const macdValue = macdMatch?.[1];
   const volumeValue = volumeMatch?.[1];
 
-  // Kâr/Zarar hesapla
   const riskPercent =
     n.entry != null && n.stop != null && n.entry !== 0
       ? ((n.stop - n.entry) / n.entry) * 100
@@ -82,8 +79,12 @@ export function ShortTermNotificationDetailModal({
         <div className="flex items-start justify-between gap-3 border-b border-border bg-secondary/30 p-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-500">
-                📉 KISA VADELİ
+              <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+                isMulti
+                  ? "bg-blue-500/15 text-blue-400"
+                  : "bg-amber-500/15 text-amber-500"
+              }`}>
+                {isMulti ? "🔀 ÇOKLU ZAMAN DİLİMİ" : `📉 KISA VADELİ (${tfLabel})`}
               </span>
               <span className={`rounded bg-secondary px-2 py-0.5 text-[10px] font-bold ${biasColor}`}>
                 {biasEmoji} {biasLabel}
@@ -111,6 +112,18 @@ export function ShortTermNotificationDetailModal({
 
         {/* İÇERİK */}
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          {/* ÇOKLU ZAMAN DİLİMİ KARŞILAŞTIRMASI */}
+          {n.multi_tf_commentary && (
+            <section className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
+                🔀 Çoklu Zaman Dilimi Karşılaştırması
+              </p>
+              <pre className="mt-2 whitespace-pre-wrap text-xs leading-5 text-foreground/90 font-sans">
+                {n.multi_tf_commentary}
+              </pre>
+            </section>
+          )}
+
           {/* FORMASYON ÖZET */}
           <section className="rounded-lg border border-border bg-background/50 p-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">

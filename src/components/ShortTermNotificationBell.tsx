@@ -24,7 +24,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
   const [loading, setLoading] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  // 1. İlk yüklemede bildirimleri çek
   useEffect(() => {
     if (!user) {
       setNotifications([]);
@@ -37,7 +36,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
     });
   }, [user]);
 
-  // 2. Realtime: yeni bildirim gelince state'e ekle
   useEffect(() => {
     if (!user) return;
 
@@ -47,13 +45,11 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
         return [n, ...prev].slice(0, 100);
       });
 
-      // Toast göster
       const biasEmoji = n.pattern_bias === "yükseliş" ? "🟢" : "🔴";
       toast.info(`📉 Kısa Vadeli | ${n.symbol}`, {
         description: `${biasEmoji} ${n.pattern_name} (%${n.confidence})`,
       });
 
-      // Tarayıcı bildirimi
       if (
         typeof window !== "undefined" &&
         "Notification" in window &&
@@ -69,7 +65,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
     return unsubscribe;
   }, [user]);
 
-  // 3. Panel dışına tıklanınca kapat
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
@@ -83,13 +78,11 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
     };
   }, []);
 
-  // 4. Okunmamış sayı
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read).length,
     [notifications],
   );
 
-  // 5. Bildirime tıklama
   async function handleNotificationClick(n: ShortTermNotification) {
     if (!n.read) {
       await markShortTermNotificationRead(n.id);
@@ -100,7 +93,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
     setDetailNotification(n);
   }
 
-  // 6. Tümünü okundu işaretle
   async function handleMarkAllRead() {
     if (!user) return;
     await markAllShortTermNotificationsRead(user.id);
@@ -108,7 +100,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
     toast.success("Tüm kısa vadeli bildirimler okundu olarak işaretlendi.");
   }
 
-  // 7. Tümünü temizle
   async function handleClearAll() {
     if (!user) return;
     if (!window.confirm("Tüm kısa vadeli bildirimleri silmek istediğinize emin misiniz?")) return;
@@ -140,7 +131,7 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
         </button>
 
         {open && (
-          <div className="absolute right-0 top-full z-50 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-background shadow-2xl">
+          <div className="absolute right-0 top-full z-50 mt-2 w-[440px] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-background shadow-2xl">
             {/* Başlık */}
             <div className="flex items-center justify-between border-b border-border p-3">
               <div>
@@ -194,8 +185,10 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                 </div>
               ) : (
                 notifications.map((n) => {
-                  const biasEmoji = n.pattern_bias === "yükseliş" ? "🟢" : "🔴";
-                  const biasColor = n.pattern_bias === "yükseliş" ? "text-bull" : "text-bear";
+                  const biasEmoji = n.pattern_bias === "yükseliş" ? "🟢" : n.pattern_bias === "düşüş" ? "🔴" : "⚪";
+                  const biasColor = n.pattern_bias === "yükseliş" ? "text-bull" : n.pattern_bias === "düşüş" ? "text-bear" : "text-muted-foreground";
+                  const tfLabel = n.timeframe ? n.timeframe.toUpperCase() : "1H";
+                  const isMulti = n.timeframe === "multi";
                   const rewardPercent =
                     n.entry != null && n.target != null && n.entry !== 0
                       ? ((n.target - n.entry) / n.entry) * 100
@@ -208,6 +201,7 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                     rewardPercent != null && riskPercent != null && riskPercent !== 0
                       ? Math.abs(rewardPercent / riskPercent)
                       : null;
+
                   return (
                     <button
                       key={n.id}
@@ -219,8 +213,12 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-500">
-                            📉 KISA VADELİ
+                          <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                            isMulti
+                              ? "bg-blue-500/15 text-blue-400"
+                              : "bg-amber-500/15 text-amber-500"
+                          }`}>
+                            {isMulti ? "🔀 ÇOKLU TF" : `📉 KISA VADELİ (${tfLabel})`}
                           </span>
                           <span className={`num text-xs font-bold ${biasColor}`}>
                             {biasEmoji} {n.symbol.replace(/USDT$/, "").replace(/\.(IS|US)$/, "")}
@@ -280,11 +278,27 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                         </div>
                       )}
 
-                      {/* Risk/Ödül */}
+                      {/* R/R */}
                       {riskReward != null && (
                         <div className="mt-1 rounded border border-border/60 bg-secondary/20 px-2 py-1 text-[10px]">
                           <span className="text-muted-foreground">R/R: </span>
                           <span className="font-bold">1:{riskReward.toFixed(2)}</span>
+                        </div>
+                      )}
+
+                      {/* ÇOKLU TF YORUMU (KISA ÖZET) */}
+                      {n.multi_tf_commentary && (
+                        <div className="mt-2 rounded-md border border-blue-500/30 bg-blue-500/5 p-2">
+                          <p className="text-[9px] font-bold text-blue-400">
+                            🔀 Çoklu Zaman Dilimi
+                          </p>
+                          <p className="mt-1 text-[10px] leading-4 text-muted-foreground line-clamp-3">
+                            {n.multi_tf_commentary
+                              .split("\n")
+                              .filter((l) => l.trim().length > 0)
+                              .slice(0, 4)
+                              .join(" · ")}
+                          </p>
                         </div>
                       )}
 
@@ -298,7 +312,7 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                         </div>
                       )}
 
-                      {n.reason && (
+                      {n.reason && !n.multi_tf_commentary && (
                         <p className="mt-1 text-[10px] italic leading-4 text-muted-foreground/80">
                           {n.reason.slice(0, 150)}
                           {n.reason.length > 150 ? "..." : ""}
