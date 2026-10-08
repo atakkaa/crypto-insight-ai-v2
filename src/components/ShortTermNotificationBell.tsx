@@ -42,8 +42,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
     if (!user) return;
 
     const unsubscribe = subscribeToShortTermNotifications(user.id, (n) => {
-      // ===== YOLO FİLTRESİ (YENİ) =====
-      // Kısa vadeli bildirimlerde formasyon adı zaten n.pattern_name'de.
       const motorPatternName = n.pattern_name ?? "";
 
       void (async () => {
@@ -57,11 +55,10 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
             console.log(
               `🤖 YOLO reddetti: ${motorPatternName} (${result.reason}) — kısa vadeli bildirim gösterilmedi`,
             );
-            return; // Bildirimi gösterme
+            return;
           }
         }
 
-        // ===== YOLO ONAYLADI =====
         setNotifications((prev) => {
           if (prev.some((x) => x.id === n.id)) return prev;
           return [n, ...prev].slice(0, 100);
@@ -260,9 +257,32 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                       <p className="mt-2 text-xs font-bold">
                         {biasEmoji} {n.pattern_name} · {n.pattern_bias}
                       </p>
+
                       <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
                         Güven: %{n.confidence} · Skor: {n.signal_score}/100
                       </p>
+
+                      {/* ===== FORMASYON KALİTE PUANI ===== */}
+                      {n.quality_score != null && n.quality_score > 0 && (
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="text-[10px] text-muted-foreground">
+                            Formasyon Kalitesi:
+                          </span>
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                              n.quality_score >= 85
+                                ? "bg-emerald-500/15 text-emerald-500"
+                                : n.quality_score >= 75
+                                  ? "bg-blue-500/15 text-blue-400"
+                                  : n.quality_score >= 70
+                                    ? "bg-amber-500/15 text-amber-500"
+                                    : "bg-secondary text-muted-foreground"
+                            }`}
+                          >
+                            %{n.quality_score}
+                          </span>
+                        </div>
+                      )}
 
                       {(n.entry != null || n.target != null || n.stop != null) && (
                         <div className="mt-2 grid grid-cols-3 gap-1 rounded-md border border-border/60 bg-secondary/30 p-2 text-[10px]">

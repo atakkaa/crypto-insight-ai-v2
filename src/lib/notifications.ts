@@ -39,6 +39,8 @@ export type Notification = {
   ai_support?: string | null;
   ai_resistance?: string | null;
   fear_greed?: number | null;
+  // === FORMASYON KALİTE PUANI ===
+  quality_score?: number | null;
   // === DİĞER ===
   is_global?: boolean | null;
   notification_type?: string | null;
@@ -224,7 +226,7 @@ export type ShortTermNotification = {
   market: string;
   symbol: string;
   pattern_name: string;
-  pattern_bias: string; // "yükseliş" | "düşüş" | "nötr"
+  pattern_bias: string;
   confidence: number;
   signal_score: number;
   entry: number | null;
@@ -234,9 +236,11 @@ export type ShortTermNotification = {
   fear_greed: number | null;
   created_at: string;
   read: boolean;
-  timeframe: string | null; // "15m" | "1h" | "4h" | "1d" | "multi"
-  multi_tf_commentary: string | null; // <-- YENİ: Çoklu zaman dilimi karşılaştırma yorumu
-  multi_tf_data: TimeframeResult[] | null; // <-- YENİ: Her zaman diliminin detaylı sonucu
+  timeframe: string | null;
+  multi_tf_commentary: string | null;
+  multi_tf_data: TimeframeResult[] | null;
+  // === FORMASYON KALİTE PUANI ===
+  quality_score?: number | null;
 };
 
 export async function fetchShortTermNotifications(
