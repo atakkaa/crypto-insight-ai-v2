@@ -1251,7 +1251,9 @@ Kurallar:
     ...result.pattern,
     name: motorPrimary?.name ?? "Formasyon tespit edilmedi",
     bias: motorPrimary?.bias ?? "nötr",
-    confidence: motorPrimary?.score ?? 0,
+    confidence: motorPrimary
+  ? Math.round((motorPrimary.score * 0.5) + (motorPrimary.qualityScore * 0.5))
+  : 0,
     lines: motorLines,
   };
 

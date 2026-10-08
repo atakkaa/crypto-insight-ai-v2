@@ -2,6 +2,7 @@ import { runChartAnalysis, type AnalyzeCandle } from "./analysis.server";
 
 const MAX_SYMBOLS_PER_RUN = 12;
 const MIN_CONFIDENCE = 70;
+const MIN_QUALITY_SCORE = 70; // YENİ: minimum kalite puanı
 const DEDUPE_HOURS = 6;
 
 type WatchRow = { user_id: string; market: string; symbol: string };
@@ -45,6 +46,22 @@ async function fetchStockCandles(symbol: string): Promise<AnalyzeCandle[]> {
     if (Number.isFinite(candle.close)) out.push(candle);
   }
   return out.slice(-160);
+}
+
+/**
+ * Kullanıcı formasyonunun kalite puanını güvenli şekilde okur.
+ * Eski formasyon motoru kalite puanı üretmediyse 0 döner.
+ */
+function readQualityScore(analysis: any): number {
+  const fromEngine = analysis?.formationEngine?.primary?.qualityScore;
+  if (typeof fromEngine === "number" && Number.isFinite(fromEngine)) {
+    return Math.round(fromEngine);
+  }
+  const fromPattern = analysis?.pattern?.qualityScore;
+  if (typeof fromPattern === "number" && Number.isFinite(fromPattern)) {
+    return Math.round(fromPattern);
+  }
+  return 0;
 }
 
 /**
@@ -94,7 +111,10 @@ export async function scanWatchlists() {
 
       const action = analysis.prediction.action;
       const confidence = Number(analysis.prediction.confidence ?? 0);
+      const qualityScore = readQualityScore(analysis); // YENİ
+
       if (action === "BEKLE" || confidence < MIN_CONFIDENCE) continue;
+      if (qualityScore > 0 && qualityScore < MIN_QUALITY_SCORE) continue; // YENİ
 
       const price = candles.at(-1)?.close ?? null;
 
@@ -118,6 +138,7 @@ export async function scanWatchlists() {
           action,
           pattern: analysis.pattern.name,
           confidence: Math.round(confidence),
+          quality_score: qualityScore, // YENİ
           price,
           entry: analysis.prediction.entry,
           stop: analysis.prediction.stop,
@@ -140,6 +161,7 @@ export async function scanWatchlists() {
 
 const SHORT_TERM_MAX_SYMBOLS_PER_RUN = 20;
 const SHORT_TERM_MIN_CONFIDENCE = 75;
+const SHORT_TERM_MIN_QUALITY = 70; // YENİ: minimum kalite puanı
 const SHORT_TERM_DEDUPE_HOURS = 4;
 const SHORT_TERM_MIN_INDICATORS = 2;
 const SHORT_TERM_MIN_VOLUME_RATIO = 1.2;
@@ -262,10 +284,12 @@ export async function scanShortTermForPremium() {
 
       const action = analysis.prediction.action;
       const confidence = Number(analysis.prediction.confidence ?? 0);
+      const qualityScore = readQualityScore(analysis); // YENİ
       const indicatorAnalysis = analysis.indicatorAnalysis;
 
       // 6. SIKI FİLTRE
       if (action === "BEKLE" || confidence < SHORT_TERM_MIN_CONFIDENCE) continue;
+      if (qualityScore > 0 && qualityScore < SHORT_TERM_MIN_QUALITY) continue; // YENİ
       if (!indicatorAnalysis || indicatorAnalysis.direction === "kararsız") continue;
 
       // İndikatör uyumu kontrolü
@@ -315,6 +339,7 @@ export async function scanShortTermForPremium() {
             pattern_name: pattern.name,
             pattern_bias: pattern.bias,
             confidence: Math.round(confidence),
+            quality_score: qualityScore, // YENİ
             signal_score: Math.round(confidence),
             entry: analysis.prediction.entry,
             stop: analysis.prediction.stop,
