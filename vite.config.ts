@@ -19,5 +19,11 @@ export default defineConfig({
       strictPort: true,
       host: true,
     },
+    // ONNX Runtime Web için optimizasyon ayarları
+    optimizeDeps: {
+      exclude: ["onnxruntime-web"],
+    },
+    // WASM dosyalarının doğru yüklenmesi için
+    assetsInclude: ["**/*.wasm"],
   },
 });
