@@ -14,6 +14,7 @@ import {
   severityColorClass,
   type Notification,
 } from "@/lib/notifications";
+import { filterNotificationWithYolo } from "@/lib/notification-yolo-filter";
 
 type Props = {
   onOpenSymbol: (market: string, symbol: string) => void;
@@ -40,35 +41,63 @@ export function NotificationBell({ onOpenSymbol }: Props) {
     });
   }, [user]);
 
-  // --- 2. Realtime: yeni bildirim gelince state'e ekle ---
+  // --- 2. Realtime: yeni bildirim gelince YOLO ile filtrele ---
   useEffect(() => {
     if (!user) return;
 
     const unsubscribe = subscribeToNotifications(user.id, (n) => {
-      setNotifications((prev) => {
-        if (prev.some((x) => x.id === n.id)) return prev;
-        return [n, ...prev].slice(0, 100);
-      });
+      // ===== YOLO FİLTRESİ (YENİ) =====
+      // Motordan gelen formasyon ismini alıp YOLO'ya soruyoruz.
+      // Eğer bildirimin içinde formasyon adı yoksa filtre uygulanmaz.
+            const motorPatternName =
+        (typeof n.data?.["pattern"] === "string" && n.data["pattern"]) ||
+        (typeof n.data?.["pattern_name"] === "string" && n.data["pattern_name"]) ||
+        (typeof n.title === "string" && n.title) ||
+        "";
 
-      // Toast göster
-      const title = formatNotificationTitle(n);
-      if (n.priority) {
-        toast.warning(title, { description: n.message.slice(0, 150) });
-      } else {
-        toast.info(title, { description: n.message.slice(0, 150) });
-      }
+      void (async () => {
+        let yoloAllowed = true;
+        let yoloReason = "filtre-uygulanmadi";
 
-      // Tarayıcı bildirimi
-      if (
-        typeof window !== "undefined" &&
-        "Notification" in window &&
-        window.Notification.permission === "granted"
-      ) {
-        new window.Notification(title, {
-          body: n.message.slice(0, 200),
-          tag: n.event_key ?? n.id,
+        if (motorPatternName) {
+          const result = await filterNotificationWithYolo(motorPatternName);
+          yoloAllowed = result.allowed;
+          yoloReason = result.reason;
+
+          if (!yoloAllowed) {
+            console.log(
+              `🤖 YOLO reddetti: ${motorPatternName} (${result.reason}) — bildirim gösterilmedi`,
+            );
+            return; // Bildirimi gösterme, listeden de çıkar
+          }
+        }
+
+        // ===== YOLO ONAYLADI VEYA FİLTRE UYGULANAMADI =====
+        setNotifications((prev) => {
+          if (prev.some((x) => x.id === n.id)) return prev;
+          return [n, ...prev].slice(0, 100);
         });
-      }
+
+        // Toast göster
+        const title = formatNotificationTitle(n);
+        if (n.priority) {
+          toast.warning(title, { description: n.message.slice(0, 150) });
+        } else {
+          toast.info(title, { description: n.message.slice(0, 150) });
+        }
+
+        // Tarayıcı bildirimi
+        if (
+          typeof window !== "undefined" &&
+          "Notification" in window &&
+          window.Notification.permission === "granted"
+        ) {
+          new window.Notification(title, {
+            body: n.message.slice(0, 200),
+            tag: n.event_key ?? n.id,
+          });
+        }
+      })();
     });
 
     return unsubscribe;

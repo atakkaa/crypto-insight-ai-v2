@@ -10,6 +10,7 @@ import {
   subscribeToShortTermNotifications,
   type ShortTermNotification,
 } from "@/lib/notifications";
+import { filterNotificationWithYolo } from "@/lib/notification-yolo-filter";
 import { ShortTermNotificationDetailModal } from "./ShortTermNotificationDetailModal";
 
 type Props = {
@@ -36,30 +37,52 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
     });
   }, [user]);
 
+  // --- Realtime: YOLO ile filtrele ---
   useEffect(() => {
     if (!user) return;
 
     const unsubscribe = subscribeToShortTermNotifications(user.id, (n) => {
-      setNotifications((prev) => {
-        if (prev.some((x) => x.id === n.id)) return prev;
-        return [n, ...prev].slice(0, 100);
-      });
+      // ===== YOLO FİLTRESİ (YENİ) =====
+      // Kısa vadeli bildirimlerde formasyon adı zaten n.pattern_name'de.
+      const motorPatternName = n.pattern_name ?? "";
 
-      const biasEmoji = n.pattern_bias === "yükseliş" ? "🟢" : "🔴";
-      toast.info(`📉 Kısa Vadeli | ${n.symbol}`, {
-        description: `${biasEmoji} ${n.pattern_name} (%${n.confidence})`,
-      });
+      void (async () => {
+        let yoloAllowed = true;
 
-      if (
-        typeof window !== "undefined" &&
-        "Notification" in window &&
-        window.Notification.permission === "granted"
-      ) {
-        new window.Notification(`📉 Kısa Vadeli | ${n.symbol}`, {
-          body: `${biasEmoji} ${n.pattern_name} (%${n.confidence})`,
-          tag: `short-${n.id}`,
+        if (motorPatternName) {
+          const result = await filterNotificationWithYolo(motorPatternName);
+          yoloAllowed = result.allowed;
+
+          if (!yoloAllowed) {
+            console.log(
+              `🤖 YOLO reddetti: ${motorPatternName} (${result.reason}) — kısa vadeli bildirim gösterilmedi`,
+            );
+            return; // Bildirimi gösterme
+          }
+        }
+
+        // ===== YOLO ONAYLADI =====
+        setNotifications((prev) => {
+          if (prev.some((x) => x.id === n.id)) return prev;
+          return [n, ...prev].slice(0, 100);
         });
-      }
+
+        const biasEmoji = n.pattern_bias === "yükseliş" ? "🟢" : "🔴";
+        toast.info(`📉 Kısa Vadeli | ${n.symbol}`, {
+          description: `${biasEmoji} ${n.pattern_name} (%${n.confidence})`,
+        });
+
+        if (
+          typeof window !== "undefined" &&
+          "Notification" in window &&
+          window.Notification.permission === "granted"
+        ) {
+          new window.Notification(`📉 Kısa Vadeli | ${n.symbol}`, {
+            body: `${biasEmoji} ${n.pattern_name} (%${n.confidence})`,
+            tag: `short-${n.id}`,
+          });
+        }
+      })();
     });
 
     return unsubscribe;
@@ -132,7 +155,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
 
         {open && (
           <div className="absolute right-0 top-full z-50 mt-2 w-[440px] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-background shadow-2xl">
-            {/* Başlık */}
             <div className="flex items-center justify-between border-b border-border p-3">
               <div>
                 <h3 className="text-sm font-bold">📉 KISA VADELİ BİLDİRİMLER</h3>
@@ -149,7 +171,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
               </button>
             </div>
 
-            {/* Aksiyonlar */}
             {notifications.length > 0 && (
               <div className="flex gap-2 border-b border-border p-2">
                 <button
@@ -169,7 +190,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
               </div>
             )}
 
-            {/* Liste */}
             <div className="max-h-[60vh] overflow-y-auto">
               {loading ? (
                 <div className="p-6 text-center text-xs text-muted-foreground">
@@ -244,7 +264,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                         Güven: %{n.confidence} · Skor: {n.signal_score}/100
                       </p>
 
-                      {/* Giriş / Hedef / Stop */}
                       {(n.entry != null || n.target != null || n.stop != null) && (
                         <div className="mt-2 grid grid-cols-3 gap-1 rounded-md border border-border/60 bg-secondary/30 p-2 text-[10px]">
                           {n.entry != null && (
@@ -278,7 +297,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                         </div>
                       )}
 
-                      {/* R/R */}
                       {riskReward != null && (
                         <div className="mt-1 rounded border border-border/60 bg-secondary/20 px-2 py-1 text-[10px]">
                           <span className="text-muted-foreground">R/R: </span>
@@ -286,7 +304,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                         </div>
                       )}
 
-                      {/* ÇOKLU TF YORUMU (KISA ÖZET) */}
                       {n.multi_tf_commentary && (
                         <div className="mt-2 rounded-md border border-blue-500/30 bg-blue-500/5 p-2">
                           <p className="text-[9px] font-bold text-blue-400">
@@ -302,7 +319,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                         </div>
                       )}
 
-                      {/* Fear & Greed */}
                       {n.fear_greed != null && (
                         <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
                           <span>😱</span>
@@ -331,7 +347,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
         )}
       </div>
 
-      {/* DETAY MODAL */}
       <ShortTermNotificationDetailModal
         notification={detailNotification}
         onClose={() => setDetailNotification(null)}
