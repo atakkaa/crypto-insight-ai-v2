@@ -4,7 +4,7 @@ import * as ort from "onnxruntime-web";
 // ONNX Runtime WASM dosyalarının konumu
 ort.env.wasm.wasmPaths = "/ort/";
 
-// Model sınıfları (Python'da aldığımız çıktıdan)
+// Model sınıfları (Python çıktısından)
 export const YOLO_CLASSES: Record<number, string> = {
   0: "Head and shoulders bottom",
   1: "Head and shoulders top",
@@ -26,12 +26,12 @@ export const YOLO_CLASSES_TR: Record<number, string> = {
 
 // Formasyon yönleri
 export const YOLO_BIAS: Record<number, "yükseliş" | "düşüş" | "nötr"> = {
-  0: "yükseliş",  // Ters OBO
-  1: "düşüş",     // OBO
-  2: "düşüş",     // M-Tepesi
-  3: "nötr",      // Trend Çizgisi
-  4: "nötr",      // Üçgen
-  5: "yükseliş",  // W-Dibi
+  0: "yükseliş",
+  1: "düşüş",
+  2: "düşüş",
+  3: "nötr",
+  4: "nötr",
+  5: "yükseliş",
 };
 
 export type YoloDetection = {
@@ -40,28 +40,19 @@ export type YoloDetection = {
   classNameTr: string;
   bias: "yükseliş" | "düşüş" | "nötr";
   confidence: number;
-  // Bounding box koordinatları (0-1 arası normalize edilmiş)
   x1: number;
   y1: number;
   x2: number;
   y2: number;
-  // Piksel koordinatları (orijinal resim boyutunda)
-  pixelX: number;
-  pixelY: number;
-  pixelWidth: number;
-  pixelHeight: number;
 };
 
 let session: ort.InferenceSession | null = null;
 let modelLoading = false;
 
-/**
- * YOLOv8 modelini yükler (bir kere yüklenir, sonra cache'lenir)
- */
 export async function loadYoloModel(): Promise<ort.InferenceSession | null> {
   if (session) return session;
+
   if (modelLoading) {
-    // Model yükleniyorsa bekle
     while (modelLoading) {
       await new Promise((r) => setTimeout(r, 100));
     }
@@ -76,7 +67,7 @@ export async function loadYoloModel(): Promise<ort.InferenceSession | null> {
     session = await ort.InferenceSession.create(
       "/models/model_quantized.onnx",
       {
-        executionProviders: ["wasm"], // CPU için (webgpu opsiyonel)
+        executionProviders: ["wasm"],
         graphOptimizationLevel: "all",
       },
     );
@@ -93,16 +84,20 @@ export async function loadYoloModel(): Promise<ort.InferenceSession | null> {
 }
 
 /**
- * Canvas elementini 640x640 boyutunda resme çevirir
+ * SVG elementini resme çevirip YOLOv8 için tensor oluşturur
  */
-export async function canvasToImageData(
-  canvas: HTMLCanvasElement,
+export async function svgToTensor(
+  svgElement: SVGSVGElement,
   targetSize = 640,
 ): Promise<{ tensor: ort.Tensor; originalWidth: number; originalHeight: number }> {
-  const originalWidth = canvas.width;
-  const originalHeight = canvas.height;
+  const viewBox = svgElement.viewBox.baseVal;
+  const originalWidth = viewBox.width || svgElement.clientWidth || 1000;
+  const originalHeight = viewBox.height || svgElement.clientHeight || 420;
 
-  // Canvas'ı geçici bir resme çevir
+  const svgString = new XMLSerializer().serializeToString(svgElement);
+  const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+
   const tempCanvas = document.createElement("canvas");
   tempCanvas.width = targetSize;
   tempCanvas.height = targetSize;
@@ -110,18 +105,25 @@ export async function canvasToImageData(
 
   if (!ctx) throw new Error("Canvas context oluşturulamadı");
 
-  // Siyah arka plan (grafikleri daha net görmek için)
-  ctx.fillStyle = "#000000";
+  // Beyaz arka plan
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, targetSize, targetSize);
 
-  // Canvas'ı 640x640'a ölçekle
-  ctx.drawImage(canvas, 0, 0, targetSize, targetSize);
+  const img = new Image();
+  img.crossOrigin = "anonymous";
 
-  // ImageData al
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("SVG yüklenemedi"));
+    img.src = url;
+  });
+
+  ctx.drawImage(img, 0, 0, targetSize, targetSize);
+  URL.revokeObjectURL(url);
+
   const imageData = ctx.getImageData(0, 0, targetSize, targetSize);
-
-  // ImageData'yı Float32Array'e çevir (YOLOv8 formatı: [1, 3, 640, 640])
   const data = imageData.data;
+
   const float32Data = new Float32Array(3 * targetSize * targetSize);
 
   for (let i = 0; i < targetSize * targetSize; i++) {
@@ -129,10 +131,9 @@ export async function canvasToImageData(
     const g = data[i * 4 + 1] ?? 0;
     const b = data[i * 4 + 2] ?? 0;
 
-    // Normalize: 0-255 → 0-1
-    float32Data[i] = r / 255;                          // R kanalı
-    float32Data[targetSize * targetSize + i] = g / 255; // G kanalı
-    float32Data[2 * targetSize * targetSize + i] = b / 255; // B kanalı
+    float32Data[i] = r / 255;
+    float32Data[targetSize * targetSize + i] = g / 255;
+    float32Data[2 * targetSize * targetSize + i] = b / 255;
   }
 
   const tensor = new ort.Tensor("float32", float32Data, [
@@ -146,39 +147,35 @@ export async function canvasToImageData(
 }
 
 /**
- * YOLOv8 modelini canvas üzerinde çalıştırır
+ * SVG üzerinde YOLOv8 formasyon tespiti yapar
  */
-export async function detectPatternsOnCanvas(
-  canvas: HTMLCanvasElement,
+export async function detectPatternsOnSvg(
+  svgElement: SVGSVGElement,
   confidenceThreshold = 0.4,
 ): Promise<YoloDetection[]> {
   const model = await loadYoloModel();
   if (!model) return [];
 
   try {
-    const { tensor, originalWidth, originalHeight } = await canvasToImageData(canvas);
+    const { tensor } = await svgToTensor(svgElement);
 
-    // Modeli çalıştır
     const feeds: Record<string, ort.Tensor> = {};
     feeds[model.inputNames[0] ?? "images"] = tensor;
 
     const results = await model.run(feeds);
 
-    // Çıktıyı al (YOLOv8 çıktı: [1, 10, 8400])
     const output = results[model.outputNames[0] ?? "output0"];
     if (!output) return [];
 
     const outputData = output.data as Float32Array;
-    const outputShape = output.dims; // [1, 10, 8400]
+    const outputShape = output.dims;
 
-    const numClasses = YOLO_CLASSES ? Object.keys(YOLO_CLASSES).length : 6;
+    const numClasses = Object.keys(YOLO_CLASSES).length;
     const numBoxes = outputShape[2] ?? 8400;
-    const numValuesPerBox = outputShape[1] ?? 10; // 4 (bbox) + 6 (sınıf)
 
     const detections: YoloDetection[] = [];
 
     for (let i = 0; i < numBoxes; i++) {
-      // Sınıf skorlarını al (4. indeksten sonrası sınıf skorları)
       let maxClassScore = 0;
       let maxClassId = -1;
 
@@ -193,17 +190,10 @@ export async function detectPatternsOnCanvas(
 
       if (maxClassScore < confidenceThreshold || maxClassId === -1) continue;
 
-      // Bounding box koordinatları (cx, cy, w, h formatında)
       const cx = outputData[0 * numBoxes + i] ?? 0;
       const cy = outputData[1 * numBoxes + i] ?? 0;
       const w = outputData[2 * numBoxes + i] ?? 0;
       const h = outputData[3 * numBoxes + i] ?? 0;
-
-      // Normalize koordinatlar (0-1)
-      const x1 = Math.max(0, cx - w / 2);
-      const y1 = Math.max(0, cy - h / 2);
-      const x2 = Math.min(1, cx + w / 2);
-      const y2 = Math.min(1, cy + h / 2);
 
       detections.push({
         classId: maxClassId,
@@ -211,18 +201,13 @@ export async function detectPatternsOnCanvas(
         classNameTr: YOLO_CLASSES_TR[maxClassId] ?? "Bilinmeyen",
         bias: YOLO_BIAS[maxClassId] ?? "nötr",
         confidence: maxClassScore,
-        x1,
-        y1,
-        x2,
-        y2,
-        pixelX: x1 * originalWidth,
-        pixelY: y1 * originalHeight,
-        pixelWidth: (x2 - x1) * originalWidth,
-        pixelHeight: (y2 - y1) * originalHeight,
+        x1: Math.max(0, cx - w / 2),
+        y1: Math.max(0, cy - h / 2),
+        x2: Math.min(1, cx + w / 2),
+        y2: Math.min(1, cy + h / 2),
       });
     }
 
-    // Aynı sınıftan birden fazla varsa, en yüksek skoru tut (NMS benzeri basit filtre)
     const bestByClass = new Map<number, YoloDetection>();
     for (const det of detections) {
       const existing = bestByClass.get(det.classId);
@@ -240,9 +225,6 @@ export async function detectPatternsOnCanvas(
   }
 }
 
-/**
- * Model hazır mı kontrolü
- */
 export function isModelLoaded(): boolean {
   return session !== null;
 }
