@@ -1,3 +1,4 @@
+
 import { NotificationDetailModal } from "@/components/NotificationDetailModal";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -46,39 +47,34 @@ export function NotificationBell({ onOpenSymbol }: Props) {
     if (!user) return;
 
     const unsubscribe = subscribeToNotifications(user.id, (n) => {
-      // ===== YOLO FİLTRESİ (YENİ) =====
-      // Motordan gelen formasyon ismini alıp YOLO'ya soruyoruz.
-      // Eğer bildirimin içinde formasyon adı yoksa filtre uygulanmaz.
-            const motorPatternName =
-        (typeof n.data?.["pattern"] === "string" && n.data["pattern"]) ||
-        (typeof n.data?.["pattern_name"] === "string" && n.data["pattern_name"]) ||
-        (typeof n.title === "string" && n.title) ||
+      // ===== YOLO FİLTRESİ =====
+      const data = n.data as Record<string, unknown> | undefined;
+      const motorPatternName =
+        (data && typeof data["pattern"] === "string" ? (data["pattern"] as string) : "") ||
+        (data && typeof data["pattern_name"] === "string" ? (data["pattern_name"] as string) : "") ||
+        (typeof n.title === "string" ? n.title : "") ||
         "";
 
       void (async () => {
         let yoloAllowed = true;
-        let yoloReason = "filtre-uygulanmadi";
 
         if (motorPatternName) {
           const result = await filterNotificationWithYolo(motorPatternName);
           yoloAllowed = result.allowed;
-          yoloReason = result.reason;
 
           if (!yoloAllowed) {
             console.log(
               `🤖 YOLO reddetti: ${motorPatternName} (${result.reason}) — bildirim gösterilmedi`,
             );
-            return; // Bildirimi gösterme, listeden de çıkar
+            return;
           }
         }
 
-        // ===== YOLO ONAYLADI VEYA FİLTRE UYGULANAMADI =====
         setNotifications((prev) => {
           if (prev.some((x) => x.id === n.id)) return prev;
           return [n, ...prev].slice(0, 100);
         });
 
-        // Toast göster
         const title = formatNotificationTitle(n);
         if (n.priority) {
           toast.warning(title, { description: n.message.slice(0, 150) });
@@ -86,7 +82,6 @@ export function NotificationBell({ onOpenSymbol }: Props) {
           toast.info(title, { description: n.message.slice(0, 150) });
         }
 
-        // Tarayıcı bildirimi
         if (
           typeof window !== "undefined" &&
           "Notification" in window &&
@@ -175,7 +170,6 @@ export function NotificationBell({ onOpenSymbol }: Props) {
 
         {open && (
           <div className="absolute right-0 top-full z-50 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-background shadow-2xl">
-            {/* Başlık */}
             <div className="flex items-center justify-between border-b border-border p-3">
               <div>
                 <h3 className="text-sm font-bold">🔔 BİLDİRİMLER</h3>
@@ -192,7 +186,6 @@ export function NotificationBell({ onOpenSymbol }: Props) {
               </button>
             </div>
 
-            {/* Aksiyonlar */}
             {notifications.length > 0 && (
               <div className="flex gap-2 border-b border-border p-2">
                 <button
@@ -212,7 +205,6 @@ export function NotificationBell({ onOpenSymbol }: Props) {
               </div>
             )}
 
-            {/* Liste */}
             <div className="max-h-[60vh] overflow-y-auto">
               {loading ? (
                 <div className="p-6 text-center text-xs text-muted-foreground">
@@ -274,6 +266,29 @@ export function NotificationBell({ onOpenSymbol }: Props) {
                     </div>
 
                     <p className="mt-2 text-xs font-bold">{n.title}</p>
+
+                    {/* ===== FORMASYON KALİTE PUANI ===== */}
+                    {n.quality_score != null && n.quality_score > 0 && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground">
+                          Formasyon Kalitesi:
+                        </span>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                            n.quality_score >= 85
+                              ? "bg-emerald-500/15 text-emerald-500"
+                              : n.quality_score >= 75
+                                ? "bg-blue-500/15 text-blue-400"
+                                : n.quality_score >= 70
+                                  ? "bg-amber-500/15 text-amber-500"
+                                  : "bg-secondary text-muted-foreground"
+                          }`}
+                        >
+                          %{n.quality_score}
+                        </span>
+                      </div>
+                    )}
+
                     <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
                       {n.message.slice(0, 200)}
                       {n.message.length > 200 ? "..." : ""}
@@ -286,7 +301,6 @@ export function NotificationBell({ onOpenSymbol }: Props) {
                       </p>
                     )}
 
-                    {/* Giriş / Hedef / Stop / R/R */}
                     {(n.ai_entry_zone || n.ai_target || n.ai_stop_loss || n.ai_risk_reward) && (
                       <div className="mt-2 grid grid-cols-2 gap-1 rounded-md border border-border/60 bg-secondary/30 p-2 text-[10px]">
                         {n.ai_entry_zone && (
@@ -320,7 +334,6 @@ export function NotificationBell({ onOpenSymbol }: Props) {
                       </div>
                     )}
 
-                    {/* Destek / Direnç */}
                     {(n.ai_support || n.ai_resistance) && (
                       <div className="mt-1 flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-secondary/20 px-2 py-1 text-[10px]">
                         <span>📊</span>
@@ -339,7 +352,6 @@ export function NotificationBell({ onOpenSymbol }: Props) {
                       </div>
                     )}
 
-                    {/* Fear & Greed */}
                     {n.fear_greed != null && (
                       <div className="mt-1 flex items-center gap-2 rounded-md border border-border/60 bg-secondary/20 px-2 py-1 text-[10px]">
                         <span>😱</span>
@@ -370,7 +382,6 @@ export function NotificationBell({ onOpenSymbol }: Props) {
         )}
       </div>
 
-      {/* DETAY MODAL */}
       <NotificationDetailModal
         notification={detailNotification}
         onClose={() => setDetailNotification(null)}
