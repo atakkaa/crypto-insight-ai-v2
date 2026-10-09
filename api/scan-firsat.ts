@@ -1,6 +1,6 @@
-// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v7 (Multi-Timeframe + Priority)
-
+// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v8 (Kaliteli Formasyon Motoru)
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
+import { detectFormations } from "../src/lib/formation-engine.server";
 
 // ==========================================================
 // ENV
@@ -51,6 +51,8 @@ type PatternSignal = {
   direction: "bullish" | "bearish" | "neutral";
   confidence: number;
   description: string;
+  /** Kalite puanı (0-100) — yeni formasyon motorundan gelir */
+  qualityScore?: number;
 };
 
 type NewsItem = {
@@ -78,7 +80,7 @@ type AiCommentary = {
   riskReward?: string | undefined;
   support?: string | undefined;
   resistance?: string | undefined;
-    fearGreed?: number | undefined;
+  fearGreed?: number | undefined;
   fearGreedClass?: string | undefined;
   timeframe?: {
     h1: TimeframeDir;
@@ -411,7 +413,7 @@ async function getNewsForSymbol(market: string, symbol: string, isPriority = fal
 }
 
 // ==========================================================
-// VERİ ÇEKME — BINANCE + STOOQ + YAHOO
+// VERİ ÇEKME
 // ==========================================================
 
 async function getCryptoCandles(symbol: string, interval = "1h"): Promise<Candle[]> {
@@ -500,8 +502,9 @@ async function getYahooCandles(symbol: string, interval: string): Promise<Candle
     return sliced;
   } catch { return []; }
 }
+
 // ==========================================================
-// FEAR & GREED INDEX (Alternative.me)
+// FEAR & GREED INDEX
 // ==========================================================
 
 type FearGreedResult = {
@@ -526,43 +529,28 @@ async function getFearGreedIndex(): Promise<FearGreedResult> {
     if (!entry) return null;
 
     const value = Number(entry.value);
-    const classification = entry.value_classification;
-
-    // Türkçe çeviri + emoji + tavsiye
     let emoji = "😐";
     let advice = "Piyasa dengede, net sinyal beklenebilir.";
     let trClass = "Nötr";
 
     if (value <= 24) {
-      emoji = "😱";
-      trClass = "Aşırı Korku";
+      emoji = "😱"; trClass = "Aşırı Korku";
       advice = "Panik satışları hakim. Klasik dip alım fırsatı olabilir.";
     } else if (value <= 44) {
-      emoji = "😰";
-      trClass = "Korku";
+      emoji = "😰"; trClass = "Korku";
       advice = "Piyasa temkinli, dikkatli alım değerlendirilebilir.";
     } else if (value <= 55) {
-      emoji = "😐";
-      trClass = "Nötr";
+      emoji = "😐"; trClass = "Nötr";
       advice = "Piyasa dengede, net sinyal beklenebilir.";
     } else if (value <= 74) {
-      emoji = "🤑";
-      trClass = "Açgözlülük";
+      emoji = "🤑"; trClass = "Açgözlülük";
       advice = "Piyasa iyimser, kısmi kar realizasyonu düşünülebilir.";
     } else {
-      emoji = "🚀";
-      trClass = "Aşırı Açgözlülük";
+      emoji = "🚀"; trClass = "Aşırı Açgözlülük";
       advice = "Coşku zirvede, düzeltme riski yüksek.";
     }
 
-    const result: FearGreedResult = {
-      value,
-      classification: trClass,
-      emoji,
-      advice,
-    };
-
-    // 1 saatlik cache
+    const result: FearGreedResult = { value, classification: trClass, emoji, advice };
     await setToCache(cacheKey, result, 60);
     return result;
   } catch (error) {
@@ -570,6 +558,11 @@ async function getFearGreedIndex(): Promise<FearGreedResult> {
     return null;
   }
 }
+
+// ==========================================================
+// TOP VARLIK LİSTELERİ
+// ==========================================================
+
 async function getTopCryptoSymbols(limit = 100): Promise<string[]> {
   const cacheKey = `binance:top:${limit}`;
   const cached = await getFromCache<string[]>(cacheKey);
@@ -598,7 +591,7 @@ const ASIA_TOP_50 = ["7203.T","6758.T","9984.T","6861.T","8306.T","8035.T","9432
 const EUROPE_TOP_50 = ["SAP.DE","SIE.DE","ALV.DE","DTE.DE","AIR.PA","ASML.AS","NESN.SW","ROG.SW","NOVN.SW","NOVO-B.CO","SHEL.L","AZN.L","HSBA.L","ULVR.L","BP.L","GSK.L","RIO.L","LSEG.L","REL.L","VOD.L","LVMH.PA","TTE.PA","OR.PA","SAN.PA","MC.PA","SU.PA","BNP.PA","AI.PA","SAF.PA","CS.PA","ENEL.MI","ENI.MI","ISP.MI","UCG.MI","STLAM.MI","IBE.MC","ITX.MC","SAN.MC","BBVA.MC","REP.MC","INGA.AS","ADYEN.AS","PHIA.AS","HEIA.AS","UNA.AS","VOLV-B.ST","ERIC-B.ST","EQNR.OL","NOKIA.HE","DSV.V"];
 
 // ==========================================================
-// İNDİKATÖR ANALİZİ
+// İNDİKATÖR ANALİZİ (DEĞİŞMEDİ)
 // ==========================================================
 
 function analyzeIndicators(candles: Candle[]): IndicatorSignal[] {
@@ -688,89 +681,61 @@ function analyzeIndicators(candles: Candle[]): IndicatorSignal[] {
 }
 
 // ==========================================================
-// FORMASYON ANALİZİ
+// FORMASYON ANALİZİ (YENİ — KALİTELİ MOTOR)
 // ==========================================================
+// Eski basit detectPatterns() kaldırıldı.
+// Yerine formation-engine.server.ts'teki kaliteli motor kullanılıyor.
 
-function analyzePatterns(candles: Candle[]): PatternSignal[] {
-  const patterns: PatternSignal[] = [];
-  if (candles.length < 30) return patterns;
-  const closes = candles.map((c) => c.close);
-
+function detectPatternsWithQuality(candles: Candle[]): PatternSignal[] {
   try {
-    const recent = candles.slice(-30);
-    const recentLows = recent.map((c) => c.low);
-    const minLow = Math.min(...recentLows);
-    const minIndex = recentLows.indexOf(minLow);
-    if (minIndex >= 0 && minIndex < 15) {
-      const secondMin = Math.min(...recentLows.slice(15));
-      if (Math.abs(minLow - secondMin) / minLow < 0.03 && secondMin > minLow * 0.97) {
-        const cur = closes[closes.length - 1];
-        if (cur !== undefined && cur > minLow * 1.02) patterns.push({ name: "İkili Dip", direction: "bullish", confidence: 75, description: "İki dip oluştu" });
-      }
-    }
-  } catch {}
+    const formationCandles = candles.map((c) => ({
+      time: c.time,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      volume: c.volume,
+    }));
 
-  try {
-    const recent = candles.slice(-30);
-    const recentHighs = recent.map((c) => c.high);
-    const maxHigh = Math.max(...recentHighs);
-    const maxIndex = recentHighs.indexOf(maxHigh);
-    if (maxIndex >= 0 && maxIndex < 15) {
-      const secondMax = Math.max(...recentHighs.slice(15));
-      if (Math.abs(maxHigh - secondMax) / maxHigh < 0.03 && secondMax < maxHigh * 1.03) {
-        const cur = closes[closes.length - 1];
-        if (cur !== undefined && cur < maxHigh * 0.98) patterns.push({ name: "İkili Tepe", direction: "bearish", confidence: 75, description: "İki tepe oluştu" });
-      }
-    }
-  } catch {}
+    const result = detectFormations(formationCandles, null);
+    const patterns: PatternSignal[] = [];
 
-  try {
-    const recent = candles.slice(-30);
-    const highs = recent.map((c) => c.high);
-    const lows = recent.map((c) => c.low);
-    const firstHigh = Math.max(...highs.slice(0, 15)), secondHigh = Math.max(...highs.slice(15));
-    const firstLow = Math.min(...lows.slice(0, 15)), secondLow = Math.min(...lows.slice(15));
-    if (Math.abs(firstHigh - secondHigh) / firstHigh < 0.02 && secondLow > firstLow * 1.02) {
-      const cur = closes[closes.length - 1];
-      if (cur !== undefined && cur > secondHigh * 0.99) patterns.push({ name: "Yükselen Üçgen", direction: "bullish", confidence: 80, description: "Yatay direnç + yükselen dip" });
-    }
-  } catch {}
+    const convert = (candidate: any): PatternSignal => {
+      const direction: PatternSignal["direction"] =
+        candidate.bias === "yükseliş"
+          ? "bullish"
+          : candidate.bias === "düşüş"
+            ? "bearish"
+            : "neutral";
 
-  try {
-    const recent = candles.slice(-30);
-    const highs = recent.map((c) => c.high);
-    const lows = recent.map((c) => c.low);
-    const firstHigh = Math.max(...highs.slice(0, 15)), secondHigh = Math.max(...highs.slice(15));
-    const firstLow = Math.min(...lows.slice(0, 15)), secondLow = Math.min(...lows.slice(15));
-    if (secondHigh < firstHigh * 0.98 && Math.abs(firstLow - secondLow) / firstLow < 0.02) {
-      const cur = closes[closes.length - 1];
-      if (cur !== undefined && cur < secondLow * 1.01) patterns.push({ name: "Düşen Üçgen", direction: "bearish", confidence: 80, description: "Düşen direnç + yatay destek" });
-    }
-  } catch {}
+      const confidence =
+        candidate.qualityScore && candidate.qualityScore > 0
+          ? candidate.qualityScore
+          : candidate.score;
 
-  try {
-    if (candles.length >= 40) {
-      const recent = candles.slice(-40);
-      const highs = recent.map((c) => c.high);
-      const ls = Math.max(...highs.slice(0, 12)), head = Math.max(...highs.slice(12, 26)), rs = Math.max(...highs.slice(26, 40));
-      if (head > ls * 1.02 && head > rs * 1.02 && Math.abs(ls - rs) / ls < 0.03) {
-        patterns.push({ name: "Omuz-Baş-Omuz", direction: "bearish", confidence: 85, description: "Klasik OBO" });
-      }
-    }
-  } catch {}
+      return {
+        name: candidate.name,
+        direction,
+        confidence,
+        description: (candidate.reasons ?? []).join(" · "),
+        qualityScore: candidate.qualityScore ?? undefined,
+      };
+    };
 
-  try {
-    if (candles.length >= 40) {
-      const recent = candles.slice(-40);
-      const lows = recent.map((c) => c.low);
-      const ls = Math.min(...lows.slice(0, 12)), head = Math.min(...lows.slice(12, 26)), rs = Math.min(...lows.slice(26, 40));
-      if (head < ls * 0.98 && head < rs * 0.98 && Math.abs(ls - rs) / ls < 0.03) {
-        patterns.push({ name: "Ters OBO", direction: "bullish", confidence: 85, description: "Ters OBO" });
-      }
+    if (result.primary) {
+      patterns.push(convert(result.primary));
     }
-  } catch {}
 
-  return patterns;
+    for (const candidate of result.candidates) {
+      if (result.primary && candidate.name === result.primary.name) continue;
+      patterns.push(convert(candidate));
+    }
+
+    return patterns;
+  } catch (error) {
+    console.error("detectFormations hatası:", error);
+    return [];
+  }
 }
 
 // ==========================================================
@@ -869,7 +834,7 @@ async function analyzeMultiTimeframe(
     const analyze = (candles: Candle[]): { direction: TimeframeDir; strength: number } | undefined => {
       if (candles.length < 50) return undefined;
       const indicators = analyzeIndicators(candles);
-      const patterns = analyzePatterns(candles);
+      const patterns = detectPatternsWithQuality(candles);
       const base = combineAnalysis(symbol, market, candles, indicators, patterns);
       return { direction: base.overallDirection, strength: base.overallStrength };
     };
@@ -892,20 +857,15 @@ async function analyzeMultiTimeframe(
     const alignedCount = counts[dominantDir] ?? 0;
     const aligned = alignedCount === 3 && dominantDir !== "neutral";
 
-        // Yeni bonus mantığı: yön bazlı, neutral'ları görmezden gel
     const bullishCount = counts.bullish ?? 0;
     const bearishCount = counts.bearish ?? 0;
     const strongDir = bullishCount > bearishCount ? "bullish" : bearishCount > bullishCount ? "bearish" : null;
     const strongCount = strongDir === "bullish" ? bullishCount : strongDir === "bearish" ? bearishCount : 0;
 
     let bonus = 0;
-    // 3/3 UYUMLU (ve yön belirgin)
     if (strongCount === 3 && strongDir) bonus = 15;
-    // 2/3 UYUMLU (ve yön belirgin)
     else if (strongCount === 2 && strongDir) bonus = 5;
-    // 1/3 UYUMLU (yön belirgin) → hafif ceza
     else if (strongCount === 1 && strongDir && dirs.length === 3) bonus = -5;
-    // Karışık yön (bullish vs bearish eşit) → 0 bonus
 
     const emoji = (d?: TimeframeDir) => d === "bullish" ? "🟢" : d === "bearish" ? "🔴" : "⚪";
     const label = (d?: TimeframeDir) => d === "bullish" ? "Bullish" : d === "bearish" ? "Bearish" : d === "neutral" ? "Nötr" : "—";
@@ -1120,7 +1080,6 @@ async function generateCommentary(input: {
 }): Promise<AiCommentary> {
   let result = await generateWithOpenRouter(input);
 
-  // Kripto için Fear & Greed çek
   let fearGreed: FearGreedResult = null;
   if (input.market === "crypto" && input.allowFearGreed !== false) {
     fearGreed = await getFearGreedIndex();
@@ -1141,7 +1100,6 @@ async function generateCommentary(input: {
     });
   }
 
-  // Fear & Greed'i AI yorumuna ekle
   if (fearGreed) {
     result.fearGreed = fearGreed.value;
     result.fearGreedClass = fearGreed.classification;
@@ -1154,10 +1112,7 @@ async function generateCommentary(input: {
 }
 
 // ==========================================================
-// SİNYAL SKORU
-// ==========================================================
-// ==========================================================
-// HABER KALİTE FİLTRESİ (Tier 1/2/3)
+// HABER KALİTE FİLTRESİ
 // ==========================================================
 
 const TIER1_SOURCES = [
@@ -1184,7 +1139,6 @@ function evaluateNewsQuality(
   for (const item of news) {
     let itemScore = 0;
 
-    // 1. Kaynak kalitesi
     const source = item.source ?? "";
     if (TIER1_SOURCES.some((s) => source.includes(s))) {
       itemScore += 30;
@@ -1194,13 +1148,11 @@ function evaluateNewsQuality(
       if (bestTier > 2) bestTier = 2;
     }
 
-    // 2. Sentiment şiddeti
     const absSent = Math.abs(item.sentimentScore);
     if (absSent >= 60) itemScore += 25;
     else if (absSent >= 40) itemScore += 15;
     else if (absSent < 20) itemScore -= 10;
 
-    // 3. Teknik uyum
     const newsDir =
       item.sentiment === "pozitif"
         ? "bullish"
@@ -1220,7 +1172,8 @@ function evaluateNewsQuality(
     isImportant: bestScore >= 60,
   };
 }
- function computeSignalScore(input: {
+
+function computeSignalScore(input: {
   direction: "bullish" | "bearish" | "neutral";
   changePercent: number;
   indicators: IndicatorSignal[];
@@ -1264,7 +1217,6 @@ function evaluateNewsQuality(
   const avgIndicatorStrength = sameDirIndicators.reduce((a, b) => a + b.strength, 0) / indicatorCount;
   const indicatorScore = clamp(avgIndicatorStrength * 0.7 + Math.min(indicatorCount - 2, 2) * 15);
 
-  // HABER KALİTESİ
   const newsQuality = evaluateNewsQuality(news, direction);
 
   let newsScore = 50;
@@ -1290,7 +1242,6 @@ function evaluateNewsQuality(
 
   finalScore = clamp(Math.round(finalScore));
 
-  // 4 KATMANLI EŞİK
   const thresholdCritical = 85;
   const thresholdImportant = isPriority ? 70 : 75;
   const thresholdNormal = isPriority ? 55 : 60;
@@ -1301,12 +1252,6 @@ function evaluateNewsQuality(
   else if (finalScore >= thresholdImportant) tier = "important";
   else if (finalScore >= thresholdNormal) tier = "normal";
   else if (finalScore >= thresholdWatch) tier = "watch";
-
-  // KATMAN 1 (critical) → herkese
-  // KATMAN 2 (important) → favori + priority
-  // KATMAN 3 (normal) → sadece priority
-  // KATMAN 4 (watch) → sadece admin panelde
-  // KATMAN 5 (silent) → hiçbir yere
 
   const shouldNotify = tier === "critical" || tier === "important" || tier === "normal";
 
@@ -1351,8 +1296,9 @@ async function getCustomAssets(): Promise<CustomAsset[]> {
     return (await res.json()) as CustomAsset[];
   } catch { return []; }
 }
+
 // ==========================================================
-// DND (SESSİZ SAATLER) KONTROLÜ
+// DND (SESSİZ SAATLER)
 // ==========================================================
 
 type DndSettings = {
@@ -1394,7 +1340,7 @@ async function getUserDndSettings(userId: string): Promise<DndSettings> {
     );
     if (!res.ok) return defaultSettings;
     const rows = (await res.json()) as Array<Record<string, unknown>>;
-        const row = rows[0];
+    const row = rows[0];
     if (!row) return defaultSettings;
 
     return {
@@ -1413,17 +1359,13 @@ async function getUserDndSettings(userId: string): Promise<DndSettings> {
   }
 }
 
-// Saat "HH:MM" formatı → dakika (0-1439)
 function timeToMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
   return (h ?? 0) * 60 + (m ?? 0);
 }
 
-// Şu an DND saatinde mi?
 function isInDndHours(dnd: DndSettings): boolean {
   if (!dnd.enabled || dnd.ranges.length === 0) return false;
-
-  // Türkiye saatine çevir
   const now = new Date();
   const trTime = new Date(now.toLocaleString("en-US", { timeZone: dnd.timezone }));
   const currentMinutes = trTime.getHours() * 60 + trTime.getMinutes();
@@ -1431,19 +1373,15 @@ function isInDndHours(dnd: DndSettings): boolean {
   for (const range of dnd.ranges) {
     const start = timeToMinutes(range.start);
     const end = timeToMinutes(range.end);
-
-    // Normal aralık: 23:00 - 07:00 → gece yarısını geçer
     if (start <= end) {
       if (currentMinutes >= start && currentMinutes < end) return true;
     } else {
-      // Gece yarısını geçen aralık (23:00 - 07:00)
       if (currentMinutes >= start || currentMinutes < end) return true;
     }
   }
   return false;
 }
 
-// DND sırasında bu bildirim geçebilir mi?
 function canBypassDnd(
   dnd: DndSettings,
   analysis: AnalysisResult,
@@ -1454,29 +1392,20 @@ function canBypassDnd(
 
   const changePct = Math.abs(analysis.changePercent);
 
-  // %10+ hareket → izinli
   if (dnd.allow10Percent && changePct >= 10) return true;
-
-  // Öncelikli varlık kritik hareket
   if (dnd.allowPriorityCritical && type === "priority") {
     if (changePct >= 5 || signalScore.tier === "critical") return true;
   }
-
-  // Skor ≥ 90
   if (dnd.allowScore90 && signalScore.score >= 90) return true;
-
-  // Favori izinli mi?
   if (dnd.allowFavorite && type === "favorite") {
     if (signalScore.tier === "critical") return true;
   }
-
-  // Tier 1 önemli haber
   if (dnd.allowTier1News && signalScore.isImportantNews && signalScore.newsTier === 1) {
     return true;
   }
-
   return false;
 }
+
 // ==========================================================
 // KULLANICI TIER SİSTEMİ
 // ==========================================================
@@ -1530,21 +1459,17 @@ async function getUserTier(userId: string): Promise<TierInfo> {
     const membership = String(row["membership"] ?? "free");
     const trialEndsAt = row["trial_ends_at"] as string | null;
 
-    // 1. Admin mi?
     if (role === "admin") {
       return { tier: "admin", limits: TIER_LIMITS.admin };
     }
 
-    // 2. Premium mu?
     if (membership === "premium") {
       return { tier: "premium", limits: TIER_LIMITS.premium };
     }
 
-    // 3. Trial mı? (süresi geçmiş mi kontrol)
     if (membership === "trial" && trialEndsAt) {
       const isExpired = new Date(trialEndsAt).getTime() < Date.now();
       if (isExpired) {
-        // Otomatik düşür
         void fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
           method: "PATCH",
           headers: {
@@ -1567,12 +1492,12 @@ async function getUserTier(userId: string): Promise<TierInfo> {
       };
     }
 
-    // 4. Free
     return { tier: "free", limits: TIER_LIMITS.free };
   } catch {
     return { tier: "free", limits: TIER_LIMITS.free };
   }
 }
+
 async function getUsersForSymbol(market: string, symbol: string): Promise<Array<{ user_id: string; type: "favorite" | "priority" }>> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
   try {
@@ -1629,20 +1554,21 @@ async function sendNotification(params: {
   const signalScore = analysis.signalScore;
   const ai = analysis.ai;
   if (!signalScore || !ai) return;
-  // DND kontrolü
+
   const dnd = await getUserDndSettings(userId);
   const inDnd = isInDndHours(dnd);
   const canBypass = canBypassDnd(dnd, analysis, type);
 
   if (inDnd && !canBypass) {
-    // DND sırasında gönderilmez → biriktir (delivered = false)
     console.log(`🌙 DND biriktirildi: ${symbol} (${type})`);
   }
+
   const priority = type === "priority";
-    const severity = 
-    signalScore.tier === "critical" ? "kritik" 
-    : signalScore.tier === "important" ? "önemli" 
+  const severity =
+    signalScore.tier === "critical" ? "kritik"
+    : signalScore.tier === "important" ? "önemli"
     : "dikkat";
+
   const actionEmoji = ai.action === "AL" ? "🟢" : ai.action === "SAT" ? "🔴" : ai.action === "BEKLE" ? "🟡" : "⚪";
   const typeLabel = isGlobal ? "🌍 GLOBAL" : priority ? "⭐ ÖNCELİKLİ" : "📢 FAVORİ";
   const cleanSymbol = symbol.replace("USDT", "").replace(/\.(IS|US|T|KS|HK|NS|DE|PA|L|MI|MC|AS|ST|OL|HE|SW|CO|V)$/, "");
@@ -1666,7 +1592,7 @@ async function sendNotification(params: {
         priority, severity, title, message, reason,
         event_key: eventKey, notification_type: type,
         confidence: ai.confidence, is_global: isGlobal ?? false,
-                delivered: !inDnd || canBypass,
+        delivered: !inDnd || canBypass,
         signal_score: signalScore.score,
         signal_breakdown: signalScore.breakdown,
         ai_summary: ai.summary, ai_impact: ai.impact,
@@ -1679,7 +1605,8 @@ async function sendNotification(params: {
         ai_risk_reward: ai.riskReward ?? null,
         ai_support: ai.support ?? null,
         ai_resistance: ai.resistance ?? null,
-                fear_greed: ai.fearGreed ?? null,
+        fear_greed: ai.fearGreed ?? null,
+        quality_score: analysis.signalScore?.breakdown.formation ?? null,
         news_items: analysis.news ?? [],
         data: {
           indicators: analysis.indicators,
@@ -1695,40 +1622,37 @@ async function sendNotification(params: {
   } catch (error) {
     console.error("Bildirim fetch hatası:", error);
   }
-}
-
-// ==========================================================
+}// ==========================================================
 // ANALİZ
 // ==========================================================
 
 async function analyzeSymbol(symbol: string, market: string): Promise<AnalysisResult | null> {
   try {
-    const candles = market === "crypto" 
-  ? await getCryptoCandles(symbol, "1h") 
-  : await getYahooCandles(symbol, "1d");
+    const candles = market === "crypto"
+      ? await getCryptoCandles(symbol, "1h")
+      : await getYahooCandles(symbol, "1d");
     const indicators = analyzeIndicators(candles);
-    const patterns = analyzePatterns(candles);
+    const patterns = detectPatternsWithQuality(candles);
     if (indicators.length === 0 && patterns.length === 0) return null;
     const baseResult = combineAnalysis(symbol, market, candles, indicators, patterns);
 
     let news: NewsItem[] = [];
     if (baseResult.isImportant) {
       const users = await getUsersForSymbol(market, symbol);
-              // Tier hesapla (MTF için)
-        let maxTier: UserTier = "free";
-        let tierInfoForUser: TierInfo | null = null;
-        for (const u of users) {
-          const t = await getUserTier(u.user_id);
-          const rank: Record<UserTier, number> = { free: 0, trial: 1, premium: 2, admin: 3 };
-          if (rank[t.tier] > rank[maxTier]) {
-            maxTier = t.tier;
-            tierInfoForUser = t;
-          }
+      let maxTier: UserTier = "free";
+      let tierInfoForUser: TierInfo | null = null;
+      for (const u of users) {
+        const t = await getUserTier(u.user_id);
+        const rank: Record<UserTier, number> = { free: 0, trial: 1, premium: 2, admin: 3 };
+        if (rank[t.tier] > rank[maxTier]) {
+          maxTier = t.tier;
+          tierInfoForUser = t;
         }
-        const allowMTF = tierInfoForUser?.limits.hasMTF ?? false;
-        const allowFearGreed = tierInfoForUser?.limits.hasFearGreed ?? false;
+      }
+      const allowFearGreed = tierInfoForUser?.limits.hasFearGreed ?? false;
       const isPriorityTracked = users.some((u) => u.type === "priority");
       news = await getNewsForSymbol(market, symbol, isPriorityTracked);
+      void allowFearGreed;
     }
 
     return { ...baseResult, news, candles };
@@ -1812,9 +1736,8 @@ export default async function handler(request: RequestLike, response: ResponseLi
     for (const result of importantResults) {
       try {
         const users = await getUsersForSymbol(result.market, result.symbol);
-                // Tier hesapla
         const hasPriorityUser = users.some((u) => u.type === "priority");
-        // En yüksek tier'lı kullanıcıyı bul (MTF için)
+
         let maxTier: UserTier = "free";
         let tierInfoForUser: TierInfo | null = null;
         for (const u of users) {
@@ -1826,11 +1749,12 @@ export default async function handler(request: RequestLike, response: ResponseLi
           }
         }
         const allowMTF = tierInfoForUser?.limits.hasMTF ?? false;
-                const allowFearGreed = tierInfoForUser?.limits.hasFearGreed ?? false;
-        // 1️⃣ ÖNCE MULTI-TIMEFRAME (sadece priority için)
-                let mtfBonus = 0;
+        const allowFearGreed = tierInfoForUser?.limits.hasFearGreed ?? false;
+
+        // 1️⃣ MULTI-TIMEFRAME
+        let mtfBonus = 0;
         let mtfSummary = "";
-                if (hasPriorityUser && allowMTF) {
+        if (hasPriorityUser && allowMTF) {
           const mtf = await analyzeMultiTimeframe(result.symbol, result.market);
           if (mtf) {
             mtfBonus = mtf.bonus;
@@ -1855,29 +1779,30 @@ export default async function handler(request: RequestLike, response: ResponseLi
           isPriority: hasPriorityUser,
         });
 
-        // 3️⃣ MTF BONUSUNU UYGULA
+        // 3️⃣ MTF BONUSU
         if (mtfBonus !== 0) {
           signalScore.score = Math.max(0, Math.min(100, signalScore.score + mtfBonus));
           if (mtfBonus > 0) signalScore.reason += ` + MTF(+${mtfBonus})`;
           else if (mtfBonus < 0) signalScore.reason += ` - MTF(${mtfBonus})`;
 
           if (signalScore.score >= 85) signalScore.tier = "critical";
-          else if (signalScore.score >= (hasPriorityUser ? 55 : 60)) signalScore.tier = "important";
+          else if (signalScore.score >= (hasPriorityUser ? 70 : 75)) signalScore.tier = "important";
+          else if (signalScore.score >= (hasPriorityUser ? 55 : 60)) signalScore.tier = "normal";
           else if (signalScore.score >= (hasPriorityUser ? 45 : 50)) signalScore.tier = "watch";
           else signalScore.tier = "silent";
-          signalScore.shouldNotify = signalScore.tier === "critical" || signalScore.tier === "important";
+          signalScore.shouldNotify = signalScore.tier === "critical" || signalScore.tier === "important" || signalScore.tier === "normal";
         }
 
         result.signalScore = signalScore;
 
-        // 4️⃣ SONRA KONTROL
+        // 4️⃣ KONTROL
         if (!signalScore.shouldNotify) {
           console.log(`🔇 Bildirim atlandı: ${result.symbol} (score=${signalScore.score}, ${signalScore.reason})`);
           continue;
         }
 
         // 5️⃣ AI YORUM
-         const ai = await generateCommentary({
+        const ai = await generateCommentary({
           symbol: result.symbol, market: result.market, price: result.price,
           changePercent: result.changePercent, direction: result.overallDirection,
           strength: result.overallStrength, indicators: result.indicators,
@@ -1898,40 +1823,37 @@ export default async function handler(request: RequestLike, response: ResponseLi
         console.log(`🤖 AI (${ai.source}): ${result.symbol} → ${ai.action}`);
 
         // 6️⃣ KULLANICILARA GÖNDER
-                // KATMAN MANTIĞI
         const tier = signalScore.tier;
-        
-        // KATMAN 2 (important) → favori + priority
-        // KATMAN 3 (normal) → sadece priority
-        const eligibleUsers = tier === "important"
-          ? users  // favori + priority
-          : tier === "normal"
-            ? users.filter((u) => u.type === "priority")  // sadece priority
-            : users;  // critical fallback
 
-                for (const user of eligibleUsers) {
+        const eligibleUsers = tier === "important"
+          ? users
+          : tier === "normal"
+            ? users.filter((u) => u.type === "priority")
+            : users;
+
+        for (const user of eligibleUsers) {
           if (await isOnCooldown(user.user_id, result.symbol, result.market, user.type)) continue;
-          
-          // DND kontrolü (sendNotification içinde tekrar kontrol edilecek, burada log için)
+
           const userDnd = await getUserDndSettings(user.user_id);
           const userInDnd = isInDndHours(userDnd);
-          
+
           if (userInDnd) {
             const canBypass = canBypassDnd(userDnd, result, user.type);
             console.log(`🌙 ${user.user_id.slice(0, 8)} DND'de — ${canBypass ? "GEÇTİ" : "biriktirildi"}: ${result.symbol}`);
           }
-          
+
           await sendNotification({ userId: user.user_id, market: result.market, symbol: result.symbol, type: user.type, analysis: result, isGlobal: false });
           totalNotifications++;
         }
 
-                // KATMAN 1 (critical) → herkese
-        const isGlobalImportant = 
+        // KATMAN 1 (critical) → herkese
+        const isGlobalImportant =
           signalScore.tier === "critical" ||
           (signalScore.isImportantNews && signalScore.newsTier === 1) ||
           (result.market === "crypto" && Math.abs(result.changePercent) >= 10) ||
           (result.market === "crypto" && Math.abs(result.changePercent) >= 5 && signalScore.isImportantNews) ||
           (["bist", "us", "asia", "europe"].includes(result.market) && Math.abs(result.changePercent) >= 5);
+
         if (isGlobalImportant) {
           const allUsersRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id&is_banned=eq.false`, {
             headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
