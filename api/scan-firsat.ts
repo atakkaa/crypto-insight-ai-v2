@@ -1,6 +1,468 @@
 // api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v8 (Kaliteli Formasyon Motoru)
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
-import { detectFormations } from "./lib/formation-engine.server";
+
+// ==========================================================
+// KALİTELİ FORMASYON MOTORU (formation-engine.server.ts'ten kopyalandı)
+// api/lib/ Vercel'de çalışmadığı için doğrudan buraya eklendi.
+// ==========================================================
+
+type PatternLine = {
+  label: string;
+  kind: "destek" | "direnç" | "trend" | "hedef" | "boyun";
+  points: Array<{ index: number; price: number }>;
+};
+
+type FormationEngineCandle = {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+type FormationCandidate = {
+  name: string;
+  bias: "yükseliş" | "düşüş" | "nötr";
+  score: number;
+  qualityScore: number;
+  qualityBreakdown: {
+    structuralClarity: number;
+    touchCount: number;
+    trendAlignment: number;
+  };
+  lines: PatternLine[];
+  breakoutStatus: "yukarı kırılım" | "aşağı kırılım" | "kırılım yok";
+  support: number | null;
+  resistance: number | null;
+  neckline: number | null;
+  target: number | null;
+  invalidation: number | null;
+  reasons: string[];
+};
+
+type SwingPoint = {
+  index: number;
+  price: number;
+  time: number;
+};
+
+type FormationPoint = {
+  index: number;
+  price: number;
+};
+
+function feClamp(value: number, min = 0, max = 100): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function feAverage(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function fePercentDifference(a: number, b: number): number {
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b === 0) return 100;
+  return Math.abs((a - b) / b) * 100;
+}
+
+function feLinearSlope(points: FormationPoint[]): number {
+  if (points.length < 2) return 0;
+  const first = points[0]!;
+  const last = points[points.length - 1]!;
+  const dx = last.index - first.index;
+  if (dx === 0) return 0;
+  return (last.price - first.price) / dx;
+}
+
+function fePredictLine(points: FormationPoint[], index: number): number {
+  if (points.length < 2) return points[0]?.price ?? 0;
+  const first = points[0]!;
+  const last = points[points.length - 1]!;
+  const dx = last.index - first.index;
+  if (dx === 0) return first.price;
+  const slope = (last.price - first.price) / dx;
+  return first.price + slope * (index - first.index);
+}
+
+function feToPatternLine(label: string, kind: PatternLine["kind"], points: FormationPoint[]): PatternLine {
+  return { label, kind, points: points.map((p) => ({ index: p.index, price: p.price })) };
+}
+
+function feCalculateStructuralClarity(relevantSwings: SwingPoint[], allCandlesCount: number): number {
+  if (relevantSwings.length < 2) return 30;
+  const firstIndex = relevantSwings[0]!.index;
+  const lastIndex = relevantSwings[relevantSwings.length - 1]!.index;
+  const span = lastIndex - firstIndex;
+  const spanScore = feClamp((span / 40) * 100, 0, 100);
+
+  const gaps: number[] = [];
+  for (let i = 1; i < relevantSwings.length; i++) {
+    const prev = relevantSwings[i - 1]!;
+    const curr = relevantSwings[i]!;
+    gaps.push(curr.index - prev.index);
+  }
+  const avgGap = feAverage(gaps);
+  const gapVariance = gaps.length > 1 ? feAverage(gaps.map((g) => Math.abs(g - avgGap))) : 0;
+  const gapScore = feClamp(100 - gapVariance * 5, 0, 100);
+
+  const prices = relevantSwings.map((s) => s.price);
+  const avgPrice = feAverage(prices);
+  const priceDeviations = prices.map((p) => fePercentDifference(p, avgPrice));
+  const avgDeviation = feAverage(priceDeviations);
+  const priceScore = feClamp(100 - avgDeviation * 20, 0, 100);
+
+  const clarity = spanScore * 0.3 + gapScore * 0.3 + priceScore * 0.4;
+  const lengthPenalty = allCandlesCount < 50 ? 0.85 : 1;
+  return feClamp(clarity * lengthPenalty, 0, 100);
+}
+
+function feCalculateTouchCount(
+  highs: SwingPoint[],
+  lows: SwingPoint[],
+  resistanceLevel?: number | null,
+  supportLevel?: number | null,
+): number {
+  if (highs.length + lows.length < 2) return 30;
+  let totalTouches = 0;
+  if (resistanceLevel != null && Number.isFinite(resistanceLevel)) {
+    totalTouches += highs.filter((h) => fePercentDifference(h.price, resistanceLevel) <= 1.5).length;
+  } else {
+    totalTouches += highs.length;
+  }
+  if (supportLevel != null && Number.isFinite(supportLevel)) {
+    totalTouches += lows.filter((l) => fePercentDifference(l.price, supportLevel) <= 1.5).length;
+  } else {
+    totalTouches += lows.length;
+  }
+  return feClamp(totalTouches <= 2 ? 40 + (totalTouches - 1) * 15 : 55 + (totalTouches - 2) * 11.25, 0, 100);
+}
+
+function feCalculateTrendAlignment(
+  formationBias: "yükseliş" | "düşüş" | "nötr",
+  technicalEvidence?: any,
+): number {
+  if (!technicalEvidence) return 50;
+  const alignment = technicalEvidence.alignment;
+  if (formationBias === "nötr") return 50;
+  if (formationBias === "yükseliş") {
+    if (alignment === "yükseliş destekli") return feClamp(70 + (technicalEvidence.alignmentScore - 65) * 1.5, 50, 100);
+    if (alignment === "düşüş destekli") return 30;
+    return 50;
+  }
+  if (formationBias === "düşüş") {
+    if (alignment === "düşüş destekli") return feClamp(70 + (35 - technicalEvidence.alignmentScore) * 1.5, 50, 100);
+    if (alignment === "yükseliş destekli") return 30;
+    return 50;
+  }
+  return 50;
+}
+
+function feCalculateQualityScore(
+  structuralClarity: number,
+  touchCount: number,
+  trendAlignment: number,
+): { total: number; breakdown: { structuralClarity: number; touchCount: number; trendAlignment: number } } {
+  const total = structuralClarity * 0.4 + touchCount * 0.3 + trendAlignment * 0.3;
+  return {
+    total: Math.round(feClamp(total, 0, 100)),
+    breakdown: {
+      structuralClarity: Math.round(structuralClarity),
+      touchCount: Math.round(touchCount),
+      trendAlignment: Math.round(trendAlignment),
+    },
+  };
+}
+
+function feDetectSwingPoints(candles: FormationEngineCandle[]): { highs: SwingPoint[]; lows: SwingPoint[] } {
+  const highs: SwingPoint[] = [];
+  const lows: SwingPoint[] = [];
+  if (candles.length < 15) return { highs, lows };
+  const window = Math.max(2, Math.min(5, Math.floor(candles.length / 35)));
+  for (let i = window; i < candles.length - window; i += 1) {
+    const candle = candles[i];
+    if (!candle) continue;
+    let isHigh = true;
+    let isLow = true;
+    for (let j = i - window; j <= i + window; j += 1) {
+      if (j === i) continue;
+      const other = candles[j];
+      if (!other) continue;
+      if (other.high > candle.high) isHigh = false;
+      if (other.low < candle.low) isLow = false;
+      if (!isHigh && !isLow) break;
+    }
+    if (isHigh) highs.push({ index: i, price: candle.high, time: candle.time });
+    if (isLow) lows.push({ index: i, price: candle.low, time: candle.time });
+  }
+  return { highs: highs.slice(-12), lows: lows.slice(-12) };
+}
+
+function feDetectAscendingTriangle(highs: SwingPoint[], lows: SwingPoint[], currentPrice: number, allCandlesCount: number): FormationCandidate | null {
+  if (highs.length < 2 || lows.length < 2) return null;
+  const h = highs.slice(-4);
+  const l = lows.slice(-4);
+  const resistance = feAverage(h.map((p) => p.price));
+  const highDeviation = feAverage(h.map((p) => fePercentDifference(p.price, resistance)));
+  const lowSlope = feLinearSlope(l);
+  const highSlope = feLinearSlope(h);
+  const range = Math.max(...h.map((p) => p.price)) - Math.min(...l.map((p) => p.price));
+  if (range <= 0) return null;
+  const normalizedLowSlope = lowSlope / range;
+  const horizontalResistance = highDeviation <= 1.8 && Math.abs(highSlope) / range < 0.0015;
+  const risingLows = normalizedLowSlope > 0.001;
+  if (!horizontalResistance || !risingLows) return null;
+
+  const allSwings = [...h, ...l];
+  const structuralClarity = feCalculateStructuralClarity(allSwings, allCandlesCount);
+  const touchCount = feCalculateTouchCount(h, l, resistance, l.at(-1)?.price ?? null);
+  const trendAlignment = feCalculateTrendAlignment("yükseliş", null);
+  const quality = feCalculateQualityScore(structuralClarity, touchCount, trendAlignment);
+  if (quality.total < 60) return null;
+
+  const score = feClamp(55 + Math.min(20, (2 - highDeviation) * 8) + Math.min(20, normalizedLowSlope * 8000) + (quality.total - 60) * 0.5);
+  const target = resistance + range * 0.85;
+  const breakout = currentPrice > resistance ? "yukarı kırılım" : "kırılım yok";
+
+  return {
+    name: "Yükselen Üçgen", bias: "yükseliş", score: Math.round(score), qualityScore: quality.total, qualityBreakdown: quality.breakdown,
+    lines: [feToPatternLine("Yatay Direnç", "direnç", h), feToPatternLine("Yükselen Destek", "trend", l)],
+    breakoutStatus: breakout, support: l.at(-1)?.price ?? null, resistance, neckline: resistance, target,
+    invalidation: l.at(-1)?.price ?? null,
+    reasons: ["Tepe noktaları aynı direnç bölgesinde toplanıyor.", "Dip noktaları kademeli olarak yükseliyor.", `Kalite: ${quality.total}/100.`],
+  };
+}
+
+function feDetectDescendingTriangle(highs: SwingPoint[], lows: SwingPoint[], currentPrice: number, allCandlesCount: number): FormationCandidate | null {
+  if (highs.length < 2 || lows.length < 2) return null;
+  const h = highs.slice(-4);
+  const l = lows.slice(-4);
+  const support = feAverage(l.map((p) => p.price));
+  const lowDeviation = feAverage(l.map((p) => fePercentDifference(p.price, support)));
+  const highSlope = feLinearSlope(h);
+  const lowSlope = feLinearSlope(l);
+  const range = Math.max(...h.map((p) => p.price)) - Math.min(...l.map((p) => p.price));
+  if (range <= 0) return null;
+  const normalizedHighSlope = highSlope / range;
+  const horizontalSupport = lowDeviation <= 1.8 && Math.abs(lowSlope) / range < 0.0015;
+  const fallingHighs = normalizedHighSlope < -0.001;
+  if (!horizontalSupport || !fallingHighs) return null;
+
+  const allSwings = [...h, ...l];
+  const structuralClarity = feCalculateStructuralClarity(allSwings, allCandlesCount);
+  const touchCount = feCalculateTouchCount(h, l, h.at(-1)?.price ?? null, support);
+  const trendAlignment = feCalculateTrendAlignment("düşüş", null);
+  const quality = feCalculateQualityScore(structuralClarity, touchCount, trendAlignment);
+  if (quality.total < 60) return null;
+
+  const score = feClamp(55 + Math.min(20, (2 - lowDeviation) * 8) + Math.min(20, Math.abs(normalizedHighSlope) * 8000) + (quality.total - 60) * 0.5);
+  const target = support - range * 0.85;
+  const breakout = currentPrice < support ? "aşağı kırılım" : "kırılım yok";
+
+  return {
+    name: "Alçalan Üçgen", bias: "düşüş", score: Math.round(score), qualityScore: quality.total, qualityBreakdown: quality.breakdown,
+    lines: [feToPatternLine("Alçalan Direnç", "trend", h), feToPatternLine("Yatay Destek", "destek", l)],
+    breakoutStatus: breakout, support, resistance: h.at(-1)?.price ?? null, neckline: support, target,
+    invalidation: h.at(-1)?.price ?? null,
+    reasons: ["Dip noktaları aynı destek bölgesinde toplanıyor.", "Tepe noktaları kademeli olarak düşüyor.", `Kalite: ${quality.total}/100.`],
+  };
+}
+
+function feDetectSymmetricalTriangle(highs: SwingPoint[], lows: SwingPoint[], currentPrice: number, allCandlesCount: number): FormationCandidate | null {
+  if (highs.length < 2 || lows.length < 2) return null;
+  const h = highs.slice(-4);
+  const l = lows.slice(-4);
+  const range = Math.max(...h.map((p) => p.price)) - Math.min(...l.map((p) => p.price));
+  if (range <= 0) return null;
+  const highSlope = feLinearSlope(h) / range;
+  const lowSlope = feLinearSlope(l) / range;
+  if (highSlope >= -0.001 || lowSlope <= 0.001) return null;
+  const convergence = Math.min(1, Math.abs(highSlope) / Math.max(lowSlope, 0.000001));
+
+  const allSwings = [...h, ...l];
+  const structuralClarity = feCalculateStructuralClarity(allSwings, allCandlesCount);
+  const touchCount = feCalculateTouchCount(h, l, h.at(-1)?.price ?? null, l.at(-1)?.price ?? null);
+  const trendAlignment = feCalculateTrendAlignment("nötr", null);
+  const quality = feCalculateQualityScore(structuralClarity, touchCount, trendAlignment);
+  if (quality.total < 60) return null;
+
+  const score = feClamp(55 + Math.min(30, convergence * 20) + (quality.total - 60) * 0.5);
+  const upperLine = fePredictLine(h, highs.at(-1)?.index ?? 0);
+  const lowerLine = fePredictLine(l, lows.at(-1)?.index ?? 0);
+  let breakout: "yukarı kırılım" | "aşağı kırılım" | "kırılım yok" = "kırılım yok";
+  if (currentPrice > upperLine) breakout = "yukarı kırılım";
+  else if (currentPrice < lowerLine) breakout = "aşağı kırılım";
+
+  return {
+    name: "Simetrik Üçgen", bias: "nötr", score: Math.round(score), qualityScore: quality.total, qualityBreakdown: quality.breakdown,
+    lines: [feToPatternLine("Üst Trend", "direnç", h), feToPatternLine("Alt Trend", "destek", l)],
+    breakoutStatus: breakout, support: l.at(-1)?.price ?? null, resistance: h.at(-1)?.price ?? null, neckline: null,
+    target: breakout === "yukarı kırılım" ? upperLine + range * 0.8 : breakout === "aşağı kırılım" ? lowerLine - range * 0.8 : null,
+    invalidation: null,
+    reasons: ["Tepe noktaları aşağı eğimli.", "Dip noktaları yukarı eğimli.", `Kalite: ${quality.total}/100.`],
+  };
+}
+
+function feDetectDoubleTop(highs: SwingPoint[], lows: SwingPoint[], currentPrice: number, allCandlesCount: number): FormationCandidate | null {
+  if (highs.length < 2 || lows.length < 1) return null;
+  const first = highs.at(-2);
+  const second = highs.at(-1);
+  if (!first || !second) return null;
+  if (second.index - first.index < 4) return null;
+  const similarity = fePercentDifference(first.price, second.price);
+  if (similarity > 2.5) return null;
+  const betweenLows = lows.filter((low) => low.index > first.index && low.index < second.index);
+  if (betweenLows.length === 0) return null;
+  const neckline = Math.min(...betweenLows.map((p) => p.price));
+  const height = feAverage([first.price, second.price]) - neckline;
+  if (height <= 0) return null;
+
+  const relevantSwings = [first, ...betweenLows, second];
+  const structuralClarity = feCalculateStructuralClarity(relevantSwings, allCandlesCount);
+  const touchCount = feCalculateTouchCount([first, second], betweenLows, null, neckline);
+  const trendAlignment = feCalculateTrendAlignment("düşüş", null);
+  const quality = feCalculateQualityScore(structuralClarity, touchCount, trendAlignment);
+  if (quality.total < 60) return null;
+
+  const score = feClamp(65 + Math.min(25, (2.5 - similarity) * 8) + (quality.total - 60) * 0.5);
+
+  return {
+    name: "Çift Tepe", bias: "düşüş", score: Math.round(score), qualityScore: quality.total, qualityBreakdown: quality.breakdown,
+    lines: [
+      feToPatternLine("Tepe 1 - Tepe 2", "direnç", [{ index: first.index, price: first.price }, { index: second.index, price: second.price }]),
+      feToPatternLine("Boyun Çizgisi", "boyun", betweenLows.slice(-2)),
+    ],
+    breakoutStatus: currentPrice < neckline ? "aşağı kırılım" : "kırılım yok",
+    support: neckline, resistance: Math.max(first.price, second.price), neckline, target: neckline - height,
+    invalidation: Math.max(first.price, second.price),
+    reasons: [`İki tepe arasındaki fiyat farkı yaklaşık %${similarity.toFixed(2)}.`, "İki tepe arasında belirgin bir geri çekilme bulunuyor.", `Kalite: ${quality.total}/100.`],
+  };
+}
+
+function feDetectDoubleBottom(highs: SwingPoint[], lows: SwingPoint[], currentPrice: number, allCandlesCount: number): FormationCandidate | null {
+  if (lows.length < 2 || highs.length < 1) return null;
+  const first = lows.at(-2);
+  const second = lows.at(-1);
+  if (!first || !second) return null;
+  if (second.index - first.index < 4) return null;
+  const similarity = fePercentDifference(first.price, second.price);
+  if (similarity > 2.5) return null;
+  const betweenHighs = highs.filter((high) => high.index > first.index && high.index < second.index);
+  if (betweenHighs.length === 0) return null;
+  const neckline = Math.max(...betweenHighs.map((p) => p.price));
+  const height = neckline - feAverage([first.price, second.price]);
+  if (height <= 0) return null;
+
+  const relevantSwings = [first, ...betweenHighs, second];
+  const structuralClarity = feCalculateStructuralClarity(relevantSwings, allCandlesCount);
+  const touchCount = feCalculateTouchCount(betweenHighs, [first, second], neckline, null);
+  const trendAlignment = feCalculateTrendAlignment("yükseliş", null);
+  const quality = feCalculateQualityScore(structuralClarity, touchCount, trendAlignment);
+  if (quality.total < 60) return null;
+
+  const score = feClamp(65 + Math.min(25, (2.5 - similarity) * 8) + (quality.total - 60) * 0.5);
+
+  return {
+    name: "Çift Dip", bias: "yükseliş", score: Math.round(score), qualityScore: quality.total, qualityBreakdown: quality.breakdown,
+    lines: [
+      feToPatternLine("Dip 1 - Dip 2", "destek", [{ index: first.index, price: first.price }, { index: second.index, price: second.price }]),
+      feToPatternLine("Boyun Çizgisi", "boyun", betweenHighs.slice(-2)),
+    ],
+    breakoutStatus: currentPrice > neckline ? "yukarı kırılım" : "kırılım yok",
+    support: Math.min(first.price, second.price), resistance: neckline, neckline, target: neckline + height,
+    invalidation: Math.min(first.price, second.price),
+    reasons: [`İki dip arasındaki fiyat farkı yaklaşık %${similarity.toFixed(2)}.`, "İki dip arasında belirgin bir tepki yükselişi bulunuyor.", `Kalite: ${quality.total}/100.`],
+  };
+}
+
+function feDetectChannel(highs: SwingPoint[], lows: SwingPoint[], allCandlesCount: number): FormationCandidate | null {
+  if (highs.length < 3 || lows.length < 3) return null;
+  const h = highs.slice(-4);
+  const l = lows.slice(-4);
+  const highSlope = feLinearSlope(h);
+  const lowSlope = feLinearSlope(l);
+  const averagePrice = feAverage([...h.map((p) => p.price), ...l.map((p) => p.price)]);
+  if (averagePrice <= 0) return null;
+  const normalizedHighSlope = highSlope / averagePrice;
+  const normalizedLowSlope = lowSlope / averagePrice;
+  const sameDirection = normalizedHighSlope * normalizedLowSlope > 0;
+  if (!sameDirection) return null;
+  const slopeDifference = Math.abs(normalizedHighSlope - normalizedLowSlope);
+  if (slopeDifference > 0.01) return null;
+  const bullish = normalizedHighSlope > 0;
+  const formationBias: "yükseliş" | "düşüş" = bullish ? "yükseliş" : "düşüş";
+
+  const allSwings = [...h, ...l];
+  const structuralClarity = feCalculateStructuralClarity(allSwings, allCandlesCount);
+  const touchCount = feCalculateTouchCount(h, l, h.at(-1)?.price ?? null, l.at(-1)?.price ?? null);
+  const trendAlignment = feCalculateTrendAlignment(formationBias, null);
+  const quality = feCalculateQualityScore(structuralClarity, touchCount, trendAlignment);
+  if (quality.total < 60) return null;
+
+  const score = feClamp(58 + Math.min(30, Math.max(0, 1 - slopeDifference * 100) * 30) + (quality.total - 60) * 0.5);
+
+  return {
+    name: bullish ? "Yükselen Kanal" : "Düşen Kanal", bias: formationBias, score: Math.round(score), qualityScore: quality.total, qualityBreakdown: quality.breakdown,
+    lines: [feToPatternLine("Üst Kanal", "direnç", h), feToPatternLine("Alt Kanal", "destek", l)],
+    breakoutStatus: "kırılım yok", support: l.at(-1)?.price ?? null, resistance: h.at(-1)?.price ?? null, neckline: null, target: null, invalidation: null,
+    reasons: [bullish ? "Tepe ve dipler birlikte yükseliyor." : "Tepe ve dipler birlikte düşüyor.", "Üst ve alt fiyat hareketleri benzer eğime sahip.", `Kalite: ${quality.total}/100.`],
+  };
+}
+
+function feChoosePrimary(candidates: FormationCandidate[]): FormationCandidate | null {
+  if (candidates.length === 0) return null;
+  return [...candidates].sort((a, b) => {
+    const bonusA = a.breakoutStatus === "kırılım yok" ? 0 : 8;
+    const bonusB = b.breakoutStatus === "kırılım yok" ? 0 : 8;
+    return (b.qualityScore * 0.6 + (b.score + bonusB) * 0.4) - (a.qualityScore * 0.6 + (a.score + bonusA) * 0.4);
+  })[0] ?? null;
+}
+
+function detectFormations(
+  candles: FormationEngineCandle[],
+  technicalEvidence?: any,
+): { primary: FormationCandidate | null; candidates: FormationCandidate[]; swingHighs: SwingPoint[]; swingLows: SwingPoint[] } {
+  const validCandles = candles.filter((c) => Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close) && c.high >= c.low);
+  if (validCandles.length < 30) return { primary: null, candidates: [], swingHighs: [], swingLows: [] };
+
+  const recentStartIndex = Math.max(0, validCandles.length - 180);
+  const recent = validCandles.slice(recentStartIndex);
+  const localSwings = feDetectSwingPoints(recent);
+  const swings = {
+    highs: localSwings.highs.map((p) => ({ ...p, index: p.index + recentStartIndex })),
+    lows: localSwings.lows.map((p) => ({ ...p, index: p.index + recentStartIndex })),
+  };
+  const currentPrice = recent.at(-1)?.close ?? 0;
+  const allCandlesCount = validCandles.length;
+  const candidates: FormationCandidate[] = [];
+
+  const ascending = feDetectAscendingTriangle(swings.highs, swings.lows, currentPrice, allCandlesCount);
+  if (ascending) candidates.push(ascending);
+  const descending = feDetectDescendingTriangle(swings.highs, swings.lows, currentPrice, allCandlesCount);
+  if (descending) candidates.push(descending);
+  const symmetrical = feDetectSymmetricalTriangle(swings.highs, swings.lows, currentPrice, allCandlesCount);
+  if (symmetrical) candidates.push(symmetrical);
+  const doubleTop = feDetectDoubleTop(swings.highs, swings.lows, currentPrice, allCandlesCount);
+  if (doubleTop) candidates.push(doubleTop);
+  const doubleBottom = feDetectDoubleBottom(swings.highs, swings.lows, currentPrice, allCandlesCount);
+  if (doubleBottom) candidates.push(doubleBottom);
+  const channel = feDetectChannel(swings.highs, swings.lows, allCandlesCount);
+  if (channel) candidates.push(channel);
+
+  if (technicalEvidence && candidates.length > 0) {
+    for (const candidate of candidates) {
+      if (candidate.bias === "yükseliş" && technicalEvidence.alignment === "yükseliş destekli") {
+        candidate.score = feClamp(candidate.score + 5);
+      }
+      if (candidate.bias === "düşüş" && technicalEvidence.alignment === "düşüş destekli") {
+        candidate.score = feClamp(candidate.score + 5);
+      }
+    }
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+  return { primary: feChoosePrimary(candidates), candidates: candidates.slice(0, 6), swingHighs: swings.highs, swingLows: swings.lows };
+}
 
 // ==========================================================
 // ENV
