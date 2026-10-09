@@ -1642,7 +1642,7 @@ function computeSignalScore(input: {
   patterns: PatternSignal[];
   news: NewsItem[];
   isPriority?: boolean;
-}): SignalScoreResult {
+}):SignalScoreResult {
   const { direction, indicators, patterns, news, changePercent, isPriority = false } = input;
 
   const sameDirPatterns = patterns.filter((p) => p.direction === direction);
@@ -2240,6 +2240,7 @@ export default async function handler(request: RequestLike, response: ResponseLi
           news: result.news ?? [],
           isPriority: hasPriorityUser,
         });
+        console.log(`🔍 DEBUG ${result.symbol}: direction=${result.overallDirection}, patterns=${result.patterns.length}, indicators=${result.indicators.length}, score=${signalScore.score}, shouldNotify=${signalScore.shouldNotify}, reason=${signalScore.reason}`);
 
         // 3️⃣ MTF BONUSU
         if (mtfBonus !== 0) {
