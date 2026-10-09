@@ -7,7 +7,8 @@
   ],
   "functions": {
     "api/**/*.ts": {
-      "regions": ["fra1"]
+      "regions": ["fra1"],
+      "includeFiles": "api/lib/**"
     }
   }
 }
