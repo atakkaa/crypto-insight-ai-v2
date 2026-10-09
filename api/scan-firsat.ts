@@ -1,6 +1,6 @@
 // api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v8 (Kaliteli Formasyon Motoru)
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
-import { detectFormations } from "../src/lib/formation-engine.server";
+import { detectFormations } from "./lib/formation-engine.server";
 
 // ==========================================================
 // ENV
