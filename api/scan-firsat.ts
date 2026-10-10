@@ -1371,14 +1371,46 @@ function calculatePosition(
   resistance: number,
 ): { entryZone: string; target: string; stopLoss: string; riskReward: string } {
   const fmt = (n: number) => n.toFixed(n > 100 ? 2 : 4);
+
+  // R/R hedefleri: en az 1:1.5, ideal 1:2
+  const MIN_RR = 1.5;
+  const IDEAL_RR = 2.0;
+  const MAX_STOP_DISTANCE = 0.03; // %3
+
   if (direction === "bullish") {
     const entryMin = currentPrice * 0.995;
     const entryMax = currentPrice * 1.005;
-    const targetPrice = Math.min(resistance, currentPrice * 1.05);
-    const stopPrice = Math.max(support, currentPrice * 0.97);
-    const reward = targetPrice - currentPrice;
+
+    // Stop: Destek VEYA %2 (hangisi daha yakınsa)
+    const supportStop = support > 0 ? support : currentPrice * 0.98;
+    const percentStop = currentPrice * 0.98;
+    let stopPrice = Math.max(supportStop, percentStop);
+
+    // Stop çok uzaksa kısalt
+    if (currentPrice - stopPrice > currentPrice * MAX_STOP_DISTANCE) {
+      stopPrice = currentPrice * (1 - MAX_STOP_DISTANCE);
+    }
+
     const risk = currentPrice - stopPrice;
+
+    // R/R hedefi
+    const rrTarget = currentPrice + risk * IDEAL_RR;
+    const rrMinTarget = currentPrice + risk * MIN_RR;
+
+    // Direnç
+    const resistanceTarget = resistance > 0 ? resistance : currentPrice * 1.05;
+
+    // Hedef seçimi
+    let targetPrice: number;
+    if (resistanceTarget >= rrMinTarget) {
+      targetPrice = Math.min(resistanceTarget, rrTarget);
+    } else {
+      targetPrice = rrTarget;
+    }
+
+    const reward = targetPrice - currentPrice;
     const rr = risk > 0 ? (reward / risk).toFixed(1) : "1.0";
+
     return {
       entryZone: `$${fmt(entryMin)} - $${fmt(entryMax)}`,
       target: `$${fmt(targetPrice)} (+${((targetPrice / currentPrice - 1) * 100).toFixed(1)}%)`,
@@ -1388,11 +1420,37 @@ function calculatePosition(
   } else if (direction === "bearish") {
     const entryMin = currentPrice * 0.995;
     const entryMax = currentPrice * 1.005;
-    const targetPrice = Math.max(support, currentPrice * 0.95);
-    const stopPrice = Math.min(resistance, currentPrice * 1.03);
-    const reward = currentPrice - targetPrice;
+
+    // Stop: Direnç VEYA %2 (hangisi daha yakınsa)
+    const resistanceStop = resistance > 0 ? resistance : currentPrice * 1.02;
+    const percentStop = currentPrice * 1.02;
+    let stopPrice = Math.min(resistanceStop, percentStop);
+
+    // Stop çok uzaksa kısalt
+    if (stopPrice - currentPrice > currentPrice * MAX_STOP_DISTANCE) {
+      stopPrice = currentPrice * (1 + MAX_STOP_DISTANCE);
+    }
+
     const risk = stopPrice - currentPrice;
+
+    // R/R hedefi
+    const rrTarget = currentPrice - risk * IDEAL_RR;
+    const rrMinTarget = currentPrice - risk * MIN_RR;
+
+    // Destek
+    const supportTarget = support > 0 ? support : currentPrice * 0.95;
+
+    // Hedef seçimi
+    let targetPrice: number;
+    if (supportTarget <= rrMinTarget) {
+      targetPrice = Math.max(supportTarget, rrTarget);
+    } else {
+      targetPrice = rrTarget;
+    }
+
+    const reward = currentPrice - targetPrice;
     const rr = risk > 0 ? (reward / risk).toFixed(1) : "1.0";
+
     return {
       entryZone: `$${fmt(entryMin)} - $${fmt(entryMax)}`,
       target: `$${fmt(targetPrice)} (-${((1 - targetPrice / currentPrice) * 100).toFixed(1)}%)`,
@@ -1400,6 +1458,7 @@ function calculatePosition(
       riskReward: `1:${rr}`,
     };
   }
+
   return { entryZone: "Bekle", target: "Belirsiz", stopLoss: "Belirsiz", riskReward: "—" };
 }
 

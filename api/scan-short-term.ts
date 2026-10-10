@@ -784,30 +784,91 @@ function validateTargetStop(
   rawTarget: number | null,
   rawStop: number | null,
 ): { target: number; stop: number } {
-  let target = rawTarget ?? (bias === "yükseliş" ? lastClose * 1.05 : lastClose * 0.95);
-  let stop = rawStop ?? (bias === "yükseliş" ? lastClose * 0.97 : lastClose * 1.03);
+  // R/R hedefleri
+  const MIN_RR = 1.5;
+  const IDEAL_RR = 2.0;
+  const MAX_STOP_DISTANCE = 0.03; // %3
 
-  // Sayısal doğrulama
-  if (!Number.isFinite(target) || target <= 0) {
-    target = bias === "yükseliş" ? lastClose * 1.05 : lastClose * 0.95;
-  }
-  if (!Number.isFinite(stop) || stop <= 0) {
-    stop = bias === "yükseliş" ? lastClose * 0.97 : lastClose * 1.03;
+  if (bias === "nötr") {
+    return { target: lastClose, stop: lastClose };
   }
 
-  // ✅ YÖN DOĞRULAMASI
   if (bias === "yükseliş") {
-    // Yükseliş: Hedef YUKARIDA, Stop AŞAĞIDA
-    if (target <= lastClose) target = lastClose * 1.05;
-    if (stop >= lastClose) stop = lastClose * 0.97;
-  } else if (bias === "düşüş") {
-    // Düşüş: Hedef AŞAĞIDA, Stop YUKARIDA
-    if (target >= lastClose) target = lastClose * 0.95;
-    if (stop <= lastClose) stop = lastClose * 1.03;
+    // Stop: raw stop VEYA %2 (hangisi daha yakınsa)
+    const rawStopValue = rawStop ?? lastClose * 0.98;
+    const percentStop = lastClose * 0.98;
+    let stop = Math.max(rawStopValue, percentStop);
+
+    // Stop çok uzaksa kısalt
+    if (lastClose - stop > lastClose * MAX_STOP_DISTANCE) {
+      stop = lastClose * (1 - MAX_STOP_DISTANCE);
+    }
+
+    // Geçersizse varsayılan
+    if (!Number.isFinite(stop) || stop <= 0 || stop >= lastClose) {
+      stop = lastClose * 0.98;
+    }
+
+    const risk = lastClose - stop;
+
+    // R/R hedefi
+    const rrTarget = lastClose + risk * IDEAL_RR;
+    const rrMinTarget = lastClose + risk * MIN_RR;
+
+    // Raw target
+    const rawTargetValue = rawTarget ?? lastClose * 1.05;
+
+    // Hedef seçimi
+    let target: number;
+    if (rawTargetValue >= rrMinTarget) {
+      target = Math.min(rawTargetValue, rrTarget);
+    } else {
+      target = rrTarget;
+    }
+
+    // Geçersizse
+    if (!Number.isFinite(target) || target <= lastClose) {
+      target = lastClose * 1.05;
+    }
+
+    return { target, stop };
+  }
+
+  // bias === "düşüş"
+  const rawStopValue = rawStop ?? lastClose * 1.02;
+  const percentStop = lastClose * 1.02;
+  let stop = Math.min(rawStopValue, percentStop);
+
+  // Stop çok uzaksa kısalt
+  if (stop - lastClose > lastClose * MAX_STOP_DISTANCE) {
+    stop = lastClose * (1 + MAX_STOP_DISTANCE);
+  }
+
+  // Geçersizse
+  if (!Number.isFinite(stop) || stop <= 0 || stop <= lastClose) {
+    stop = lastClose * 1.02;
+  }
+
+  const risk = stop - lastClose;
+
+  // R/R hedefi
+  const rrTarget = lastClose - risk * IDEAL_RR;
+  const rrMinTarget = lastClose - risk * MIN_RR;
+
+  // Raw target
+  const rawTargetValue = rawTarget ?? lastClose * 0.95;
+
+  // Hedef seçimi
+  let target: number;
+  if (rawTargetValue <= rrMinTarget) {
+    target = Math.max(rawTargetValue, rrTarget);
   } else {
-    // Nötr: Hedef ve stop'u sıfırla
-    target = lastClose;
-    stop = lastClose;
+    target = rrTarget;
+  }
+
+  // Geçersizse
+  if (!Number.isFinite(target) || target >= lastClose) {
+    target = lastClose * 0.95;
   }
 
   return { target, stop };
