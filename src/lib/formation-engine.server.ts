@@ -711,8 +711,6 @@ function detectInverseHeadAndShoulders(
   };
 }
 
-// ⏸️ PARÇA 1 BURADA BİTİYOR
-// Sonraki mesajda Parça 2 gelecek (Çanak, Çanak-Kulp, Takozlar)// =====================================================
 // YENİ FORMASYONLAR — ÇANAK VE ÇANAK-KULP
 // =====================================================
 
@@ -1080,8 +1078,6 @@ function detectFallingWedge(
     ],
   };
 }
-// ⏸️ PARÇA 2 BURADA BİTİYOR
-// Sonraki mesajda Parça 3 gelecek (Boğa/Ayı Flaması, Elmas, ana detectFormations)// =====================================================
 // YENİ FORMASYONLAR — FLAMALAR
 // =====================================================
 
