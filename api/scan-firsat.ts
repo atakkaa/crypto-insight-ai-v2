@@ -1750,12 +1750,26 @@ function computeSignalScore(input: {
   const adxIndicator = indicators.find((i) => i.name === "ADX");
   const trendScore = adxIndicator ? clamp(Number(adxIndicator.value) * 1.5) : 40;
 
-  let finalScore =
+  // Haber var mı?
+const hasNews = news.length > 0;
+
+let finalScore: number;
+if (hasNews) {
+  // Haber varsa: normal ağırlık
+  finalScore =
     formationScore * 0.4 +
     indicatorScore * 0.25 +
     newsScore * 0.2 +
     volumeScore * 0.1 +
     trendScore * 0.05;
+} else {
+  // Haber yoksa: formasyon + indikatör ağırlığını arttır
+  finalScore =
+    formationScore * 0.5 +
+    indicatorScore * 0.35 +
+    volumeScore * 0.1 +
+    trendScore * 0.05;
+}
 
   if (bestFormation >= 85) finalScore += 5;
   if ((direction === "bullish" && changePercent >= 3) || (direction === "bearish" && changePercent <= -3)) finalScore += 3;
