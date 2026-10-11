@@ -1179,6 +1179,27 @@ async function scanGlobalShortTerm(timeframe: string) {
             timeframe,
           });
           if (ok) globalCreated += 1;
+          // Sinyali kaydet (başarı istatistiği için)
+if (ok) {
+  const risk = Math.abs(lastClose - stop);
+  const reward = Math.abs(targetPrice - lastClose);
+  const rr = risk > 0 ? `1:${(reward / risk).toFixed(1)}` : "—";
+
+  await saveFormationSignal({
+    userId,
+    market: target.market,
+    symbol: target.symbol,
+    timeframe,
+    formationName: best.name,
+    formationBias: best.bias,
+    qualityScore: best.confidence,
+    signalScore: best.confidence,
+    entryPrice: lastClose,
+    targetPrice,
+    stopPrice: stop,
+    riskReward: rr,
+  });
+}
           // Sinyali kaydet
 if (ok) {
   const risk = Math.abs(lastClose - stop);
