@@ -262,7 +262,7 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                         Güven: %{n.confidence} · Skor: {n.signal_score}/100
                       </p>
 
-                      {/* ===== FORMASYON KALİTE PUANI ===== */}
+                      {/* FORMASYON KALİTE PUANI */}
                       {n.quality_score != null && n.quality_score > 0 && (
                         <div className="mt-1 flex items-center gap-2">
                           <span className="text-[10px] text-muted-foreground">
@@ -321,6 +321,35 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                         <div className="mt-1 rounded border border-border/60 bg-secondary/20 px-2 py-1 text-[10px]">
                           <span className="text-muted-foreground">R/R: </span>
                           <span className="font-bold">1:{riskReward.toFixed(2)}</span>
+                        </div>
+                      )}
+
+                      {/* KAR/ZARAR PROJEKSİYONU ($100) */}
+                      {rewardPercent != null && riskPercent != null && (
+                        <div className="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[10px]">
+                          <p className="text-[9px] font-bold text-emerald-400 mb-1">
+                            💰 $100 YATIRIM İÇİN PROJEKSİYON
+                          </p>
+                          <div className="space-y-0.5">
+                            <div className="flex justify-between text-bull">
+                              <span>🎯 Hedef gerçekleşirse:</span>
+                              <span className="font-bold">
+                                ${(100 + rewardPercent).toFixed(2)} (+
+                                {rewardPercent.toFixed(2)}%)
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-bear">
+                              <span>🛑 Stop olursa:</span>
+                              <span className="font-bold">
+                                ${(100 + riskPercent).toFixed(2)} (
+                                {riskPercent.toFixed(2)}%)
+                              </span>
+                            </div>
+                          </div>
+                          <p className="mt-1.5 text-[8px] italic text-muted-foreground/70 border-t border-emerald-500/20 pt-1">
+                            ⚠️ Yatırım tavsiyesi değildir. Geçmiş performans gelecek
+                            performansı garanti etmez.
+                          </p>
                         </div>
                       )}
 

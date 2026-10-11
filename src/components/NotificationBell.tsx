@@ -1,4 +1,3 @@
-
 import { NotificationDetailModal } from "@/components/NotificationDetailModal";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -20,6 +19,23 @@ import { filterNotificationWithYolo } from "@/lib/notification-yolo-filter";
 type Props = {
   onOpenSymbol: (market: string, symbol: string) => void;
 };
+
+// =====================================================
+// KAR/ZARAR PROJEKSİYONU
+// =====================================================
+function parseTargetInfo(targetStr: string | null | undefined): { percent: number } | null {
+  if (!targetStr) return null;
+  const match = targetStr.match(/\(([+-]?[\d.]+)%\)/);
+  if (!match || !match[1]) return null;
+  return { percent: parseFloat(match[1]) };
+}
+
+function parseStopInfo(stopStr: string | null | undefined): { percent: number } | null {
+  if (!stopStr) return null;
+  const match = stopStr.match(/\(([+-]?[\d.]+)%\)/);
+  if (!match || !match[1]) return null;
+  return { percent: parseFloat(match[1]) };
+}
 
 export function NotificationBell({ onOpenSymbol }: Props) {
   const { user } = useAuth();
@@ -47,7 +63,6 @@ export function NotificationBell({ onOpenSymbol }: Props) {
     if (!user) return;
 
     const unsubscribe = subscribeToNotifications(user.id, (n) => {
-      // ===== YOLO FİLTRESİ =====
       const data = n.data as Record<string, unknown> | undefined;
       const motorPatternName =
         (data && typeof data["pattern"] === "string" ? (data["pattern"] as string) : "") ||
@@ -220,162 +235,201 @@ export function NotificationBell({ onOpenSymbol }: Props) {
                   </span>
                 </div>
               ) : (
-                notifications.map((n) => (
-                  <button
-                    key={n.id}
-                    type="button"
-                    onClick={() => void handleNotificationClick(n)}
-                    className={`w-full border-b border-border p-3 text-left transition-colors hover:bg-secondary/60 ${
-                      !n.read ? "bg-primary/5" : ""
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        {n.priority && (
-                          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-500">
-                            ⭐ ÖNCELİKLİ
+                notifications.map((n) => {
+                  const targetInfo = parseTargetInfo(n.ai_target);
+                  const stopInfo = parseStopInfo(n.ai_stop_loss);
+
+                  return (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => void handleNotificationClick(n)}
+                      className={`w-full border-b border-border p-3 text-left transition-colors hover:bg-secondary/60 ${
+                        !n.read ? "bg-primary/5" : ""
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          {n.priority && (
+                            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-500">
+                              ⭐ ÖNCELİKLİ
+                            </span>
+                          )}
+                          <span
+                            className={`rounded px-2 py-0.5 text-[10px] font-bold ${severityColorClass(
+                              n.severity,
+                            )}`}
+                          >
+                            {severityEmoji(n.severity)}{" "}
+                            {n.severity === "kritik"
+                              ? "KRİTİK"
+                              : n.severity === "önemli"
+                                ? "ÖNEMLİ"
+                                : "DİKKAT"}
                           </span>
-                        )}
-                        <span
-                          className={`rounded px-2 py-0.5 text-[10px] font-bold ${severityColorClass(
-                            n.severity,
-                          )}`}
-                        >
-                          {severityEmoji(n.severity)}{" "}
-                          {n.severity === "kritik"
-                            ? "KRİTİK"
-                            : n.severity === "önemli"
-                              ? "ÖNEMLİ"
-                              : "DİKKAT"}
-                        </span>
-                        <span className="num text-xs font-bold">
-                          {n.symbol.replace(/\.(IS|US)$/, "").replace(/USDT$/, "")}
-                        </span>
-                      </div>
-                      <span className="text-[9px] text-muted-foreground">
-                        {new Date(n.created_at).toLocaleString("tr-TR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          day: "2-digit",
-                          month: "2-digit",
-                        })}
-                        {!n.read && (
-                          <span className="ml-2 font-bold text-primary">• YENİ</span>
-                        )}
-                      </span>
-                    </div>
-
-                    <p className="mt-2 text-xs font-bold">{n.title}</p>
-
-                    {/* ===== FORMASYON KALİTE PUANI ===== */}
-                    {n.quality_score != null && n.quality_score > 0 && (
-                      <div className="mt-1 flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground">
-                          Formasyon Kalitesi:
-                        </span>
-                        <span
-                          className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
-                            n.quality_score >= 85
-                              ? "bg-emerald-500/15 text-emerald-500"
-                              : n.quality_score >= 75
-                                ? "bg-blue-500/15 text-blue-400"
-                                : n.quality_score >= 70
-                                  ? "bg-amber-500/15 text-amber-500"
-                                  : "bg-secondary text-muted-foreground"
-                          }`}
-                        >
-                          %{n.quality_score}
+                          <span className="num text-xs font-bold">
+                            {n.symbol.replace(/\.(IS|US)$/, "").replace(/USDT$/, "")}
+                          </span>
+                        </div>
+                        <span className="text-[9px] text-muted-foreground">
+                          {new Date(n.created_at).toLocaleString("tr-TR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            day: "2-digit",
+                            month: "2-digit",
+                          })}
+                          {!n.read && (
+                            <span className="ml-2 font-bold text-primary">• YENİ</span>
+                          )}
                         </span>
                       </div>
-                    )}
 
-                    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-                      {n.message.slice(0, 200)}
-                      {n.message.length > 200 ? "..." : ""}
-                    </p>
+                      <p className="mt-2 text-xs font-bold">{n.title}</p>
 
-                    {n.reason && (
-                      <p className="mt-1 text-[10px] italic leading-4 text-muted-foreground/80">
-                        {n.reason.slice(0, 150)}
-                        {n.reason.length > 150 ? "..." : ""}
+                      {/* FORMASYON KALİTE PUANI */}
+                      {n.quality_score != null && n.quality_score > 0 && (
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="text-[10px] text-muted-foreground">
+                            Formasyon Kalitesi:
+                          </span>
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                              n.quality_score >= 85
+                                ? "bg-emerald-500/15 text-emerald-500"
+                                : n.quality_score >= 75
+                                  ? "bg-blue-500/15 text-blue-400"
+                                  : n.quality_score >= 70
+                                    ? "bg-amber-500/15 text-amber-500"
+                                    : "bg-secondary text-muted-foreground"
+                            }`}
+                          >
+                            %{n.quality_score}
+                          </span>
+                        </div>
+                      )}
+
+                      <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                        {n.message.slice(0, 200)}
+                        {n.message.length > 200 ? "..." : ""}
                       </p>
-                    )}
 
-                    {(n.ai_entry_zone || n.ai_target || n.ai_stop_loss || n.ai_risk_reward) && (
-                      <div className="mt-2 grid grid-cols-2 gap-1 rounded-md border border-border/60 bg-secondary/30 p-2 text-[10px]">
-                        {n.ai_entry_zone && (
-                          <div className="flex items-center gap-1">
-                            <span>💰</span>
-                            <span className="text-muted-foreground">Giriş:</span>
-                            <span className="num font-bold">{n.ai_entry_zone}</span>
-                          </div>
-                        )}
-                        {n.ai_target && (
-                          <div className="flex items-center gap-1">
-                            <span>🎯</span>
-                            <span className="text-muted-foreground">Hedef:</span>
-                            <span className="num font-bold text-bull">{n.ai_target}</span>
-                          </div>
-                        )}
-                        {n.ai_stop_loss && (
-                          <div className="flex items-center gap-1">
-                            <span>🛑</span>
-                            <span className="text-muted-foreground">Stop:</span>
-                            <span className="num font-bold text-bear">{n.ai_stop_loss}</span>
-                          </div>
-                        )}
-                        {n.ai_risk_reward && (
-                          <div className="flex items-center gap-1">
-                            <span>⚖️</span>
-                            <span className="text-muted-foreground">R/R:</span>
-                            <span className="num font-bold">{n.ai_risk_reward}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                      {n.reason && (
+                        <p className="mt-1 text-[10px] italic leading-4 text-muted-foreground/80">
+                          {n.reason.slice(0, 150)}
+                          {n.reason.length > 150 ? "..." : ""}
+                        </p>
+                      )}
 
-                    {(n.ai_support || n.ai_resistance) && (
-                      <div className="mt-1 flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-secondary/20 px-2 py-1 text-[10px]">
-                        <span>📊</span>
-                        {n.ai_resistance && (
-                          <span className="text-bear">
-                            Direnç:{" "}
-                            <span className="num font-bold">{n.ai_resistance}</span>
+                      {/* GİRİŞ / HEDEF / STOP / R/R */}
+                      {(n.ai_entry_zone || n.ai_target || n.ai_stop_loss || n.ai_risk_reward) && (
+                        <div className="mt-2 grid grid-cols-2 gap-1 rounded-md border border-border/60 bg-secondary/30 p-2 text-[10px]">
+                          {n.ai_entry_zone && (
+                            <div className="flex items-center gap-1">
+                              <span>💰</span>
+                              <span className="text-muted-foreground">Giriş:</span>
+                              <span className="num font-bold">{n.ai_entry_zone}</span>
+                            </div>
+                          )}
+                          {n.ai_target && (
+                            <div className="flex items-center gap-1">
+                              <span>🎯</span>
+                              <span className="text-muted-foreground">Hedef:</span>
+                              <span className="num font-bold text-bull">{n.ai_target}</span>
+                            </div>
+                          )}
+                          {n.ai_stop_loss && (
+                            <div className="flex items-center gap-1">
+                              <span>🛑</span>
+                              <span className="text-muted-foreground">Stop:</span>
+                              <span className="num font-bold text-bear">{n.ai_stop_loss}</span>
+                            </div>
+                          )}
+                          {n.ai_risk_reward && (
+                            <div className="flex items-center gap-1">
+                              <span>⚖️</span>
+                              <span className="text-muted-foreground">R/R:</span>
+                              <span className="num font-bold">{n.ai_risk_reward}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* KAR/ZARAR PROJEKSİYONU ($100) */}
+                      {(targetInfo || stopInfo) && (
+                        <div className="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[10px]">
+                          <p className="text-[9px] font-bold text-emerald-400 mb-1">
+                            💰 $100 YATIRIM İÇİN PROJEKSİYON
+                          </p>
+                          <div className="space-y-0.5">
+                            {targetInfo && (
+                              <div className="flex justify-between text-bull">
+                                <span>🎯 Hedef gerçekleşirse:</span>
+                                <span className="font-bold">
+                                  ${(100 + targetInfo.percent).toFixed(2)} (+
+                                  {targetInfo.percent.toFixed(2)}%)
+                                </span>
+                              </div>
+                            )}
+                            {stopInfo && (
+                              <div className="flex justify-between text-bear">
+                                <span>🛑 Stop olursa:</span>
+                                <span className="font-bold">
+                                  ${(100 + stopInfo.percent).toFixed(2)} (
+                                  {stopInfo.percent.toFixed(2)}%)
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <p className="mt-1.5 text-[8px] italic text-muted-foreground/70 border-t border-emerald-500/20 pt-1">
+                            ⚠️ Yatırım tavsiyesi değildir. Geçmiş performans gelecek
+                            performansı garanti etmez.
+                          </p>
+                        </div>
+                      )}
+
+                      {(n.ai_support || n.ai_resistance) && (
+                        <div className="mt-1 flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-secondary/20 px-2 py-1 text-[10px]">
+                          <span>📊</span>
+                          {n.ai_resistance && (
+                            <span className="text-bear">
+                              Direnç:{" "}
+                              <span className="num font-bold">{n.ai_resistance}</span>
+                            </span>
+                          )}
+                          {n.ai_support && (
+                            <span className="text-bull">
+                              Destek:{" "}
+                              <span className="num font-bold">{n.ai_support}</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {n.fear_greed != null && (
+                        <div className="mt-1 flex items-center gap-2 rounded-md border border-border/60 bg-secondary/20 px-2 py-1 text-[10px]">
+                          <span>😱</span>
+                          <span className="text-muted-foreground">Piyasa:</span>
+                          <span className="num font-bold">
+                            {n.fear_greed}{" "}
+                            {n.fear_greed <= 24
+                              ? "(Aşırı Korku)"
+                              : n.fear_greed <= 44
+                                ? "(Korku)"
+                                : n.fear_greed <= 55
+                                  ? "(Nötr)"
+                                  : n.fear_greed <= 74
+                                    ? "(Açgözlülük)"
+                                    : "(Aşırı Açgözlülük)"}
                           </span>
-                        )}
-                        {n.ai_support && (
-                          <span className="text-bull">
-                            Destek:{" "}
-                            <span className="num font-bold">{n.ai_support}</span>
-                          </span>
-                        )}
-                      </div>
-                    )}
+                        </div>
+                      )}
 
-                    {n.fear_greed != null && (
-                      <div className="mt-1 flex items-center gap-2 rounded-md border border-border/60 bg-secondary/20 px-2 py-1 text-[10px]">
-                        <span>😱</span>
-                        <span className="text-muted-foreground">Piyasa:</span>
-                        <span className="num font-bold">
-                          {n.fear_greed}{" "}
-                          {n.fear_greed <= 24
-                            ? "(Aşırı Korku)"
-                            : n.fear_greed <= 44
-                              ? "(Korku)"
-                              : n.fear_greed <= 55
-                                ? "(Nötr)"
-                                : n.fear_greed <= 74
-                                  ? "(Açgözlülük)"
-                                  : "(Aşırı Açgözlülük)"}
-                        </span>
-                      </div>
-                    )}
-
-                    <p className="mt-2 text-[9px] font-bold text-primary">
-                      👁️ Detay için tıkla →
-                    </p>
-                  </button>
-                ))
+                      <p className="mt-2 text-[9px] font-bold text-primary">
+                        👁️ Detay için tıkla →
+                      </p>
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>
