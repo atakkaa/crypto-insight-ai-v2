@@ -763,7 +763,59 @@ async function supabaseInsert(table: string, data: any): Promise<boolean> {
     return res.ok;
   } catch { return false; }
 }
+// ==========================================================
+// FORMASYON SİNYALİ KAYDET
+// ==========================================================
 
+async function saveFormationSignal(params: {
+  userId: string;
+  market: string;
+  symbol: string;
+  timeframe: string;
+  formationName: string;
+  formationBias: string;
+  qualityScore: number;
+  signalScore: number;
+  entryPrice: number;
+  targetPrice: number;
+  stopPrice: number;
+  riskReward: string;
+}) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/formation_signals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        Prefer: "return=minimal,resolution=ignore-duplicates",
+      },
+      body: JSON.stringify({
+        user_id: params.userId,
+        market: params.market,
+        symbol: params.symbol,
+        timeframe: params.timeframe,
+        formation_name: params.formationName,
+        formation_bias: params.formationBias,
+        quality_score: params.qualityScore,
+        signal_score: params.signalScore,
+        entry_price: params.entryPrice,
+        target_price: params.targetPrice,
+        stop_price: params.stopPrice,
+        risk_reward: params.riskReward,
+        status: "pending",
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Formation signal kayıt hatası:", await res.text());
+    }
+  } catch (error) {
+    console.error("Formation signal fetch hatası:", error);
+  }
+}
 function getDedupeHoursForTf(tf: string): number {
   switch (tf) {
     case "15m": return 1;
@@ -981,6 +1033,27 @@ async function scanShortTermForPremium(timeframe: string) {
             timeframe,
           });
           if (ok) created += 1;
+          // Sinyali kaydet (başarı istatistiği için)
+if (ok) {
+  const risk = Math.abs(lastClose - stop);
+  const reward = Math.abs(targetPrice - lastClose);
+  const rr = risk > 0 ? `1:${(reward / risk).toFixed(1)}` : "—";
+
+  await saveFormationSignal({
+    userId,
+    market: target.market,
+    symbol: target.symbol,
+    timeframe,
+    formationName: best.name,
+    formationBias: best.bias,
+    qualityScore: best.confidence,
+    signalScore: best.confidence,
+    entryPrice: lastClose,
+    targetPrice,
+    stopPrice: stop,
+    riskReward: rr,
+  });
+}
         }
       } catch (err) { console.error(`Hata (${target.symbol}):`, err); }
     }));
@@ -1106,6 +1179,27 @@ async function scanGlobalShortTerm(timeframe: string) {
             timeframe,
           });
           if (ok) globalCreated += 1;
+          // Sinyali kaydet
+if (ok) {
+  const risk = Math.abs(lastClose - stop);
+  const reward = Math.abs(targetPrice - lastClose);
+  const rr = risk > 0 ? `1:${(reward / risk).toFixed(1)}` : "—";
+
+  await saveFormationSignal({
+    userId,
+    market: target.market,
+    symbol: target.symbol,
+    timeframe,
+    formationName: best.name,
+    formationBias: best.bias,
+    qualityScore: best.confidence,
+    signalScore: best.confidence,
+    entryPrice: lastClose,
+    targetPrice,
+    stopPrice: stop,
+    riskReward: rr,
+  });
+}
         }
       } catch (err) {
         console.error(`Global tarama hatası (${target.symbol}):`, err);

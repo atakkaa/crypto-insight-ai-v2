@@ -2076,6 +2076,59 @@ async function isOnCooldown(userId: string, symbol: string, market: string, type
 }
 
 // ==========================================================
+// FORMASYON SİNYALİ KAYDET
+// ==========================================================
+
+async function saveFormationSignal(params: {
+  userId: string;
+  market: string;
+  symbol: string;
+  timeframe: string;
+  formationName: string;
+  formationBias: string;
+  qualityScore: number;
+  signalScore: number;
+  entryPrice: number;
+  targetPrice: number;
+  stopPrice: number;
+  riskReward: string;
+}) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/formation_signals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        Prefer: "return=minimal,resolution=ignore-duplicates",
+      },
+      body: JSON.stringify({
+        user_id: params.userId,
+        market: params.market,
+        symbol: params.symbol,
+        timeframe: params.timeframe,
+        formation_name: params.formationName,
+        formation_bias: params.formationBias,
+        quality_score: params.qualityScore,
+        signal_score: params.signalScore,
+        entry_price: params.entryPrice,
+        target_price: params.targetPrice,
+        stop_price: params.stopPrice,
+        risk_reward: params.riskReward,
+        status: "pending",
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Formation signal kayıt hatası:", await res.text());
+    }
+  } catch (error) {
+    console.error("Formation signal fetch hatası:", error);
+  }
+}
+// ==========================================================
 // BİLDİRİM GÖNDER
 // ==========================================================
 
@@ -2154,6 +2207,35 @@ async function sendNotification(params: {
     });
     if (!res.ok) console.error(`Bildirim hatası (${symbol}):`, res.status, await res.text());
     else console.log(`✅ ${typeLabel} → ${symbol} → score=${signalScore.score} → ${ai.action}`);
+        // Sinyali kaydet (başarı istatistiği için)
+    if (res.ok && analysis.patterns.length > 0) {
+      const primaryPattern = analysis.patterns[0];
+      const entryPrice = parseFloat(ai.entryZone?.split("-")[0]?.replace("$", "").trim() ?? "0") || symbol ? 0 : 0;
+      
+      // Entry fiyatını current price olarak al (daha güvenli)
+      const currentPrice = analysis.price;
+      
+      // Target ve stop'u ai'den parse et
+      const targetPrice = parseFloat(ai.target?.match(/\$([\d.]+)/)?.[1] ?? "0") || 0;
+      const stopPrice = parseFloat(ai.stopLoss?.match(/\$([\d.]+)/)?.[1] ?? "0") || 0;
+      
+      if (currentPrice > 0 && targetPrice > 0 && stopPrice > 0 && primaryPattern) {
+        await saveFormationSignal({
+          userId,
+          market,
+          symbol,
+          timeframe: "1h", // scan-firsat 1h kullanıyor
+          formationName: primaryPattern.name,
+          formationBias: primaryPattern.direction === "bullish" ? "yükseliş" : primaryPattern.direction === "bearish" ? "düşüş" : "nötr",
+          qualityScore: primaryPattern.qualityScore ?? primaryPattern.confidence,
+          signalScore: signalScore.score,
+          entryPrice: currentPrice,
+          targetPrice,
+          stopPrice,
+          riskReward: ai.riskReward ?? "—",
+        });
+      }
+    }
   } catch (error) {
     console.error("Bildirim fetch hatası:", error);
   }
