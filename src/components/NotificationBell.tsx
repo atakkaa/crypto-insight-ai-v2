@@ -21,7 +21,7 @@ type Props = {
 };
 
 // =====================================================
-// KAR/ZARAR PROJEKSİYONU
+// KAR/ZARAR PROJEKSİYONU — YARDIMCILAR
 // =====================================================
 function parseTargetInfo(targetStr: string | null | undefined): { percent: number } | null {
   if (!targetStr) return null;
@@ -35,6 +35,21 @@ function parseStopInfo(stopStr: string | null | undefined): { percent: number } 
   const match = stopStr.match(/\(([+-]?[\d.]+)%\)/);
   if (!match || !match[1]) return null;
   return { percent: parseFloat(match[1]) };
+}
+
+// SAT sinyali mi kontrol et (başlık, mesaj veya data)
+function isSellSignal(n: Notification): boolean {
+  const data = n.data as Record<string, unknown> | undefined;
+  const direction = data && typeof data["direction"] === "string" ? data["direction"] : "";
+  
+  // Mesajda "SAT" var mı?
+  if (typeof n.message === "string" && n.message.includes("SAT")) return true;
+  // Başlıkta "SAT" var mı?
+  if (typeof n.title === "string" && n.title.includes("SAT")) return true;
+  // Data'da direction bearish mi?
+  if (direction === "bearish") return true;
+  
+  return false;
 }
 
 export function NotificationBell({ onOpenSymbol }: Props) {
@@ -238,6 +253,15 @@ export function NotificationBell({ onOpenSymbol }: Props) {
                 notifications.map((n) => {
                   const targetInfo = parseTargetInfo(n.ai_target);
                   const stopInfo = parseStopInfo(n.ai_stop_loss);
+                  const isSell = isSellSignal(n);
+
+                  // SAT sinyali için yön ters
+                  const targetReturn = isSell
+                    ? -(targetInfo?.percent ?? 0)
+                    : targetInfo?.percent ?? 0;
+                  const stopReturn = isSell
+                    ? -(stopInfo?.percent ?? 0)
+                    : stopInfo?.percent ?? 0;
 
                   return (
                     <button
@@ -358,24 +382,35 @@ export function NotificationBell({ onOpenSymbol }: Props) {
                       {(targetInfo || stopInfo) && (
                         <div className="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[10px]">
                           <p className="text-[9px] font-bold text-emerald-400 mb-1">
-                            💰 $100 YATIRIM İÇİN PROJEKSİYON
+                            💰 $100 YATIRIM İÇİN PROJEKSİYON{" "}
+                            {isSell ? "(KISA)" : "(UZUN)"}
                           </p>
                           <div className="space-y-0.5">
                             {targetInfo && (
-                              <div className="flex justify-between text-bull">
+                              <div
+                                className={`flex justify-between ${
+                                  targetReturn >= 0 ? "text-bull" : "text-bear"
+                                }`}
+                              >
                                 <span>🎯 Hedef gerçekleşirse:</span>
                                 <span className="font-bold">
-                                  ${(100 + targetInfo.percent).toFixed(2)} (+
-                                  {targetInfo.percent.toFixed(2)}%)
+                                  ${(100 + targetReturn).toFixed(2)} (
+                                  {targetReturn >= 0 ? "+" : ""}
+                                  {targetReturn.toFixed(2)}%)
                                 </span>
                               </div>
                             )}
                             {stopInfo && (
-                              <div className="flex justify-between text-bear">
+                              <div
+                                className={`flex justify-between ${
+                                  stopReturn >= 0 ? "text-bull" : "text-bear"
+                                }`}
+                              >
                                 <span>🛑 Stop olursa:</span>
                                 <span className="font-bold">
-                                  ${(100 + stopInfo.percent).toFixed(2)} (
-                                  {stopInfo.percent.toFixed(2)}%)
+                                  ${(100 + stopReturn).toFixed(2)} (
+                                  {stopReturn >= 0 ? "+" : ""}
+                                  {stopReturn.toFixed(2)}%)
                                 </span>
                               </div>
                             )}

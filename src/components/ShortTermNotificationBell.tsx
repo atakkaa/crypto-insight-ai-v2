@@ -219,6 +219,17 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                       ? Math.abs(rewardPercent / riskPercent)
                       : null;
 
+                  // SAT sinyali mi?
+                  const isSell = n.pattern_bias === "düşüş";
+
+                  // SAT sinyali için yön ters
+                  const targetReturn = isSell
+                    ? -(rewardPercent ?? 0)
+                    : rewardPercent ?? 0;
+                  const stopReturn = isSell
+                    ? -(riskPercent ?? 0)
+                    : riskPercent ?? 0;
+
                   return (
                     <button
                       key={n.id}
@@ -328,21 +339,32 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
                       {rewardPercent != null && riskPercent != null && (
                         <div className="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[10px]">
                           <p className="text-[9px] font-bold text-emerald-400 mb-1">
-                            💰 $100 YATIRIM İÇİN PROJEKSİYON
+                            💰 $100 YATIRIM İÇİN PROJEKSİYON{" "}
+                            {isSell ? "(KISA)" : "(UZUN)"}
                           </p>
                           <div className="space-y-0.5">
-                            <div className="flex justify-between text-bull">
+                            <div
+                              className={`flex justify-between ${
+                                targetReturn >= 0 ? "text-bull" : "text-bear"
+                              }`}
+                            >
                               <span>🎯 Hedef gerçekleşirse:</span>
                               <span className="font-bold">
-                                ${(100 + rewardPercent).toFixed(2)} (+
-                                {rewardPercent.toFixed(2)}%)
+                                ${(100 + targetReturn).toFixed(2)} (
+                                {targetReturn >= 0 ? "+" : ""}
+                                {targetReturn.toFixed(2)}%)
                               </span>
                             </div>
-                            <div className="flex justify-between text-bear">
+                            <div
+                              className={`flex justify-between ${
+                                stopReturn >= 0 ? "text-bull" : "text-bear"
+                              }`}
+                            >
                               <span>🛑 Stop olursa:</span>
                               <span className="font-bold">
-                                ${(100 + riskPercent).toFixed(2)} (
-                                {riskPercent.toFixed(2)}%)
+                                ${(100 + stopReturn).toFixed(2)} (
+                                {stopReturn >= 0 ? "+" : ""}
+                                {stopReturn.toFixed(2)}%)
                               </span>
                             </div>
                           </div>
