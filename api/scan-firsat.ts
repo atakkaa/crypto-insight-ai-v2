@@ -2207,35 +2207,6 @@ async function sendNotification(params: {
     });
     if (!res.ok) console.error(`Bildirim hatası (${symbol}):`, res.status, await res.text());
     else console.log(`✅ ${typeLabel} → ${symbol} → score=${signalScore.score} → ${ai.action}`);
-        // Sinyali kaydet (başarı istatistiği için)
-    if (res.ok && analysis.patterns.length > 0) {
-      const primaryPattern = analysis.patterns[0];
-      const entryPrice = parseFloat(ai.entryZone?.split("-")[0]?.replace("$", "").trim() ?? "0") || symbol ? 0 : 0;
-      
-      // Entry fiyatını current price olarak al (daha güvenli)
-      const currentPrice = analysis.price;
-      
-      // Target ve stop'u ai'den parse et
-      const targetPrice = parseFloat(ai.target?.match(/\$([\d.]+)/)?.[1] ?? "0") || 0;
-      const stopPrice = parseFloat(ai.stopLoss?.match(/\$([\d.]+)/)?.[1] ?? "0") || 0;
-      
-      if (currentPrice > 0 && targetPrice > 0 && stopPrice > 0 && primaryPattern) {
-        await saveFormationSignal({
-          userId,
-          market,
-          symbol,
-          timeframe: "1h", // scan-firsat 1h kullanıyor
-          formationName: primaryPattern.name,
-          formationBias: primaryPattern.direction === "bullish" ? "yükseliş" : primaryPattern.direction === "bearish" ? "düşüş" : "nötr",
-          qualityScore: primaryPattern.qualityScore ?? primaryPattern.confidence,
-          signalScore: signalScore.score,
-          entryPrice: currentPrice,
-          targetPrice,
-          stopPrice,
-          riskReward: ai.riskReward ?? "—",
-        });
-      }
-    }
   } catch (error) {
     console.error("Bildirim fetch hatası:", error);
   }
@@ -2352,6 +2323,49 @@ export default async function handler(request: RequestLike, response: ResponseLi
 
     for (const result of importantResults) {
       try {
+              // ═══════════════════════════════════════════════════════════
+      // SİNYALİ KAYDET (başarı istatistiği için)
+      // Bildirim gitse de gitmese de, her önemli formasyon kaydedilir
+      // ═══════════════════════════════════════════════════════════
+      const primaryPattern = result.patterns[0];
+      if (primaryPattern && result.price > 0) {
+        const sr = findSupportResistance(result.candles ?? [], result.price);
+        const pos = calculatePosition(
+          result.price,
+          result.overallDirection,
+          sr.support,
+          sr.resistance,
+        );
+
+        const targetPrice = parseFloat(pos.target.match(/\$([\d.]+)/)?.[1] ?? "0") || 0;
+        const stopPrice = parseFloat(pos.stopLoss.match(/\$([\d.]+)/)?.[1] ?? "0") || 0;
+
+        if (targetPrice > 0 && stopPrice > 0) {
+          const risk = Math.abs(result.price - stopPrice);
+          const reward = Math.abs(targetPrice - result.price);
+          const rr = risk > 0 ? `1:${(reward / risk).toFixed(1)}` : "—";
+
+          await saveFormationSignal({
+            userId: "global",
+            market: result.market,
+            symbol: result.symbol,
+            timeframe: "1h",
+            formationName: primaryPattern.name,
+            formationBias:
+              primaryPattern.direction === "bullish"
+                ? "yükseliş"
+                : primaryPattern.direction === "bearish"
+                  ? "düşüş"
+                  : "nötr",
+            qualityScore: primaryPattern.qualityScore ?? primaryPattern.confidence,
+            signalScore: 0,
+            entryPrice: result.price,
+            targetPrice,
+            stopPrice,
+            riskReward: rr,
+          });
+        }
+      }
         const users = await getUsersForSymbol(result.market, result.symbol);
         const hasPriorityUser = users.some((u) => u.type === "priority");
 
