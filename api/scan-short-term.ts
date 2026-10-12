@@ -840,6 +840,7 @@ function validateTargetStop(
   const MIN_RR = 1.5;
   const IDEAL_RR = 2.0;
   const MAX_STOP_DISTANCE = 0.03; // %3
+  const MIN_TARGET_DISTANCE = 0.015; // %1.5 — YENİ
 
   if (bias === "nötr") {
     return { target: lastClose, stop: lastClose };
@@ -876,6 +877,12 @@ function validateTargetStop(
       target = Math.min(rawTargetValue, rrTarget);
     } else {
       target = rrTarget;
+    }
+
+    // ✅ YENİ: Minimum hedef mesafesi kontrolü
+    const targetDistance = (target - lastClose) / lastClose;
+    if (targetDistance < MIN_TARGET_DISTANCE) {
+      target = lastClose * (1 + MIN_TARGET_DISTANCE);
     }
 
     // Geçersizse
@@ -916,6 +923,12 @@ function validateTargetStop(
     target = Math.max(rawTargetValue, rrTarget);
   } else {
     target = rrTarget;
+  }
+
+  // ✅ YENİ: Minimum hedef mesafesi kontrolü
+  const targetDistance = (lastClose - target) / lastClose;
+  if (targetDistance < MIN_TARGET_DISTANCE) {
+    target = lastClose * (1 - MIN_TARGET_DISTANCE);
   }
 
   // Geçersizse
