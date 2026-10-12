@@ -2104,6 +2104,14 @@ function Dashboard() {
                 Liste
               </Link>
             </nav>
+            {(tierInfo?.tier === "admin" || tierInfo?.tier === "premium" || tierInfo?.tier === "trial") && (
+  <Link
+    to="/stats"
+    className="rounded-md border border-purple-500/40 px-3 py-1.5 text-xs font-bold text-purple-400 hover:bg-purple-500/10"
+  >
+    📊 İstatistikler
+  </Link>
+)}
                         <Link
               to="/settings"
               className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
