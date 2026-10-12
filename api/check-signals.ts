@@ -1,4 +1,4 @@
-// api/cron/check-signals.ts
+// api/check-signals.ts
 // Bekleyen sinyalleri kontrol eder ve sonuçlandırır.
 // Her saat başı çalışır (Vercel cron).
 
