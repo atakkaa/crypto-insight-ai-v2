@@ -3,6 +3,10 @@
     {
       "path": "/api/scan-firsat",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/check-signals",
+      "schedule": "0 * * * *"
     }
   ],
   "functions": {
