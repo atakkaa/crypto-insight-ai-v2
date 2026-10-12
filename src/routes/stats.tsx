@@ -1,6 +1,19 @@
 // src/routes/stats.tsx
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
 
 import { useAuth } from "@/hooks/useAuth";
 
@@ -47,6 +60,21 @@ type StatsData = {
     losses: number;
     winRate: number;
   }>;
+  byBias: Array<{
+    bias: string;
+    total: number;
+    wins: number;
+    losses: number;
+    winRate: number;
+  }>;
+};
+
+const COLORS = {
+  bull: "#22c55e",
+  bear: "#ef4444",
+  neutral: "#a855f7",
+  amber: "#f59e0b",
+  blue: "#3b82f6",
 };
 
 function StatsPage() {
@@ -112,7 +140,7 @@ function StatsPage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="max-w-md text-center">
-          <p className="text-2xl">🔒</p>
+          <p className="text-4xl">🔒</p>
           <p className="mt-3 text-lg font-bold">Premium Üyelere Özel</p>
           <p className="mt-2 text-sm text-muted-foreground">{error}</p>
           <p className="mt-4 text-xs text-muted-foreground">
@@ -126,18 +154,57 @@ function StatsPage() {
 
   if (!data) return null;
 
+  // Pie chart verisi (başarılı / başarısız)
+  const winLossData = [
+    { name: "Başarılı", value: data.general.wins, color: COLORS.bull },
+    { name: "Başarısız", value: data.general.losses, color: COLORS.bear },
+  ].filter((d) => d.value > 0);
+
+  // Formasyon bar chart verisi (ilk 10)
+  const formationChartData = data.byFormation
+    .slice(0, 10)
+    .map((f) => ({
+      name: f.name.length > 15 ? f.name.slice(0, 15) + "..." : f.name,
+      fullName: f.name,
+      "Başarı %": f.winRate,
+      "Toplam": f.total,
+    }));
+
+  // Coin bar chart verisi (ilk 10)
+  const symbolChartData = data.bySymbol
+    .slice(0, 10)
+    .map((s) => ({
+      name: s.symbol.replace("USDT", "").replace(".IS", "").slice(0, 10),
+      fullName: s.symbol,
+      "Başarı %": s.winRate,
+      "Toplam": s.total,
+    }));
+
+  // Bias pie chart verisi
+  const biasData = data.byBias.map((b) => ({
+    name: b.bias === "yükseliş" ? "AL" : b.bias === "düşüş" ? "SAT" : "Nötr",
+    value: b.total,
+    color:
+      b.bias === "yükseliş"
+        ? COLORS.bull
+        : b.bias === "düşüş"
+          ? COLORS.bear
+          : COLORS.neutral,
+  }));
+
   return (
     <div className="container mx-auto max-w-7xl space-y-6 p-4">
       {/* BAŞLIK */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">📊 Formasyon Başarı İstatistikleri</h1>
+          <h1 className="text-2xl font-bold">
+            📊 Formasyon Başarı İstatistikleri
+          </h1>
           <p className="text-sm text-muted-foreground">
             Sonuçlanmış sinyallerin başarı oranları ve performansı
           </p>
         </div>
 
-        {/* ZAMAN FİLTRESİ */}
         <div className="flex items-center gap-2">
           <label className="text-xs text-muted-foreground">Zaman:</label>
           <select
@@ -186,7 +253,6 @@ function StatsPage() {
         />
       </div>
 
-      {/* İKİNCİ SATIR */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Başarılı"
@@ -227,94 +293,181 @@ function StatsPage() {
         </div>
       )}
 
-      {/* FORMASYON TABLOSU */}
-      {data.byFormation.length > 0 && (
-        <div className="rounded-lg border border-border bg-card">
-          <div className="border-b border-border p-3">
-            <h2 className="text-sm font-bold">📋 Formasyon Bazlı Başarı</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="border-b border-border bg-secondary/30">
-                <tr>
-                  <th className="p-2 text-left">Formasyon</th>
-                  <th className="p-2 text-right">Toplam</th>
-                  <th className="p-2 text-right">Başarılı</th>
-                  <th className="p-2 text-right">Başarısız</th>
-                  <th className="p-2 text-right">Başarı %</th>
-                  <th className="p-2 text-right">Ort. Kazanç</th>
-                  <th className="p-2 text-right">Ort. Kayıp</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.byFormation.map((f) => (
-                  <tr key={f.name} className="border-b border-border/50">
-                    <td className="p-2 font-bold">{f.name}</td>
-                    <td className="p-2 text-right">{f.total}</td>
-                    <td className="p-2 text-right text-bull">{f.wins}</td>
-                    <td className="p-2 text-right text-bear">{f.losses}</td>
-                    <td
-                      className={`p-2 text-right font-bold ${
-                        f.winRate >= 60
-                          ? "text-bull"
-                          : f.winRate >= 40
-                            ? "text-amber-500"
-                            : "text-bear"
-                      }`}
+      {/* GRAFİKLER */}
+      {data.general.total > 0 && (
+        <>
+          {/* PIE CHART SATIRI */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* BAŞARI ORANI PIE CHART */}
+            <div className="rounded-lg border border-border bg-card p-4">
+              <h2 className="text-sm font-bold mb-4">🥧 Başarı Dağılımı</h2>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={winLossData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value, percent }) =>
+                        `${name}: ${value} (${((percent ?? 0) * 100).toFixed(0)}%)`
+                      }
+                      outerRadius={90}
+                      fill="#8884d8"
+                      dataKey="value"
                     >
-                      {f.winRate}%
-                    </td>
-                    <td className="p-2 text-right text-bull">+{f.avgWin}%</td>
-                    <td className="p-2 text-right text-bear">{f.avgLoss}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                      {winLossData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1f2937",
+                        border: "1px solid #374151",
+                        borderRadius: 8,
+                        color: "#fff",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
 
-      {/* COIN TABLOSU */}
-      {data.bySymbol.length > 0 && (
-        <div className="rounded-lg border border-border bg-card">
-          <div className="border-b border-border p-3">
-            <h2 className="text-sm font-bold">🪙 Coin/Hisse Bazlı Başarı</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="border-b border-border bg-secondary/30">
-                <tr>
-                  <th className="p-2 text-left">Sembol</th>
-                  <th className="p-2 text-left">Market</th>
-                  <th className="p-2 text-right">Toplam</th>
-                  <th className="p-2 text-right">Başarı %</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.bySymbol.map((s) => (
-                  <tr key={s.symbol} className="border-b border-border/50">
-                    <td className="p-2 font-bold">
-                      {s.symbol.replace("USDT", "").replace(".IS", "")}
-                    </td>
-                    <td className="p-2 text-muted-foreground">{s.market}</td>
-                    <td className="p-2 text-right">{s.total}</td>
-                    <td
-                      className={`p-2 text-right font-bold ${
-                        s.winRate >= 60
-                          ? "text-bull"
-                          : s.winRate >= 40
-                            ? "text-amber-500"
-                            : "text-bear"
-                      }`}
+            {/* BIAS (AL/SAT) PIE CHART */}
+            <div className="rounded-lg border border-border bg-card p-4">
+              <h2 className="text-sm font-bold mb-4">🎯 AL/SAT Dağılımı</h2>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={biasData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value, percent }) =>
+                        `${name}: ${value} (${((percent ?? 0) * 100).toFixed(0)}%)`
+                      }
+                      outerRadius={90}
+                      fill="#8884d8"
+                      dataKey="value"
                     >
-                      {s.winRate}%
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      {biasData.map((entry, index) => (
+                        <Cell key={`cell-bias-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1f2937",
+                        border: "1px solid #374151",
+                        borderRadius: 8,
+                        color: "#fff",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
-        </div>
+
+          {/* FORMASYON BAR CHART */}
+          {formationChartData.length > 0 && (
+            <div className="rounded-lg border border-border bg-card p-4">
+              <h2 className="text-sm font-bold mb-4">
+                📋 Formasyon Başarı Oranları (İlk 10)
+              </h2>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={formationChartData}
+                    margin={{ top: 5, right: 20, left: 0, bottom: 40 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis
+                      dataKey="name"
+                      angle={-30}
+                      textAnchor="end"
+                      height={80}
+                      tick={{ fill: "#9ca3af", fontSize: 11 }}
+                    />
+                    <YAxis
+                      tick={{ fill: "#9ca3af", fontSize: 11 }}
+                      domain={[0, 100]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1f2937",
+                        border: "1px solid #374151",
+                        borderRadius: 8,
+                        color: "#fff",
+                      }}
+                      formatter={(value: number, name: string) => [
+                        name === "Başarı %" ? `${value}%` : value,
+                        name,
+                      ]}
+                      labelFormatter={(label: string, payload: any) => {
+                        const item = payload?.[0]?.payload;
+                        return item?.fullName ?? label;
+                      }}
+                    />
+                    <Bar
+                      dataKey="Başarı %"
+                      fill={COLORS.blue}
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* COIN BAR CHART */}
+          {symbolChartData.length > 0 && (
+            <div className="rounded-lg border border-border bg-card p-4">
+              <h2 className="text-sm font-bold mb-4">
+                🪙 Coin/Hisse Başarı Oranları (İlk 10)
+              </h2>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={symbolChartData}
+                    margin={{ top: 5, right: 20, left: 0, bottom: 20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: "#9ca3af", fontSize: 11 }}
+                    />
+                    <YAxis
+                      tick={{ fill: "#9ca3af", fontSize: 11 }}
+                      domain={[0, 100]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1f2937",
+                        border: "1px solid #374151",
+                        borderRadius: 8,
+                        color: "#fff",
+                      }}
+                      formatter={(value: number, name: string) => [
+                        name === "Başarı %" ? `${value}%` : value,
+                        name,
+                      ]}
+                      labelFormatter={(label: string, payload: any) => {
+                        const item = payload?.[0]?.payload;
+                        return item?.fullName ?? label;
+                      }}
+                    />
+                    <Bar
+                      dataKey="Başarı %"
+                      fill={COLORS.amber}
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
