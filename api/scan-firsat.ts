@@ -1,4 +1,4 @@
-// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v8 (Kaliteli Formasyon Motoru)
+// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v9 (Kaliteli Formasyon Motoru + İstatistik)
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
 
 // ==========================================================
@@ -513,7 +513,6 @@ type PatternSignal = {
   direction: "bullish" | "bearish" | "neutral";
   confidence: number;
   description: string;
-  /** Kalite puanı (0-100) — yeni formasyon motorundan gelir */
   qualityScore?: number;
 };
 
@@ -1143,10 +1142,8 @@ function analyzeIndicators(candles: Candle[]): IndicatorSignal[] {
 }
 
 // ==========================================================
-// FORMASYON ANALİZİ (YENİ — KALİTELİ MOTOR)
+// FORMASYON ANALİZİ (KALİTELİ MOTOR)
 // ==========================================================
-// Eski basit detectPatterns() kaldırıldı.
-// Yerine formation-engine.server.ts'teki kaliteli motor kullanılıyor.
 
 function detectPatternsWithQuality(candles: Candle[]): PatternSignal[] {
   try {
@@ -1372,35 +1369,27 @@ function calculatePosition(
 ): { entryZone: string; target: string; stopLoss: string; riskReward: string } {
   const fmt = (n: number) => n.toFixed(n > 100 ? 2 : 4);
 
-  // R/R hedefleri: en az 1:1.5, ideal 1:2
   const MIN_RR = 1.5;
   const IDEAL_RR = 2.0;
-  const MAX_STOP_DISTANCE = 0.03; // %3
+  const MAX_STOP_DISTANCE = 0.03;
 
   if (direction === "bullish") {
     const entryMin = currentPrice * 0.995;
     const entryMax = currentPrice * 1.005;
 
-    // Stop: Destek VEYA %2 (hangisi daha yakınsa)
     const supportStop = support > 0 ? support : currentPrice * 0.98;
     const percentStop = currentPrice * 0.98;
     let stopPrice = Math.max(supportStop, percentStop);
 
-    // Stop çok uzaksa kısalt
     if (currentPrice - stopPrice > currentPrice * MAX_STOP_DISTANCE) {
       stopPrice = currentPrice * (1 - MAX_STOP_DISTANCE);
     }
 
     const risk = currentPrice - stopPrice;
-
-    // R/R hedefi
     const rrTarget = currentPrice + risk * IDEAL_RR;
     const rrMinTarget = currentPrice + risk * MIN_RR;
-
-    // Direnç
     const resistanceTarget = resistance > 0 ? resistance : currentPrice * 1.05;
 
-    // Hedef seçimi
     let targetPrice: number;
     if (resistanceTarget >= rrMinTarget) {
       targetPrice = Math.min(resistanceTarget, rrTarget);
@@ -1421,26 +1410,19 @@ function calculatePosition(
     const entryMin = currentPrice * 0.995;
     const entryMax = currentPrice * 1.005;
 
-    // Stop: Direnç VEYA %2 (hangisi daha yakınsa)
     const resistanceStop = resistance > 0 ? resistance : currentPrice * 1.02;
     const percentStop = currentPrice * 1.02;
     let stopPrice = Math.min(resistanceStop, percentStop);
 
-    // Stop çok uzaksa kısalt
     if (stopPrice - currentPrice > currentPrice * MAX_STOP_DISTANCE) {
       stopPrice = currentPrice * (1 + MAX_STOP_DISTANCE);
     }
 
     const risk = stopPrice - currentPrice;
-
-    // R/R hedefi
     const rrTarget = currentPrice - risk * IDEAL_RR;
     const rrMinTarget = currentPrice - risk * MIN_RR;
-
-    // Destek
     const supportTarget = support > 0 ? support : currentPrice * 0.95;
 
-    // Hedef seçimi
     let targetPrice: number;
     if (supportTarget <= rrMinTarget) {
       targetPrice = Math.max(supportTarget, rrTarget);
@@ -1701,7 +1683,7 @@ function computeSignalScore(input: {
   patterns: PatternSignal[];
   news: NewsItem[];
   isPriority?: boolean;
-}):SignalScoreResult {
+}): SignalScoreResult {
   const { direction, indicators, patterns, news, changePercent, isPriority = false } = input;
 
   const sameDirPatterns = patterns.filter((p) => p.direction === direction);
@@ -1750,26 +1732,23 @@ function computeSignalScore(input: {
   const adxIndicator = indicators.find((i) => i.name === "ADX");
   const trendScore = adxIndicator ? clamp(Number(adxIndicator.value) * 1.5) : 40;
 
-  // Haber var mı?
-const hasNews = news.length > 0;
+  const hasNews = news.length > 0;
 
-let finalScore: number;
-if (hasNews) {
-  // Haber varsa: normal ağırlık
-  finalScore =
-    formationScore * 0.4 +
-    indicatorScore * 0.25 +
-    newsScore * 0.2 +
-    volumeScore * 0.1 +
-    trendScore * 0.05;
-} else {
-  // Haber yoksa: formasyon + indikatör ağırlığını arttır
-  finalScore =
-    formationScore * 0.5 +
-    indicatorScore * 0.35 +
-    volumeScore * 0.1 +
-    trendScore * 0.05;
-}
+  let finalScore: number;
+  if (hasNews) {
+    finalScore =
+      formationScore * 0.4 +
+      indicatorScore * 0.25 +
+      newsScore * 0.2 +
+      volumeScore * 0.1 +
+      trendScore * 0.05;
+  } else {
+    finalScore =
+      formationScore * 0.5 +
+      indicatorScore * 0.35 +
+      volumeScore * 0.1 +
+      trendScore * 0.05;
+  }
 
   if (bestFormation >= 85) finalScore += 5;
   if ((direction === "bullish" && changePercent >= 3) || (direction === "bearish" && changePercent <= -3)) finalScore += 3;
@@ -2076,11 +2055,10 @@ async function isOnCooldown(userId: string, symbol: string, market: string, type
 }
 
 // ==========================================================
-// FORMASYON SİNYALİ KAYDET
+// FORMASYON SİNYALİ KAYDET (GLOBAL — user_id NULL)
 // ==========================================================
 
 async function saveFormationSignal(params: {
-  userId: string;
   market: string;
   symbol: string;
   timeframe: string;
@@ -2105,7 +2083,7 @@ async function saveFormationSignal(params: {
         Prefer: "return=minimal,resolution=ignore-duplicates",
       },
       body: JSON.stringify({
-        user_id: params.userId,
+        user_id: null,
         market: params.market,
         symbol: params.symbol,
         timeframe: params.timeframe,
@@ -2128,6 +2106,7 @@ async function saveFormationSignal(params: {
     console.error("Formation signal fetch hatası:", error);
   }
 }
+
 // ==========================================================
 // BİLDİRİM GÖNDER
 // ==========================================================
@@ -2210,7 +2189,9 @@ async function sendNotification(params: {
   } catch (error) {
     console.error("Bildirim fetch hatası:", error);
   }
-}// ==========================================================
+}
+
+// ==========================================================
 // ANALİZ
 // ==========================================================
 
@@ -2218,7 +2199,7 @@ async function analyzeSymbol(symbol: string, market: string): Promise<AnalysisRe
   try {
     const candles = market === "crypto"
       ? await getCryptoCandles(symbol, "1h")
-      : await getYahooCandles(symbol, "1d");
+      : await getYahooCandles(symbol, "1h");
     const indicators = analyzeIndicators(candles);
     const patterns = detectPatternsWithQuality(candles);
     if (indicators.length === 0 && patterns.length === 0) return null;
@@ -2316,19 +2297,29 @@ export default async function handler(request: RequestLike, response: ResponseLi
 
     console.log(`📊 ${finalAssets.length} varlık taranacak.`);
     const results = await scanSymbolsParallel(finalAssets, 10);
+
+    // Sadece formasyonu olan sonuçlar (tüm market'ler dahil)
+    const resultsWithPatterns = results.filter(
+      (r) => r.patterns.length > 0 && r.price > 0,
+    );
+    // Bildirim gönderilecekler (important olanlar)
     const importantResults = results.filter((r) => r.isImportant);
-    console.log(`✅ ${results.length} varlık analiz edildi, ${importantResults.length} önemli.`);
+    console.log(
+      `✅ ${results.length} varlık analiz edildi, ${resultsWithPatterns.length} formasyonlu, ${importantResults.length} önemli.`,
+    );
 
     let totalNotifications = 0;
 
-    for (const result of importantResults) {
+    // ═══════════════════════════════════════════════════════════
+    // 1. AŞAMA: TÜM FORMASYONLU SONUÇLARI DB'YE KAYDET
+    // (Bildirim gitse de gitmese de istatistik için kaydedilir)
+    // ═══════════════════════════════════════════════════════════
+    let signalsSaved = 0;
+    for (const result of resultsWithPatterns) {
       try {
-              // ═══════════════════════════════════════════════════════════
-      // SİNYALİ KAYDET (başarı istatistiği için)
-      // Bildirim gitse de gitmese de, her önemli formasyon kaydedilir
-      // ═══════════════════════════════════════════════════════════
-      const primaryPattern = result.patterns[0];
-      if (primaryPattern && result.price > 0) {
+        const primaryPattern = result.patterns[0];
+        if (!primaryPattern) continue;
+
         const sr = findSupportResistance(result.candles ?? [], result.price);
         const pos = calculatePosition(
           result.price,
@@ -2337,8 +2328,10 @@ export default async function handler(request: RequestLike, response: ResponseLi
           sr.resistance,
         );
 
-        const targetPrice = parseFloat(pos.target.match(/\$([\d.]+)/)?.[1] ?? "0") || 0;
-        const stopPrice = parseFloat(pos.stopLoss.match(/\$([\d.]+)/)?.[1] ?? "0") || 0;
+        const targetPrice =
+          parseFloat(pos.target.match(/\$([\d.]+)/)?.[1] ?? "0") || 0;
+        const stopPrice =
+          parseFloat(pos.stopLoss.match(/\$([\d.]+)/)?.[1] ?? "0") || 0;
 
         if (targetPrice > 0 && stopPrice > 0) {
           const risk = Math.abs(result.price - stopPrice);
@@ -2346,7 +2339,6 @@ export default async function handler(request: RequestLike, response: ResponseLi
           const rr = risk > 0 ? `1:${(reward / risk).toFixed(1)}` : "—";
 
           await saveFormationSignal({
-            userId: "global",
             market: result.market,
             symbol: result.symbol,
             timeframe: "1h",
@@ -2364,8 +2356,19 @@ export default async function handler(request: RequestLike, response: ResponseLi
             stopPrice,
             riskReward: rr,
           });
+          signalsSaved++;
         }
+      } catch (err) {
+        console.error(`Sinyal kayıt hatası (${result.symbol}):`, err);
       }
+    }
+    console.log(`💾 ${signalsSaved} formasyon sinyali DB'ye kaydedildi.`);
+
+    // ═══════════════════════════════════════════════════════════
+    // 2. AŞAMA: BİLDİRİM GÖNDER (sadece important olanlar)
+    // ═══════════════════════════════════════════════════════════
+    for (const result of importantResults) {
+      try {
         const users = await getUsersForSymbol(result.market, result.symbol);
         const hasPriorityUser = users.some((u) => u.type === "priority");
 
@@ -2508,7 +2511,8 @@ export default async function handler(request: RequestLike, response: ResponseLi
 
     return response.status(200).json({
       success: true, message: "Tarama tamamlandı.",
-      scanned: results.length, important: importantResults.length,
+      scanned: results.length, withPatterns: resultsWithPatterns.length,
+      signalsSaved, important: importantResults.length,
       notificationsSent: totalNotifications, totalAssets: finalAssets.length,
       timestamp: new Date().toISOString(),
     });
