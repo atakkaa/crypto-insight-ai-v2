@@ -1052,7 +1052,7 @@ const ASIA_TOP_50 = ["7203.T","6758.T","9984.T","6861.T","8306.T","8035.T","9432
 const EUROPE_TOP_50 = ["SAP.DE","SIE.DE","ALV.DE","DTE.DE","AIR.PA","ASML.AS","NESN.SW","ROG.SW","NOVN.SW","NOVO-B.CO","SHEL.L","AZN.L","HSBA.L","ULVR.L","BP.L","GSK.L","RIO.L","LSEG.L","REL.L","VOD.L","LVMH.PA","TTE.PA","OR.PA","SAN.PA","MC.PA","SU.PA","BNP.PA","AI.PA","SAF.PA","CS.PA","ENEL.MI","ENI.MI","ISP.MI","UCG.MI","STLAM.MI","IBE.MC","ITX.MC","SAN.MC","BBVA.MC","REP.MC","INGA.AS","ADYEN.AS","PHIA.AS","HEIA.AS","UNA.AS","VOLV-B.ST","ERIC-B.ST","EQNR.OL","NOKIA.HE","DSV.V"];
 
 // ==========================================================
-// İNDİKATÖR ANALİZİ (DEĞİŞMEDİ)
+// İNDİKATÖR ANALİZİ
 // ==========================================================
 
 function analyzeIndicators(candles: Candle[]): IndicatorSignal[] {
@@ -2199,7 +2199,7 @@ async function analyzeSymbol(symbol: string, market: string): Promise<AnalysisRe
   try {
     const candles = market === "crypto"
       ? await getCryptoCandles(symbol, "1h")
-      : await getYahooCandles(symbol, "1h");
+      : await getYahooCandles(symbol, "1d");
     const indicators = analyzeIndicators(candles);
     const patterns = detectPatternsWithQuality(candles);
     if (indicators.length === 0 && patterns.length === 0) return null;
@@ -2312,7 +2312,6 @@ export default async function handler(request: RequestLike, response: ResponseLi
 
     // ═══════════════════════════════════════════════════════════
     // 1. AŞAMA: TÜM FORMASYONLU SONUÇLARI DB'YE KAYDET
-    // (Bildirim gitse de gitmese de istatistik için kaydedilir)
     // ═══════════════════════════════════════════════════════════
     let signalsSaved = 0;
     for (const result of resultsWithPatterns) {
