@@ -1,6 +1,7 @@
 // api/check-signals.ts
 // Bekleyen sinyalleri kontrol eder ve sonuçlandırır.
-// Her saat başı çalışır (Vercel cron).
+// Vercel cron / harici cron tarafından çağrılır.
+// OPTIMIZE EDİLDİ: Toplu fiyat çekme + paralel işleme + cache
 
 const ENV = (globalThis as any).process?.env ?? {};
 const SUPABASE_URL = String(ENV.SUPABASE_URL ?? "");
@@ -29,11 +30,13 @@ type PendingSignal = {
   signal_time: string;
 };
 
-// Vercel cron header'ı veya Authorization Bearer token kontrolü
-function authorized(request: RequestLike): boolean {
-  if (!CRON_SECRET) return true; // Secret yoksa herkese izin ver (test için)
+// ==========================================================
+// YETKİLENDİRME
+// ==========================================================
 
-  // Vercel cron header
+function authorized(request: RequestLike): boolean {
+  if (!CRON_SECRET) return true;
+
   const headers = request.headers;
   if (headers && typeof (headers as any).get === "function") {
     const cronHeader = (headers as any).get("x-cron-secret");
@@ -49,21 +52,32 @@ function authorized(request: RequestLike): boolean {
   return false;
 }
 
-// Binance'ten güncel fiyat çek (kripto)
-async function fetchCryptoPrice(symbol: string): Promise<number | null> {
+// ==========================================================
+// TOPLU FİYAT ÇEKME (Binance)
+// ==========================================================
+
+async function fetchAllCryptoPrices(): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
   try {
-    const res = await fetch(
-      `https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}`,
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as { price?: string };
-    return data.price ? Number(data.price) : null;
-  } catch {
-    return null;
+    const res = await fetch("https://api.binance.com/api/v3/ticker/price");
+    if (!res.ok) return map;
+    const data = (await res.json()) as Array<{ symbol: string; price: string }>;
+    for (const item of data) {
+      const price = Number(item.price);
+      if (Number.isFinite(price)) {
+        map.set(item.symbol, price);
+      }
+    }
+  } catch (err) {
+    console.error("Binance toplu fiyat hatası:", err);
   }
+  return map;
 }
 
-// Yahoo Finance'ten güncel fiyat çek (hisse)
+// ==========================================================
+// HİSSE FİYAT ÇEKME (Yahoo, paralel)
+// ==========================================================
+
 async function fetchStockPrice(symbol: string): Promise<number | null> {
   try {
     const res = await fetch(
@@ -81,20 +95,39 @@ async function fetchStockPrice(symbol: string): Promise<number | null> {
   }
 }
 
-async function getCurrentPrice(symbol: string, market: string): Promise<number | null> {
-  if (market === "crypto") {
-    return fetchCryptoPrice(symbol);
+// Paralel hisse fiyat çekme (10'arlı gruplar)
+async function fetchStockPricesParallel(
+  symbols: string[],
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  const CONCURRENCY = 10;
+
+  for (let i = 0; i < symbols.length; i += CONCURRENCY) {
+    const batch = symbols.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (sym) => {
+        const price = await fetchStockPrice(sym);
+        return { sym, price };
+      }),
+    );
+    for (const r of results) {
+      if (r.price !== null) map.set(r.sym, r.price);
+    }
   }
-  return fetchStockPrice(symbol);
+
+  return map;
 }
 
-// Supabase'den pending sinyalleri çek
+// ==========================================================
+// SUPABASE
+// ==========================================================
+
 async function fetchPendingSignals(): Promise<PendingSignal[]> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
 
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/formation_signals?status=eq.pending&select=id,symbol,market,formation_bias,entry_price,target_price,stop_price,signal_time&limit=500`,
+      `${SUPABASE_URL}/rest/v1/formation_signals?status=eq.pending&select=id,symbol,market,formation_bias,entry_price,target_price,stop_price,signal_time&limit=200`,
       {
         headers: {
           apikey: SUPABASE_SERVICE_ROLE_KEY,
@@ -109,42 +142,61 @@ async function fetchPendingSignals(): Promise<PendingSignal[]> {
   }
 }
 
-// Sinyali güncelle
-async function updateSignal(
-  id: string,
-  status: string,
-  resultPrice: number,
-  resultPercent: number,
-): Promise<boolean> {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return false;
+async function updateSignals(
+  updates: Array<{
+    id: string;
+    status: string;
+    resultPrice: number;
+    resultPercent: number;
+  }>,
+): Promise<number> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return 0;
+  if (updates.length === 0) return 0;
 
-  try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/formation_signals?id=eq.${id}`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-          Prefer: "return=minimal",
-        },
-        body: JSON.stringify({
-          status,
-          result_price: resultPrice,
-          result_percent: resultPercent,
-          result_time: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }),
-      },
+  // Toplu PATCH (Supabase desteklemez, tek tek paralel yapalım)
+  const CONCURRENCY = 10;
+  let successCount = 0;
+
+  for (let i = 0; i < updates.length; i += CONCURRENCY) {
+    const batch = updates.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (u) => {
+        try {
+          const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/formation_signals?id=eq.${u.id}`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: SUPABASE_SERVICE_ROLE_KEY,
+                Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                Prefer: "return=minimal",
+              },
+              body: JSON.stringify({
+                status: u.status,
+                result_price: u.resultPrice,
+                result_percent: u.resultPercent,
+                result_time: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }),
+            },
+          );
+          return res.ok;
+        } catch {
+          return false;
+        }
+      }),
     );
-    return res.ok;
-  } catch {
-    return false;
+    successCount += results.filter(Boolean).length;
   }
+
+  return successCount;
 }
 
-// Ana handler
+// ==========================================================
+// ANA HANDLER
+// ==========================================================
+
 export default async function handler(
   request: RequestLike,
   response: ResponseLike,
@@ -156,34 +208,95 @@ export default async function handler(
     return response.status(401).json({ error: "unauthorized" });
   }
 
+  const startTime = Date.now();
+
   try {
     const signals = await fetchPendingSignals();
     console.log(`🔍 ${signals.length} pending sinyal kontrol ediliyor...`);
+
+    if (signals.length === 0) {
+      return response.status(200).json({
+        success: true,
+        checked: 0,
+        hitTarget: 0,
+        hitStop: 0,
+        expired: 0,
+        stillPending: 0,
+        duration: Date.now() - startTime,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 1. ADIM: TÜM FİYATLARI TOPLU ÇEK
+    // ═══════════════════════════════════════════════════════════
+
+    const cryptoSymbols = signals
+      .filter((s) => s.market === "crypto")
+      .map((s) => s.symbol);
+    const stockSymbols = [
+      ...new Set(
+        signals
+          .filter((s) => s.market !== "crypto")
+          .map((s) => s.symbol),
+      ),
+    ];
+
+    console.log(
+      `💰 ${cryptoSymbols.length} kripto + ${stockSymbols.length} hisse fiyatı çekiliyor...`,
+    );
+
+    const [cryptoPrices, stockPrices] = await Promise.all([
+      fetchAllCryptoPrices(),
+      fetchStockPricesParallel(stockSymbols),
+    ]);
+
+    console.log(
+      `✅ Fiyatlar alındı: ${cryptoPrices.size} kripto, ${stockPrices.size} hisse`,
+    );
+
+    // ═══════════════════════════════════════════════════════════
+    // 2. ADIM: SİNYALLERİ DEĞERLENDİR
+    // ═══════════════════════════════════════════════════════════
+
+    const now = Date.now();
+    const MAX_AGE_HOURS = 24 * 7; // 7 gün
+    const updates: Array<{
+      id: string;
+      status: string;
+      resultPrice: number;
+      resultPercent: number;
+    }> = [];
 
     let hitTarget = 0;
     let hitStop = 0;
     let expired = 0;
     let stillPending = 0;
 
-    const MAX_AGE_HOURS = 24 * 7; // 7 gün
-    const now = Date.now();
-
     for (const signal of signals) {
       try {
-        // Yaş kontrolü (7 günden eski mi?)
+        // Yaş kontrolü
         const signalTime = new Date(signal.signal_time).getTime();
         const ageHours = (now - signalTime) / (1000 * 60 * 60);
 
         if (ageHours > MAX_AGE_HOURS) {
-          // Süresi geçmiş → expired
-          await updateSignal(signal.id, "expired", 0, 0);
+          updates.push({
+            id: signal.id,
+            status: "expired",
+            resultPrice: 0,
+            resultPercent: 0,
+          });
           expired++;
           continue;
         }
 
-        // Güncel fiyatı al
-        const currentPrice = await getCurrentPrice(signal.symbol, signal.market);
-        if (currentPrice === null) {
+        // Fiyatı map'ten oku
+        const currentPrice =
+          signal.market === "crypto"
+            ? cryptoPrices.get(signal.symbol)
+            : stockPrices.get(signal.symbol);
+
+        if (currentPrice === undefined || currentPrice === null) {
           stillPending++;
           continue;
         }
@@ -197,7 +310,6 @@ export default async function handler(
         let resultPercent = 0;
 
         if (bias === "yükseliş") {
-          // AL sinyali: hedef yukarıda, stop aşağıda
           if (currentPrice >= target) {
             newStatus = "hit_target";
             resultPercent = ((currentPrice - entry) / entry) * 100;
@@ -210,7 +322,6 @@ export default async function handler(
             stillPending++;
           }
         } else if (bias === "düşüş") {
-          // SAT sinyali: hedef aşağıda, stop yukarıda
           if (currentPrice <= target) {
             newStatus = "hit_target";
             resultPercent = ((entry - currentPrice) / entry) * 100;
@@ -227,10 +338,12 @@ export default async function handler(
         }
 
         if (newStatus) {
-          await updateSignal(signal.id, newStatus, currentPrice, resultPercent);
-          console.log(
-            `✅ ${signal.symbol}: ${newStatus} (%${resultPercent.toFixed(2)})`,
-          );
+          updates.push({
+            id: signal.id,
+            status: newStatus,
+            resultPrice: currentPrice,
+            resultPercent,
+          });
         }
       } catch (err) {
         console.error(`Sinyal hatası (${signal.id}):`, err);
@@ -238,13 +351,25 @@ export default async function handler(
       }
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // 3. ADIM: TOPLU GÜNCELLE
+    // ═══════════════════════════════════════════════════════════
+
+    const updatedCount = await updateSignals(updates);
+    console.log(`💾 ${updatedCount} sinyal güncellendi.`);
+
+    const duration = Date.now() - startTime;
+    console.log(`⏱️ Toplam süre: ${duration}ms`);
+
     return response.status(200).json({
       success: true,
       checked: signals.length,
+      updated: updatedCount,
       hitTarget,
       hitStop,
       expired,
       stillPending,
+      duration,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
