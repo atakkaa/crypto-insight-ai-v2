@@ -144,6 +144,7 @@ function StatsPage() {
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [symbolSearch, setSymbolSearch] = useState("");
+  const [downloadingCsv, setDownloadingCsv] = useState(false);
 
   // ==========================================================
   // FETCH
@@ -182,7 +183,7 @@ function StatsPage() {
   }, [user, filters]);
 
   // ==========================================================
-  // AKTİF FİLTRE SAYISI (chip için)
+  // AKTİF FİLTRE SAYISI
   // ==========================================================
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -240,6 +241,49 @@ function StatsPage() {
   }
 
   // ==========================================================
+  // CSV İNDİR
+  // ==========================================================
+  async function downloadCsv() {
+    if (!user || downloadingCsv) return;
+
+    setDownloadingCsv(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("days", String(filters.days));
+      params.set("format", "csv");
+      for (const f of filters.formations) params.append("formation", f);
+      for (const m of filters.markets) params.append("market", m);
+      if (filters.symbol) params.set("symbol", filters.symbol);
+      if (filters.bias) params.set("bias", filters.bias);
+
+      const res = await fetch(`/api/formation-stats?${params.toString()}`, {
+        headers: { "x-user-id": user.id },
+      });
+
+      if (!res.ok) {
+        throw new Error(`CSV indirilemedi (${res.status})`);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `formasyon-istatistikleri-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("CSV indirilemedi:", err);
+      alert("CSV indirilemedi. Lütfen tekrar deneyin.");
+    } finally {
+      setDownloadingCsv(false);
+    }
+  }
+
+  // ==========================================================
   // GİRİŞ YOK
   // ==========================================================
   if (!user) {
@@ -261,7 +305,9 @@ function StatsPage() {
   if (loading && !data) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-muted-foreground">İstatistikler yükleniyor...</p>
+        <p className="text-sm text-muted-foreground">
+          İstatistikler yükleniyor...
+        </p>
       </div>
     );
   }
@@ -277,7 +323,8 @@ function StatsPage() {
           <p className="mt-3 text-lg font-bold">Premium Üyelere Özel</p>
           <p className="mt-2 text-sm text-muted-foreground">{error}</p>
           <p className="mt-4 text-xs text-muted-foreground">
-            Formasyon başarı oranlarını ve istatistiklerini görmek için premium üyeliğe geçin.
+            Formasyon başarı oranlarını ve istatistiklerini görmek için premium
+            üyeliğe geçin.
           </p>
         </div>
       </div>
@@ -287,6 +334,7 @@ function StatsPage() {
   if (!data) return null;
 
   const options = data.filterOptions;
+  const isAdmin = data.tier === "admin";
 
   // ==========================================================
   // GRAFİK VERİLERİ
@@ -313,7 +361,12 @@ function StatsPage() {
   const biasData = data.byBias.map((b) => ({
     name: biasLabel(b.bias),
     value: b.total,
-    color: b.bias === "yükseliş" ? COLORS.bull : b.bias === "düşüş" ? COLORS.bear : COLORS.neutral,
+    color:
+      b.bias === "yükseliş"
+        ? COLORS.bull
+        : b.bias === "düşüş"
+          ? COLORS.bear
+          : COLORS.neutral,
   }));
 
   const filteredSymbols = options.symbols.filter((s) =>
@@ -328,17 +381,34 @@ function StatsPage() {
       {/* BAŞLIK */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">📊 Formasyon Başarı İstatistikleri</h1>
+          <h1 className="text-2xl font-bold">
+            📊 Formasyon Başarı İstatistikleri
+          </h1>
           <p className="text-sm text-muted-foreground">
             Sonuçlanmış sinyallerin başarı oranları ve performansı
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* CSV İNDİR — sadece admin */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => void downloadCsv()}
+              disabled={downloadingCsv || loading}
+              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50"
+              title="Mevcut filtrelerle CSV indir"
+            >
+              {downloadingCsv ? "⏳ İndiriliyor..." : "📥 CSV İndir"}
+            </button>
+          )}
+
           <label className="text-xs text-muted-foreground">Zaman:</label>
           <select
             value={filters.days}
-            onChange={(e) => setFilters((prev) => ({ ...prev, days: Number(e.target.value) }))}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, days: Number(e.target.value) }))
+            }
             className="rounded-md border border-border bg-background px-3 py-1.5 text-xs"
           >
             <option value={7}>Son 7 gün</option>
@@ -364,7 +434,11 @@ function StatsPage() {
             )}
           </button>
 
-          {loading && <span className="text-xs text-muted-foreground">Güncelleniyor...</span>}
+          {loading && (
+            <span className="text-xs text-muted-foreground">
+              Güncelleniyor...
+            </span>
+          )}
         </div>
       </div>
 
@@ -458,7 +532,9 @@ function StatsPage() {
 
             {/* SEMBOL */}
             <div>
-              <p className="text-xs font-bold text-muted-foreground">Sembol (tek seçim)</p>
+              <p className="text-xs font-bold text-muted-foreground">
+                Sembol (tek seçim)
+              </p>
               <input
                 type="text"
                 value={symbolSearch}
@@ -480,7 +556,9 @@ function StatsPage() {
                   <button
                     key={s}
                     type="button"
-                    onClick={() => setFilters((prev) => ({ ...prev, symbol: s }))}
+                    onClick={() =>
+                      setFilters((prev) => ({ ...prev, symbol: s }))
+                    }
                     className={`block w-full px-3 py-1.5 text-left text-xs hover:bg-secondary ${
                       filters.symbol === s ? "bg-secondary font-bold" : ""
                     }`}
@@ -489,14 +567,18 @@ function StatsPage() {
                   </button>
                 ))}
                 {filteredSymbols.length === 0 && (
-                  <p className="px-3 py-2 text-xs text-muted-foreground">Sonuç yok.</p>
+                  <p className="px-3 py-2 text-xs text-muted-foreground">
+                    Sonuç yok.
+                  </p>
                 )}
               </div>
             </div>
 
             {/* BIAS */}
             <div>
-              <p className="text-xs font-bold text-muted-foreground">Yön (Bias)</p>
+              <p className="text-xs font-bold text-muted-foreground">
+                Yön (Bias)
+              </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <button
                   type="button"
@@ -536,7 +618,9 @@ function StatsPage() {
       {/* AKTİF FİLTRE CHIP'LERİ */}
       {activeFilterCount > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-bold text-muted-foreground">Aktif:</span>
+          <span className="text-[11px] font-bold text-muted-foreground">
+            Aktif:
+          </span>
 
           {filters.formations.map((f) => (
             <button
@@ -546,7 +630,9 @@ function StatsPage() {
               className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
             >
               <span>{f}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">×</span>
+              <span className="text-muted-foreground group-hover:text-destructive">
+                ×
+              </span>
             </button>
           ))}
 
@@ -558,7 +644,9 @@ function StatsPage() {
               className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
             >
               <span>{marketLabel(m)}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">×</span>
+              <span className="text-muted-foreground group-hover:text-destructive">
+                ×
+              </span>
             </button>
           ))}
 
@@ -569,7 +657,9 @@ function StatsPage() {
               className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
             >
               <span>📈 {filters.symbol}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">×</span>
+              <span className="text-muted-foreground group-hover:text-destructive">
+                ×
+              </span>
             </button>
           )}
 
@@ -580,7 +670,9 @@ function StatsPage() {
               className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
             >
               <span>{biasLabel(filters.bias)}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">×</span>
+              <span className="text-muted-foreground group-hover:text-destructive">
+                ×
+              </span>
             </button>
           )}
 
@@ -596,7 +688,11 @@ function StatsPage() {
 
       {/* GENEL İSTATİSTİK KARTLARI */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Toplam Sinyal" value={data.general.total.toString()} icon="📈" />
+        <StatCard
+          title="Toplam Sinyal"
+          value={data.general.total.toString()}
+          icon="📈"
+        />
         <StatCard
           title="Başarı Oranı"
           value={`${data.general.winRate}%`}
@@ -739,7 +835,9 @@ function StatsPage() {
 
           {formationChartData.length > 0 && (
             <div className="rounded-lg border border-border bg-card p-4">
-              <h2 className="mb-4 text-sm font-bold">📋 Formasyon Başarı Oranları (İlk 10)</h2>
+              <h2 className="mb-4 text-sm font-bold">
+                📋 Formasyon Başarı Oranları (İlk 10)
+              </h2>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
@@ -754,7 +852,10 @@ function StatsPage() {
                       height={80}
                       tick={{ fill: "#9ca3af", fontSize: 11 }}
                     />
-                    <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} domain={[0, 100]} />
+                    <YAxis
+                      tick={{ fill: "#9ca3af", fontSize: 11 }}
+                      domain={[0, 100]}
+                    />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#1f2937",
@@ -771,7 +872,11 @@ function StatsPage() {
                         return item?.fullName ?? label;
                       }}
                     />
-                    <Bar dataKey="Başarı %" fill={COLORS.blue} radius={[4, 4, 0, 0]} />
+                    <Bar
+                      dataKey="Başarı %"
+                      fill={COLORS.blue}
+                      radius={[4, 4, 0, 0]}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -780,7 +885,9 @@ function StatsPage() {
 
           {symbolChartData.length > 0 && (
             <div className="rounded-lg border border-border bg-card p-4">
-              <h2 className="mb-4 text-sm font-bold">🪙 Coin/Hisse Başarı Oranları (İlk 10)</h2>
+              <h2 className="mb-4 text-sm font-bold">
+                🪙 Coin/Hisse Başarı Oranları (İlk 10)
+              </h2>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
@@ -788,8 +895,14 @@ function StatsPage() {
                     margin={{ top: 5, right: 20, left: 0, bottom: 20 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis dataKey="name" tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} domain={[0, 100]} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: "#9ca3af", fontSize: 11 }}
+                    />
+                    <YAxis
+                      tick={{ fill: "#9ca3af", fontSize: 11 }}
+                      domain={[0, 100]}
+                    />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#1f2937",
@@ -806,7 +919,11 @@ function StatsPage() {
                         return item?.fullName ?? label;
                       }}
                     />
-                    <Bar dataKey="Başarı %" fill={COLORS.amber} radius={[4, 4, 0, 0]} />
+                    <Bar
+                      dataKey="Başarı %"
+                      fill={COLORS.amber}
+                      radius={[4, 4, 0, 0]}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -841,7 +958,9 @@ function StatCard({
         </p>
         <span className="text-lg">{icon}</span>
       </div>
-      <p className={`mt-2 text-2xl font-bold ${color ?? "text-foreground"}`}>{value}</p>
+      <p className={`mt-2 text-2xl font-bold ${color ?? "text-foreground"}`}>
+        {value}
+      </p>
     </div>
   );
 }

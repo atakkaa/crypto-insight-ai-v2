@@ -1,6 +1,6 @@
 // api/formation-stats.ts
 // Formasyon başarı istatistiklerini döndürür.
-// Tier bazlı: Free (403), Premium (filtreli), Admin (tam)
+// Tier bazlı: Free (403), Premium (filtreli), Admin (tam + CSV export)
 
 const ENV = (globalThis as any).process?.env ?? {};
 const SUPABASE_URL = String(ENV.SUPABASE_URL ?? "");
@@ -16,6 +16,7 @@ type ResponseLike = {
   setHeader: (name: string, value: string) => void;
   status: (code: number) => ResponseLike;
   json: (data: unknown) => unknown;
+  send: (data: string) => unknown;
 };
 
 type SignalRow = {
@@ -34,17 +35,60 @@ type UserTier = "admin" | "premium" | "trial" | "free";
 // YARDIMCILAR
 // ==========================================================
 
-// Query param'ı dizi olarak al (tek veya çoklu)
 function asArray(value: string | string[] | undefined): string[] {
   if (!value) return [];
   const arr = Array.isArray(value) ? value : [value];
-  return arr.map((v) => String(v).trim()).filter((v) => v.length > 0);
+  return arr
+    .map((v) => String(v).trim())
+    .filter((v) => v.length > 0);
 }
 
-// Supabase eq/in filter değerini üret
 function toSupabaseIn(values: string[]): string {
-  // in.(a,b,c) — değerlerde virgül varsa escape edilmeli
   return `in.(${values.map((v) => v.replace(/,/g, "")).join(",")})`;
+}
+
+// CSV hücresini güvenli hale getir
+function csvCell(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+  // İçinde virgül, tırnak veya yeni satır varsa tırnak içine al
+  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+// Sinyal dizisini CSV string'e çevir
+function toCsv(signals: SignalRow[]): string {
+  const headers = [
+    "symbol",
+    "market",
+    "formation_name",
+    "formation_bias",
+    "status",
+    "result_percent",
+    "signal_time",
+  ];
+
+  const lines: string[] = [];
+  lines.push(headers.join(","));
+
+  for (const s of signals) {
+    lines.push(
+      [
+        csvCell(s.symbol),
+        csvCell(s.market),
+        csvCell(s.formation_name),
+        csvCell(s.formation_bias),
+        csvCell(s.status),
+        csvCell(s.result_percent),
+        csvCell(s.signal_time),
+      ].join(","),
+    );
+  }
+
+  // Excel'in Türkçe karakterleri doğru görmesi için BOM ekle
+  return "\uFEFF" + lines.join("\r\n");
 }
 
 // ==========================================================
@@ -90,17 +134,19 @@ async function getUserTier(userId: string): Promise<UserTier> {
 
 type Filters = {
   days: number;
-  formations: string[]; // çoklu
-  markets: string[]; // çoklu
-  symbol?: string; // tek
-  bias?: string; // tek
+  formations: string[];
+  markets: string[];
+  symbol?: string;
+  bias?: string;
 };
 
 async function fetchSignals(filters: Filters): Promise<SignalRow[]> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
 
   try {
-    const since = new Date(Date.now() - filters.days * 24 * 3600_000).toISOString();
+    const since = new Date(
+      Date.now() - filters.days * 24 * 3600_000,
+    ).toISOString();
 
     const params = new URLSearchParams();
     params.set(
@@ -127,12 +173,15 @@ async function fetchSignals(filters: Filters): Promise<SignalRow[]> {
     if (filters.symbol) params.set("symbol", `eq.${filters.symbol}`);
     if (filters.bias) params.set("formation_bias", `eq.${filters.bias}`);
 
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/formation_signals?${params.toString()}`, {
-      headers: {
-        apikey: SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/formation_signals?${params.toString()}`,
+      {
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
       },
-    });
+    );
     if (!res.ok) return [];
     return (await res.json()) as SignalRow[];
   } catch {
@@ -141,7 +190,7 @@ async function fetchSignals(filters: Filters): Promise<SignalRow[]> {
 }
 
 // ==========================================================
-// FİLTRE SEÇENEKLERİ (filtresiz, bağımsız sorgu)
+// FİLTRE SEÇENEKLERİ
 // ==========================================================
 
 async function fetchFilterOptions(days: number): Promise<{
@@ -168,12 +217,15 @@ async function fetchFilterOptions(days: number): Promise<{
     params.set("signal_time", `gte.${since}`);
     params.set("limit", "10000");
 
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/formation_signals?${params.toString()}`, {
-      headers: {
-        apikey: SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/formation_signals?${params.toString()}`,
+      {
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
       },
-    });
+    );
     if (!res.ok) return empty;
 
     const rows = (await res.json()) as Array<{
@@ -222,15 +274,20 @@ function calculateStats(signals: SignalRow[]) {
     .filter((n) => Number.isFinite(n));
 
   const avgWin =
-    winPercents.length > 0 ? winPercents.reduce((a, b) => a + b, 0) / winPercents.length : 0;
+    winPercents.length > 0
+      ? winPercents.reduce((a, b) => a + b, 0) / winPercents.length
+      : 0;
   const avgLoss =
-    lossPercents.length > 0 ? lossPercents.reduce((a, b) => a + b, 0) / lossPercents.length : 0;
+    lossPercents.length > 0
+      ? lossPercents.reduce((a, b) => a + b, 0) / lossPercents.length
+      : 0;
 
   const total = wins.length + losses.length;
   const winRate = total > 0 ? (wins.length / total) * 100 : 0;
 
   const totalReturn =
-    winPercents.reduce((a, b) => a + b, 0) + lossPercents.reduce((a, b) => a + b, 0);
+    winPercents.reduce((a, b) => a + b, 0) +
+    lossPercents.reduce((a, b) => a + b, 0);
 
   const winRateDecimal = total > 0 ? wins.length / total : 0;
   const lossRateDecimal = total > 0 ? losses.length / total : 0;
@@ -252,11 +309,14 @@ function calculateStats(signals: SignalRow[]) {
 // HANDLER
 // ==========================================================
 
-export default async function handler(request: RequestLike, response: ResponseLike) {
-  response.setHeader("Content-Type", "application/json");
+export default async function handler(
+  request: RequestLike,
+  response: ResponseLike,
+) {
   response.setHeader("Cache-Control", "no-store");
 
   if (request.method !== "GET") {
+    response.setHeader("Content-Type", "application/json");
     return response.status(405).json({ error: "Method not allowed" });
   }
 
@@ -273,10 +333,12 @@ export default async function handler(request: RequestLike, response: ResponseLi
     const tier = await getUserTier(userId);
 
     if (tier === "free") {
+      response.setHeader("Content-Type", "application/json");
       return response.status(403).json({
         success: false,
         error: "Premium gerekli",
-        message: "Formasyon başarı istatistiklerini görmek için premium'a geçin.",
+        message:
+          "Formasyon başarı istatistiklerini görmek için premium'a geçin.",
         tier,
       });
     }
@@ -285,14 +347,17 @@ export default async function handler(request: RequestLike, response: ResponseLi
     const daysParam = Number(
       Array.isArray(request.query?.["days"])
         ? request.query?.["days"]?.[0]
-        : (request.query?.["days"] ?? 30),
+        : request.query?.["days"] ?? 30,
     );
-    const days = Number.isFinite(daysParam) ? Math.min(Math.max(daysParam, 1), 365) : 30;
+    const days = Number.isFinite(daysParam)
+      ? Math.min(Math.max(daysParam, 1), 365)
+      : 30;
 
     const formations = asArray(request.query?.["formation"]);
     const markets = asArray(request.query?.["market"]);
     const symbolRaw = request.query?.["symbol"];
     const biasRaw = request.query?.["bias"];
+    const formatRaw = request.query?.["format"];
 
     const symbol = Array.isArray(symbolRaw)
       ? symbolRaw[0]?.trim() || undefined
@@ -300,16 +365,50 @@ export default async function handler(request: RequestLike, response: ResponseLi
     const bias = Array.isArray(biasRaw)
       ? biasRaw[0]?.trim() || undefined
       : biasRaw?.trim() || undefined;
+    const format = Array.isArray(formatRaw)
+      ? formatRaw[0]?.trim() || ""
+      : formatRaw?.trim() || "";
 
     const filters: Filters = { days, formations, markets, symbol, bias };
 
-    // 3. Veri + filtre seçenekleri paralel
+    // ==========================================================
+    // CSV EXPORT (sadece admin)
+    // ==========================================================
+    if (format === "csv") {
+      if (tier !== "admin") {
+        response.setHeader("Content-Type", "application/json");
+        return response.status(403).json({
+          success: false,
+          error: "CSV export sadece admin için",
+          tier,
+        });
+      }
+
+      const signals = await fetchSignals(filters);
+      const csv = toCsv(signals);
+
+      const filename = `formasyon-istatistikleri-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+
+      response.setHeader("Content-Type", "text/csv; charset=utf-8");
+      response.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"`,
+      );
+      return response.send(csv);
+    }
+
+    // ==========================================================
+    // JSON (mevcut davranış)
+    // ==========================================================
+    response.setHeader("Content-Type", "application/json");
+
     const [signals, filterOptions] = await Promise.all([
       fetchSignals(filters),
       fetchFilterOptions(days),
     ]);
 
-    // 4. İstatistikler
     const general = calculateStats(signals);
 
     const byFormationMap = new Map<string, SignalRow[]>();
@@ -379,6 +478,7 @@ export default async function handler(request: RequestLike, response: ResponseLi
   } catch (error) {
     const message = error instanceof Error ? error.message : "Bilinmeyen hata";
     console.error("Stats handler hatası:", error);
+    response.setHeader("Content-Type", "application/json");
     return response.status(500).json({ success: false, error: message });
   }
 }
