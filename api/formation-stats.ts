@@ -135,9 +135,9 @@ type Filters = {
   days: number;
   formations: string[];
   markets: string[];
-  symbol?: string;
-  bias?: string;
-  signalType?: string;
+  symbol?: string | undefined;
+  bias?: string | undefined;
+  signalType?: string | undefined;
 };
 
 async function fetchSignals(filters: Filters): Promise<SignalRow[]> {
@@ -454,7 +454,14 @@ export default async function handler(
       ? signalTypeRaw[0]?.trim() || undefined
       : signalTypeRaw?.trim() || undefined;
 
-    const filters: Filters = { days, formations, markets, symbol, bias, signalType };
+    const filters: Filters = {
+      days,
+      formations,
+      markets,
+      symbol,
+      bias,
+      signalType,
+    };
 
     // ==========================================================
     // CSV EXPORT (sadece admin)
