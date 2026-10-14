@@ -195,11 +195,13 @@ function AdminPage() {
   async function startTrialForUser(userId: string) {
     setBusyUserId(userId);
     try {
-      const res = await fetch("/api/start-trial", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
-      });
+      const res = await fetch(
+  `/api/alarms?action=start-trial&userId=${encodeURIComponent(userId)}`,
+  {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  },
+);
       const data = (await res.json()) as { success: boolean; error?: string };
       if (!res.ok || !data.success) {
         toast.error(data.error ?? "Deneme başlatılamadı");

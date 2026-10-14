@@ -1,9 +1,10 @@
-// api/alarms.ts — Alarm CRUD + Cron Kontrolü (tek dosyada)
-// GET    /api/alarms             → alarmları listele
-// GET    /api/alarms?action=check → cron kontrolü
-// POST   /api/alarms             → yeni alarm
-// PATCH  /api/alarms?id=X        → güncelle
-// DELETE /api/alarms?id=X        → sil
+// api/alarms.ts — Alarm CRUD + Cron Kontrolü + Start Trial (birleşik)
+// GET    /api/alarms                    → alarmları listele
+// GET    /api/alarms?action=check       → cron kontrolü
+// GET    /api/alarms?action=start-trial&userId=X → trial başlat
+// POST   /api/alarms                    → yeni alarm
+// PATCH  /api/alarms?id=X               → güncelle
+// DELETE /api/alarms?id=X               → sil
 
 const ENV = (globalThis as any).process?.env ?? {};
 const SUPABASE_URL = String(ENV.SUPABASE_URL ?? "");
@@ -334,6 +335,93 @@ async function handleCheckAlarms(response: ResponseLike): Promise<unknown> {
 }
 
 // ==========================================================
+// START TRIAL (eski api/start-trial.ts)
+// ==========================================================
+
+async function handleStartTrial(
+  userId: string,
+  response: ResponseLike,
+): Promise<unknown> {
+  if (!userId) {
+    return response.status(400).json({ success: false, error: "userId gerekli" });
+  }
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return response.status(500).json({ success: false, error: "Env eksik" });
+  }
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=role,membership,trial_used`,
+      {
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      },
+    );
+
+    if (!res.ok) {
+      return response.status(500).json({ success: false, error: "Fetch hatası" });
+    }
+
+    const rows = (await res.json()) as Array<Record<string, unknown>>;
+    const row = rows[0];
+    if (!row) {
+      return response.status(404).json({ success: false, error: "Kullanıcı yok" });
+    }
+
+    const role = String(row["role"] ?? "user");
+    const membership = String(row["membership"] ?? "free");
+    const trialUsed = Boolean(row["trial_used"]);
+
+    if (role === "admin") {
+      return response.status(400).json({ success: false, error: "Admin zaten premium" });
+    }
+    if (membership === "premium") {
+      return response.status(400).json({ success: false, error: "Zaten premium" });
+    }
+    if (membership === "trial") {
+      return response.status(400).json({ success: false, error: "Trial zaten aktif" });
+    }
+    if (trialUsed) {
+      return response.status(400).json({ success: false, error: "Trial hakkı kullanıldı" });
+    }
+
+    const now = new Date();
+    const endsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({
+        membership: "trial",
+        trial_started_at: now.toISOString(),
+        trial_ends_at: endsAt.toISOString(),
+        trial_used: true,
+      }),
+    });
+
+    if (!updateRes.ok) {
+      return response.status(500).json({ success: false, error: "Güncelleme hatası" });
+    }
+
+    return response.status(200).json({
+      success: true,
+      message: "7 günlük deneme başladı",
+      trialEndsAt: endsAt.toISOString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Bilinmeyen hata";
+    return response.status(500).json({ success: false, error: message });
+  }
+}
+
+// ==========================================================
 // GET — Listele
 // ==========================================================
 
@@ -589,13 +677,21 @@ export default async function handler(
   }
 
   try {
-    // CRON kontrolü (action=check)
+    // Action kontrolü
     const action = getQueryStr(request.query, "action");
+
+    // CRON kontrolü
     if (action === "check") {
       if (!isCronAuthorized(request)) {
         return response.status(401).json({ error: "unauthorized" });
       }
       return await handleCheckAlarms(response);
+    }
+
+    // START TRIAL (admin kullanır)
+    if (action === "start-trial") {
+      const targetUserId = getQueryStr(request.query, "userId") ?? "";
+      return await handleStartTrial(targetUserId, response);
     }
 
     // Kullanıcı işlemleri
