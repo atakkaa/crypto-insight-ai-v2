@@ -15,6 +15,7 @@ import { LimitReachedModal } from "@/components/LimitReachedModal";
 import { useUserTier } from "@/hooks/useUserTier";
 import { WelcomeGate } from "@/components/WelcomeGate";
 import { useAuth } from "@/hooks/useAuth";
+import { FormationProjectionModal } from "@/components/FormationProjectionModal";
 import { useAdmin } from "@/hooks/useAdmin";
 import { supabase } from "@/integrations/supabase/client";
 import { analyzeChart, type ChartAnalysis } from "@/lib/analysis.functions";
@@ -974,6 +975,7 @@ function Dashboard() {
   const [shortTermAnalysis, setShortTermAnalysis] = useState<DashboardAnalysis | null>(null);
   const [shortTermAnalyzing, setShortTermAnalyzing] = useState(false);
   const [showShortTerm, setShowShortTerm] = useState(false);
+  const [projectionModalOpen, setProjectionModalOpen] = useState(false);
   const shortTermCacheKey = `formasyon-ai-short-term-v1`;
   const runAnalysis = useServerFn(analyzeChart);
   const loadStock = useServerFn(getStockCandles);
@@ -2008,6 +2010,14 @@ function Dashboard() {
   return (
     <>
       <div className="min-h-screen">
+              {projectionModalOpen && (
+        <FormationProjectionModal
+          market={market}
+          symbol={activeSymbol}
+          interval={interval}
+          onClose={() => setProjectionModalOpen(false)}
+        />
+      )}
                 {/* ========================================================== */}
         {/* ONBOARDING TOOLTIP TURU */}
         {/* ========================================================== */}
@@ -2663,6 +2673,13 @@ function Dashboard() {
     : tierInfo?.tier === "free"
       ? `📉 Kısa Vadeli Analiz (${shortTermTracked.length}/${tierInfo?.limits.shortTermTracking ?? 2})`
       : "📉 Kısa Vadeli (20-30 Mum) Formasyon Değerlendir"}
+</button>
+<button
+  type="button"
+  onClick={() => setProjectionModalOpen(true)}
+  className="rounded-md border border-purple-500/40 bg-purple-500/10 px-3 py-1.5 text-xs font-bold text-purple-400 hover:bg-purple-500/20"
+>
+  🔮 Gelecek Projeksiyonu
 </button>
 
               {shortTermAnalysis && (
