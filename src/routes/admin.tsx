@@ -1,4 +1,4 @@
-// src/routes/admin.tsx — Admin Paneli v2
+// src/routes/admin.tsx — Admin Paneli v3 (Backtest linkli)
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -28,7 +28,7 @@ type Profile = {
   trial_started_at: string | null;
   trial_ends_at: string | null;
   trial_used: boolean;
-  last_sign_in_at: string | null; // YENİ EKLENDİ
+  last_sign_in_at: string | null;
 };
 
 type UserTier = "admin" | "premium" | "trial" | "free";
@@ -58,7 +58,6 @@ function getTrialDaysLeft(profile: Profile): number | null {
   return Math.ceil(msLeft / (1000 * 60 * 60 * 24));
 }
 
-// YENİ EKLENDİ: Son girişi insan okunur formata çevir
 function formatLastSignIn(dateStr: string | null): string {
   if (!dateStr) return "Hiç giriş yapmadı";
   const date = new Date(dateStr);
@@ -104,7 +103,6 @@ function tierBadge(tier: UserTier) {
   }
 }
 
-// SELECT_FIELDS'e last_sign_in_at EKLENDİ
 const SELECT_FIELDS =
   "id, email, role, membership, is_banned, created_at, trial_started_at, trial_ends_at, trial_used, last_sign_in_at";
 
@@ -413,7 +411,6 @@ function AdminPage() {
   // FİLTRELEME
   // =========================================================
   const filtered = users.filter((u) => {
-    // Arama
     if (search.trim()) {
       const q = search.toLowerCase();
       const matches =
@@ -421,7 +418,6 @@ function AdminPage() {
         u.id.toLowerCase().includes(q);
       if (!matches) return false;
     }
-    // Tier filtresi
     if (tierFilter !== "all") {
       const tier = getUserTier(u);
       if (tier !== tierFilter) return false;
@@ -429,7 +425,6 @@ function AdminPage() {
     return true;
   });
 
-  // İstatistikler
   const totalUsers = users.length;
   const premiumUsers = users.filter(
     (u) => getUserTier(u) === "premium",
@@ -447,7 +442,7 @@ function AdminPage() {
           >
             Formasyon AI
           </Link>
-          <nav className="flex gap-2 text-xs">
+          <nav className="flex flex-wrap gap-2 text-xs">
             <Link
               to="/"
               className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
@@ -459,6 +454,18 @@ function AdminPage() {
               className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
             >
               Liste
+            </Link>
+            <Link
+              to="/stats"
+              className="rounded-md border border-purple-500/40 px-3 py-1.5 font-bold text-purple-400 hover:bg-purple-500/10"
+            >
+              📊 İstatistikler
+            </Link>
+            <Link
+              to="/backtest"
+              className="rounded-md border border-cyan-500/40 px-3 py-1.5 font-bold text-cyan-400 hover:bg-cyan-500/10"
+            >
+              🧪 Backtest
             </Link>
             <Link
               to="/settings"
