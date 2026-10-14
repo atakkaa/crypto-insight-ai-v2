@@ -1,4 +1,4 @@
-// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v9 (Kaliteli Formasyon Motoru + İstatistik)
+// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v10 (ATR bazlı hedef/stop)
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
 
 // ==========================================================
@@ -607,6 +607,105 @@ function safeDate(input: string | undefined | null): string {
   const ts = new Date(input).getTime();
   if (!Number.isFinite(ts)) return new Date().toISOString();
   return new Date(ts).toISOString();
+}
+
+// ==========================================================
+// ATR HESAPLAMA
+// ==========================================================
+
+function calculateATR(candles: Candle[], period = 14): number {
+  if (candles.length < period + 1) {
+    if (candles.length === 0) return 0;
+    const ranges = candles.map((c) => c.high - c.low);
+    return ranges.reduce((a, b) => a + b, 0) / ranges.length;
+  }
+
+  const trueRanges: number[] = [];
+  for (let i = 1; i < candles.length; i++) {
+    const c = candles[i]!;
+    const prev = candles[i - 1]!;
+    const tr = Math.max(
+      c.high - c.low,
+      Math.abs(c.high - prev.close),
+      Math.abs(c.low - prev.close),
+    );
+    trueRanges.push(tr);
+  }
+
+  const recent = trueRanges.slice(-period);
+  return recent.reduce((a, b) => a + b, 0) / recent.length;
+}
+
+function calculateATRBasedTargetStop(
+  currentPrice: number,
+  bias: "bullish" | "bearish" | "neutral",
+  atr: number,
+  market: string,
+  support: number,
+  resistance: number,
+): { target: number; stop: number; rr: number } {
+  if (bias === "neutral") {
+    return { target: currentPrice, stop: currentPrice, rr: 0 };
+  }
+
+  const atrPercent = atr / currentPrice;
+  const isCrypto = market === "crypto";
+
+  // HEDEF: max(%2, ATR × 2)
+  const MIN_TARGET_PERCENT = 0.02;
+  const targetPercent = Math.max(MIN_TARGET_PERCENT, atrPercent * 2);
+
+  // STOP: kripto max(%1.5, ATR × 1), hisse max(%1, ATR × 1)
+  const minStopPercent = isCrypto ? 0.015 : 0.01;
+  const stopPercent = Math.max(minStopPercent, atrPercent * 1);
+
+  let target: number;
+  let stop: number;
+
+  if (bias === "bullish") {
+    target = currentPrice * (1 + targetPercent);
+    stop = currentPrice * (1 - stopPercent);
+  } else {
+    target = currentPrice * (1 - targetPercent);
+    stop = currentPrice * (1 + stopPercent);
+  }
+
+  // R/R KONTROLÜ: Min 1:2 zorunlu
+  const risk = Math.abs(currentPrice - stop);
+  const reward = Math.abs(target - currentPrice);
+  let rr = risk > 0 ? reward / risk : 0;
+
+  if (rr < 2) {
+    if (bias === "bullish") {
+      target = currentPrice + risk * 2;
+    } else {
+      target = currentPrice - risk * 2;
+    }
+    rr = 2;
+  }
+
+  // Direnç/destek yakınsa hedefi kısalt (R/R 1:2 üstünde kalırsa)
+  if (bias === "bullish" && resistance > currentPrice && resistance < target) {
+    const resistanceRr = (resistance - currentPrice) / risk;
+    if (resistanceRr >= 2) {
+      target = resistance;
+      rr = resistanceRr;
+    }
+  }
+
+  if (bias === "bearish" && support < currentPrice && support > target) {
+    const supportRr = (currentPrice - support) / risk;
+    if (supportRr >= 2) {
+      target = support;
+      rr = supportRr;
+    }
+  }
+
+  return {
+    target: Math.round(target * 10000) / 10000,
+    stop: Math.round(stop * 10000) / 10000,
+    rr: Math.round(rr * 10) / 10,
+  };
 }
 
 // ==========================================================
@@ -1365,82 +1464,42 @@ function calculatePosition(
   direction: "bullish" | "bearish" | "neutral",
   support: number,
   resistance: number,
+  atr: number = 0,
+  market: string = "crypto",
 ): { entryZone: string; target: string; stopLoss: string; riskReward: string } {
   const fmt = (n: number) => n.toFixed(n > 100 ? 2 : 4);
 
-  const MIN_RR = 1.5;
-  const IDEAL_RR = 2.0;
-  const MAX_STOP_DISTANCE = 0.03;
+  if (direction === "neutral" || atr <= 0) {
+    return { entryZone: "Bekle", target: "Belirsiz", stopLoss: "Belirsiz", riskReward: "—" };
+  }
+
+  const { target: targetPrice, stop: stopPrice, rr } = calculateATRBasedTargetStop(
+    currentPrice,
+    direction,
+    atr,
+    market,
+    support,
+    resistance,
+  );
+
+  const entryMin = currentPrice * 0.995;
+  const entryMax = currentPrice * 1.005;
 
   if (direction === "bullish") {
-    const entryMin = currentPrice * 0.995;
-    const entryMax = currentPrice * 1.005;
-
-    const supportStop = support > 0 ? support : currentPrice * 0.98;
-    const percentStop = currentPrice * 0.98;
-    let stopPrice = Math.max(supportStop, percentStop);
-
-    if (currentPrice - stopPrice > currentPrice * MAX_STOP_DISTANCE) {
-      stopPrice = currentPrice * (1 - MAX_STOP_DISTANCE);
-    }
-
-    const risk = currentPrice - stopPrice;
-    const rrTarget = currentPrice + risk * IDEAL_RR;
-    const rrMinTarget = currentPrice + risk * MIN_RR;
-    const resistanceTarget = resistance > 0 ? resistance : currentPrice * 1.05;
-
-    let targetPrice: number;
-    if (resistanceTarget >= rrMinTarget) {
-      targetPrice = Math.min(resistanceTarget, rrTarget);
-    } else {
-      targetPrice = rrTarget;
-    }
-
-    const reward = targetPrice - currentPrice;
-    const rr = risk > 0 ? (reward / risk).toFixed(1) : "1.0";
-
     return {
       entryZone: `$${fmt(entryMin)} - $${fmt(entryMax)}`,
       target: `$${fmt(targetPrice)} (+${((targetPrice / currentPrice - 1) * 100).toFixed(1)}%)`,
       stopLoss: `$${fmt(stopPrice)} (-${((1 - stopPrice / currentPrice) * 100).toFixed(1)}%)`,
-      riskReward: `1:${rr}`,
-    };
-  } else if (direction === "bearish") {
-    const entryMin = currentPrice * 0.995;
-    const entryMax = currentPrice * 1.005;
-
-    const resistanceStop = resistance > 0 ? resistance : currentPrice * 1.02;
-    const percentStop = currentPrice * 1.02;
-    let stopPrice = Math.min(resistanceStop, percentStop);
-
-    if (stopPrice - currentPrice > currentPrice * MAX_STOP_DISTANCE) {
-      stopPrice = currentPrice * (1 + MAX_STOP_DISTANCE);
-    }
-
-    const risk = stopPrice - currentPrice;
-    const rrTarget = currentPrice - risk * IDEAL_RR;
-    const rrMinTarget = currentPrice - risk * MIN_RR;
-    const supportTarget = support > 0 ? support : currentPrice * 0.95;
-
-    let targetPrice: number;
-    if (supportTarget <= rrMinTarget) {
-      targetPrice = Math.max(supportTarget, rrTarget);
-    } else {
-      targetPrice = rrTarget;
-    }
-
-    const reward = currentPrice - targetPrice;
-    const rr = risk > 0 ? (reward / risk).toFixed(1) : "1.0";
-
-    return {
-      entryZone: `$${fmt(entryMin)} - $${fmt(entryMax)}`,
-      target: `$${fmt(targetPrice)} (-${((1 - targetPrice / currentPrice) * 100).toFixed(1)}%)`,
-      stopLoss: `$${fmt(stopPrice)} (+${((stopPrice / currentPrice - 1) * 100).toFixed(1)}%)`,
-      riskReward: `1:${rr}`,
+      riskReward: `1:${rr.toFixed(1)}`,
     };
   }
 
-  return { entryZone: "Bekle", target: "Belirsiz", stopLoss: "Belirsiz", riskReward: "—" };
+  return {
+    entryZone: `$${fmt(entryMin)} - $${fmt(entryMax)}`,
+    target: `$${fmt(targetPrice)} (-${((1 - targetPrice / currentPrice) * 100).toFixed(1)}%)`,
+    stopLoss: `$${fmt(stopPrice)} (+${((stopPrice / currentPrice - 1) * 100).toFixed(1)}%)`,
+    riskReward: `1:${rr.toFixed(1)}`,
+  };
 }
 
 // ==========================================================
@@ -1457,8 +1516,9 @@ function generateRuleBasedCommentary(input: {
   changePercent: number;
   candles?: Candle[] | undefined;
   price?: number | undefined;
+  market?: string;
 }): AiCommentary {
-  const { direction, strength, patterns, indicators, news, symbol, changePercent, candles, price } = input;
+  const { direction, strength, patterns, indicators, news, symbol, changePercent, candles, price, market } = input;
   const displaySymbol = symbol.replace("USDT", "").replace(/\.(IS|US|T|KS|HK|NS|DE|PA|L|MI|MC|AS|ST|OL|HE|SW|CO|V)$/, "");
   const avgNewsSentiment = news.length > 0 ? news.reduce((a, b) => a + b.sentimentScore, 0) / news.length : 0;
 
@@ -1492,7 +1552,8 @@ function generateRuleBasedCommentary(input: {
 
   if (candles && candles.length >= 30 && price !== undefined && price > 0) {
     const sr = findSupportResistance(candles, price);
-    const pos = calculatePosition(price, direction, sr.support, sr.resistance);
+    const atr = calculateATR(candles, 14);
+    const pos = calculatePosition(price, direction, sr.support, sr.resistance, atr, market ?? "crypto");
     result.support = `$${sr.support.toFixed(sr.support > 100 ? 2 : 4)}`;
     result.resistance = `$${sr.resistance.toFixed(sr.resistance > 100 ? 2 : 4)}`;
     result.entryZone = pos.entryZone;
@@ -1599,6 +1660,7 @@ async function generateCommentary(input: {
       changePercent: input.changePercent,
       candles: input.candles,
       price: input.price,
+      market: input.market,
     });
   }
 
@@ -2299,11 +2361,9 @@ export default async function handler(request: RequestLike, response: ResponseLi
     console.log(`📊 ${finalAssets.length} varlık taranacak.`);
     const results = await scanSymbolsParallel(finalAssets, 10);
 
-    // Sadece formasyonu olan sonuçlar (tüm market'ler dahil)
     const resultsWithPatterns = results.filter(
       (r) => r.patterns.length > 0 && r.price > 0,
     );
-    // Bildirim gönderilecekler (important olanlar)
     const importantResults = results.filter((r) => r.isImportant);
     console.log(
       `✅ ${results.length} varlık analiz edildi, ${resultsWithPatterns.length} formasyonlu, ${importantResults.length} önemli.`,
@@ -2321,11 +2381,14 @@ export default async function handler(request: RequestLike, response: ResponseLi
         if (!primaryPattern) continue;
 
         const sr = findSupportResistance(result.candles ?? [], result.price);
+        const atr = calculateATR(result.candles ?? [], 14);
         const pos = calculatePosition(
           result.price,
           result.overallDirection,
           sr.support,
           sr.resistance,
+          atr,
+          result.market,
         );
 
         const targetPrice =
@@ -2386,7 +2449,6 @@ export default async function handler(request: RequestLike, response: ResponseLi
         const allowMTF = tierInfoForUser?.limits.hasMTF ?? false;
         const allowFearGreed = tierInfoForUser?.limits.hasFearGreed ?? false;
 
-        // 1️⃣ MULTI-TIMEFRAME
         let mtfBonus = 0;
         let mtfSummary = "";
         if (hasPriorityUser && allowMTF) {
@@ -2404,7 +2466,6 @@ export default async function handler(request: RequestLike, response: ResponseLi
           }
         }
 
-        // 2️⃣ SIGNAL SCORE
         const signalScore = computeSignalScore({
           direction: result.overallDirection,
           changePercent: result.changePercent,
@@ -2415,7 +2476,6 @@ export default async function handler(request: RequestLike, response: ResponseLi
         });
         console.log(`🔍 DEBUG ${result.symbol}: direction=${result.overallDirection}, patterns=${result.patterns.length}, indicators=${result.indicators.length}, score=${signalScore.score}, shouldNotify=${signalScore.shouldNotify}, reason=${signalScore.reason}`);
 
-        // 3️⃣ MTF BONUSU
         if (mtfBonus !== 0) {
           signalScore.score = Math.max(0, Math.min(100, signalScore.score + mtfBonus));
           if (mtfBonus > 0) signalScore.reason += ` + MTF(+${mtfBonus})`;
@@ -2431,13 +2491,11 @@ export default async function handler(request: RequestLike, response: ResponseLi
 
         result.signalScore = signalScore;
 
-        // 4️⃣ KONTROL
         if (!signalScore.shouldNotify) {
           console.log(`🔇 Bildirim atlandı: ${result.symbol} (score=${signalScore.score}, ${signalScore.reason})`);
           continue;
         }
 
-        // 5️⃣ AI YORUM
         const ai = await generateCommentary({
           symbol: result.symbol, market: result.market, price: result.price,
           changePercent: result.changePercent, direction: result.overallDirection,
@@ -2458,7 +2516,6 @@ export default async function handler(request: RequestLike, response: ResponseLi
         result.ai = ai;
         console.log(`🤖 AI (${ai.source}): ${result.symbol} → ${ai.action}`);
 
-        // 6️⃣ KULLANICILARA GÖNDER
         const tier = signalScore.tier;
 
         const eligibleUsers = tier === "important"
@@ -2482,7 +2539,6 @@ export default async function handler(request: RequestLike, response: ResponseLi
           totalNotifications++;
         }
 
-        // KATMAN 1 (critical) → herkese
         const isGlobalImportant =
           signalScore.tier === "critical" ||
           (signalScore.isImportantNews && signalScore.newsTier === 1) ||

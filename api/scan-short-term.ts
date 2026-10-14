@@ -1,4 +1,4 @@
-// api/scan-short-term.ts — Kısa Vadeli Premium Tarama (Çoklu Zaman Dilimi + Paralel İşleme + Yön Doğrulaması)
+// api/scan-short-term.ts — Kısa Vadeli Premium Tarama (ATR bazlı hedef/stop)
 
 const ENV = (globalThis as any).process?.env ?? {};
 const SUPABASE_URL = String(ENV.SUPABASE_URL ?? "");
@@ -249,7 +249,34 @@ function calculateIndicatorData(candles: Candle[]) {
 }
 
 // ==========================================================
-// FORMASYON TESPİTİ (16 FORMASYON — HEDEF/STOP DÜZELTİLDİ)
+// ATR HESAPLAMA
+// ==========================================================
+
+function calculateATR(candles: Candle[], period = 14): number {
+  if (candles.length < period + 1) {
+    if (candles.length === 0) return 0;
+    const ranges = candles.map((c) => c.high - c.low);
+    return ranges.reduce((a, b) => a + b, 0) / ranges.length;
+  }
+
+  const trueRanges: number[] = [];
+  for (let i = 1; i < candles.length; i++) {
+    const c = candles[i]!;
+    const prev = candles[i - 1]!;
+    const tr = Math.max(
+      c.high - c.low,
+      Math.abs(c.high - prev.close),
+      Math.abs(c.low - prev.close),
+    );
+    trueRanges.push(tr);
+  }
+
+  const recent = trueRanges.slice(-period);
+  return recent.reduce((a, b) => a + b, 0) / recent.length;
+}
+
+// ==========================================================
+// FORMASYON TESPİTİ (16 FORMASYON)
 // ==========================================================
 
 function detectPatterns(candles: Candle[]): DetectedPattern[] {
@@ -781,96 +808,71 @@ function getDedupeHoursForTf(tf: string): number {
 }
 
 // ==========================================================
-// HEDEF/STOP YÖN DOĞRULAMASI
+// ATR BAZLI HEDEF/STOP HESAPLAMA
 // ==========================================================
 
-function validateTargetStop(
+function calculateATRBasedTargetStop(
   bias: "yükseliş" | "düşüş" | "nötr",
-  lastClose: number,
-  rawTarget: number | null,
-  rawStop: number | null,
-): { target: number; stop: number } {
-  const MIN_RR = 1.5;
-  const IDEAL_RR = 2.0;
-  const MAX_STOP_DISTANCE = 0.03;
-  const MIN_TARGET_DISTANCE = 0.015;
-
-  if (bias === "nötr") {
-    return { target: lastClose, stop: lastClose };
+  currentPrice: number,
+  atr: number,
+  market: string,
+): { target: number; stop: number; rr: number } {
+  if (bias === "nötr" || atr <= 0) {
+    return { target: currentPrice, stop: currentPrice, rr: 0 };
   }
 
-  if (bias === "yükseliş") {
-    const rawStopValue = rawStop ?? lastClose * 0.98;
-    const percentStop = lastClose * 0.98;
-    let stop = Math.max(rawStopValue, percentStop);
+  const atrPercent = atr / currentPrice;
+  const isCrypto = market === "crypto";
 
-    if (lastClose - stop > lastClose * MAX_STOP_DISTANCE) {
-      stop = lastClose * (1 - MAX_STOP_DISTANCE);
-    }
+  // HEDEF: max(%2, ATR × 2)
+  const MIN_TARGET_PERCENT = 0.02;
+  const targetPercent = Math.max(MIN_TARGET_PERCENT, atrPercent * 2);
 
-    if (!Number.isFinite(stop) || stop <= 0 || stop >= lastClose) {
-      stop = lastClose * 0.98;
-    }
-
-    const risk = lastClose - stop;
-    const rrTarget = lastClose + risk * IDEAL_RR;
-    const rrMinTarget = lastClose + risk * MIN_RR;
-    const rawTargetValue = rawTarget ?? lastClose * 1.05;
-
-    let target: number;
-    if (rawTargetValue >= rrMinTarget) {
-      target = Math.min(rawTargetValue, rrTarget);
-    } else {
-      target = rrTarget;
-    }
-
-    const targetDistance = (target - lastClose) / lastClose;
-    if (targetDistance < MIN_TARGET_DISTANCE) {
-      target = lastClose * (1 + MIN_TARGET_DISTANCE);
-    }
-
-    if (!Number.isFinite(target) || target <= lastClose) {
-      target = lastClose * 1.05;
-    }
-
-    return { target, stop };
-  }
-
-  // bias === "düşüş"
-  const rawStopValue = rawStop ?? lastClose * 1.02;
-  const percentStop = lastClose * 1.02;
-  let stop = Math.min(rawStopValue, percentStop);
-
-  if (stop - lastClose > lastClose * MAX_STOP_DISTANCE) {
-    stop = lastClose * (1 + MAX_STOP_DISTANCE);
-  }
-
-  if (!Number.isFinite(stop) || stop <= 0 || stop <= lastClose) {
-    stop = lastClose * 1.02;
-  }
-
-  const risk = stop - lastClose;
-  const rrTarget = lastClose - risk * IDEAL_RR;
-  const rrMinTarget = lastClose - risk * MIN_RR;
-  const rawTargetValue = rawTarget ?? lastClose * 0.95;
+  // STOP: kripto max(%1.5, ATR × 1), hisse max(%1, ATR × 1)
+  const minStopPercent = isCrypto ? 0.015 : 0.01;
+  const stopPercent = Math.max(minStopPercent, atrPercent * 1);
 
   let target: number;
-  if (rawTargetValue <= rrMinTarget) {
-    target = Math.max(rawTargetValue, rrTarget);
+  let stop: number;
+
+  if (bias === "yükseliş") {
+    target = currentPrice * (1 + targetPercent);
+    stop = currentPrice * (1 - stopPercent);
   } else {
-    target = rrTarget;
+    target = currentPrice * (1 - targetPercent);
+    stop = currentPrice * (1 + stopPercent);
   }
 
-  const targetDistance = (lastClose - target) / lastClose;
-  if (targetDistance < MIN_TARGET_DISTANCE) {
-    target = lastClose * (1 - MIN_TARGET_DISTANCE);
+  // R/R KONTROLÜ: Min 1:2 zorunlu
+  const risk = Math.abs(currentPrice - stop);
+  const reward = Math.abs(target - currentPrice);
+  let rr = risk > 0 ? reward / risk : 0;
+
+  if (rr < 2) {
+    if (bias === "yükseliş") {
+      target = currentPrice + risk * 2;
+    } else {
+      target = currentPrice - risk * 2;
+    }
+    rr = 2;
   }
 
-  if (!Number.isFinite(target) || target >= lastClose) {
-    target = lastClose * 0.95;
+  // Geçersizlik kontrolü
+  if (!Number.isFinite(target) || (bias === "yükseliş" && target <= currentPrice)) {
+    target = currentPrice * 1.05;
+  }
+  if (!Number.isFinite(target) || (bias === "düşüş" && target >= currentPrice)) {
+    target = currentPrice * 0.95;
+  }
+  if (!Number.isFinite(stop) || stop <= 0) {
+    stop = bias === "yükseliş" ? currentPrice * 0.98 : currentPrice * 1.02;
   }
 
-  return { target, stop };
+  return {
+    target: Math.round(target * 10000) / 10000,
+    stop: Math.round(stop * 10000) / 10000,
+    rr: Math.round(rr * 10) / 10,
+  };
 }
 
 // ==========================================================
@@ -949,12 +951,14 @@ async function scanShortTermForPremium(timeframe: string) {
         if (target.market === "crypto" && fearGreed && (fearGreed.value >= 85 || fearGreed.value <= 15)) return;
 
         const lastClose = shortCandles[shortCandles.length - 1]?.close ?? 0;
-        
-        const { target: targetPrice, stop } = validateTargetStop(
+        const atr = calculateATR(shortCandles, 14);
+
+        // ATR bazlı hedef/stop
+        const { target: targetPrice, stop } = calculateATRBasedTargetStop(
           best.bias,
           lastClose,
-          best.target,
-          best.invalidation,
+          atr,
+          target.market,
         );
 
         const reason = `${best.name} (%${best.confidence}) · RSI: ${indicators.rsi.toFixed(1)} · MACD: ${indicators.macdHistogram.toFixed(4)} · Hacim: ${(indicators.volumeRatio * 100).toFixed(0)}% · ${timeframe.toUpperCase()}`;
@@ -980,7 +984,7 @@ async function scanShortTermForPremium(timeframe: string) {
           });
           if (ok) created += 1;
 
-          // Sinyali global olarak kaydet (başarı istatistiği için)
+          // Sinyali global olarak kaydet
           if (ok) {
             const risk = Math.abs(lastClose - stop);
             const reward = Math.abs(targetPrice - lastClose);
@@ -1085,12 +1089,14 @@ async function scanGlobalShortTerm(timeframe: string) {
 
         globalScanned += 1;
         const lastClose = shortCandles[shortCandles.length - 1]?.close ?? 0;
-        
-        const { target: targetPrice, stop } = validateTargetStop(
+        const atr = calculateATR(shortCandles, 14);
+
+        // ATR bazlı hedef/stop
+        const { target: targetPrice, stop } = calculateATRBasedTargetStop(
           best.bias,
           lastClose,
-          best.target,
-          best.invalidation,
+          atr,
+          target.market,
         );
 
         const reason = `${best.name} (%${best.confidence}) · RSI: ${indicators.rsi.toFixed(1)} · MACD: ${indicators.macdHistogram.toFixed(4)} · Hacim: ${(indicators.volumeRatio * 100).toFixed(0)}% · ${timeframe.toUpperCase()} · GLOBAL`;
@@ -1126,7 +1132,7 @@ async function scanGlobalShortTerm(timeframe: string) {
           });
           if (ok) globalCreated += 1;
 
-          // Sinyali global olarak kaydet — sadece ilk kullanıcı için (duplicate olmasın)
+          // Sinyali global olarak kaydet — sadece ilk kullanıcı için
           if (ok && userId === eligibleUsers[0]) {
             const risk = Math.abs(lastClose - stop);
             const reward = Math.abs(targetPrice - lastClose);

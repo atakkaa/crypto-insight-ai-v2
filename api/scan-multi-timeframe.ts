@@ -1,4 +1,4 @@
-// api/scan-multi-timeframe.ts — Çoklu Zaman Dilimi Karşılaştırmalı Tarama (Grup Desteği ile)
+// api/scan-multi-timeframe.ts — Çoklu Zaman Dilimi Karşılaştırmalı Tarama (ATR bazlı hedef/stop)
 
 const ENV = (globalThis as any).process?.env ?? {};
 const SUPABASE_URL = String(ENV.SUPABASE_URL ?? "");
@@ -123,7 +123,6 @@ const US_TOP_10 = [
   "GOOGL.US", "META.US", "JPM.US", "WMT.US", "NFLX.US",
 ];
 
-// Tüm varlıklar (50 adet)
 const ALL_SYMBOLS: Array<{ market: string; symbol: string }> = [
   ...CRYPTO_TOP_30.map((s) => ({ market: "crypto", symbol: s })),
   ...BIST_TOP_10.map((s) => ({ market: "bist", symbol: s })),
@@ -227,6 +226,80 @@ function calculateIndicatorData(candles: Candle[]) {
 }
 
 // ==========================================================
+// ATR HESAPLAMA
+// ==========================================================
+
+function calculateATR(candles: Candle[], period = 14): number {
+  if (candles.length < period + 1) {
+    if (candles.length === 0) return 0;
+    const ranges = candles.map((c) => c.high - c.low);
+    return ranges.reduce((a, b) => a + b, 0) / ranges.length;
+  }
+
+  const trueRanges: number[] = [];
+  for (let i = 1; i < candles.length; i++) {
+    const c = candles[i]!;
+    const prev = candles[i - 1]!;
+    const tr = Math.max(
+      c.high - c.low,
+      Math.abs(c.high - prev.close),
+      Math.abs(c.low - prev.close),
+    );
+    trueRanges.push(tr);
+  }
+
+  const recent = trueRanges.slice(-period);
+  return recent.reduce((a, b) => a + b, 0) / recent.length;
+}
+
+function calculateATRBasedTargetStop(
+  currentPrice: number,
+  bias: "yükseliş" | "düşüş",
+  atr: number,
+  market: string,
+): { target: number; stop: number } {
+  const atrPercent = atr / currentPrice;
+  const isCrypto = market === "crypto";
+
+  // HEDEF: max(%2, ATR × 2)
+  const MIN_TARGET_PERCENT = 0.02;
+  const targetPercent = Math.max(MIN_TARGET_PERCENT, atrPercent * 2);
+
+  // STOP: kripto max(%1.5, ATR × 1), hisse max(%1, ATR × 1)
+  const minStopPercent = isCrypto ? 0.015 : 0.01;
+  const stopPercent = Math.max(minStopPercent, atrPercent * 1);
+
+  let target: number;
+  let stop: number;
+
+  if (bias === "yükseliş") {
+    target = currentPrice * (1 + targetPercent);
+    stop = currentPrice * (1 - stopPercent);
+  } else {
+    target = currentPrice * (1 - targetPercent);
+    stop = currentPrice * (1 + stopPercent);
+  }
+
+  // R/R min 1:2
+  const risk = Math.abs(currentPrice - stop);
+  const reward = Math.abs(target - currentPrice);
+  const rr = risk > 0 ? reward / risk : 0;
+
+  if (rr < 2) {
+    if (bias === "yükseliş") {
+      target = currentPrice + risk * 2;
+    } else {
+      target = currentPrice - risk * 2;
+    }
+  }
+
+  return {
+    target: Math.round(target * 10000) / 10000,
+    stop: Math.round(stop * 10000) / 10000,
+  };
+}
+
+// ==========================================================
 // FORMASYON TESPİTİ
 // ==========================================================
 
@@ -239,7 +312,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
   const recentHighs = candles.slice(-30).map((c) => c.high);
   const recentLows = candles.slice(-30).map((c) => c.low);
 
-  // 1. İkili Dip (Yükseliş)
+  // 1. İkili Dip
   try {
     const minLow = Math.min(...recentLows);
     const minIdx = recentLows.indexOf(minLow);
@@ -262,7 +335,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 2. İkili Tepe (Düşüş)
+  // 2. İkili Tepe
   try {
     const maxHigh = Math.max(...recentHighs);
     const maxIdx = recentHighs.indexOf(maxHigh);
@@ -285,7 +358,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 3. Yükselen Üçgen (Yükseliş)
+  // 3. Yükselen Üçgen
   try {
     const firstHigh = Math.max(...recentHighs.slice(0, 15));
     const secondHigh = Math.max(...recentHighs.slice(15));
@@ -302,7 +375,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 4. Düşen Üçgen (Düşüş)
+  // 4. Düşen Üçgen
   try {
     const firstHigh = Math.max(...recentHighs.slice(0, 15));
     const secondHigh = Math.max(...recentHighs.slice(15));
@@ -319,7 +392,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 5. OBO (Düşüş)
+  // 5. OBO
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
@@ -340,7 +413,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 6. Ters OBO (Yükseliş)
+  // 6. Ters OBO
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
@@ -361,7 +434,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 7. Üçlü Dip (Yükseliş)
+  // 7. Üçlü Dip
   try {
     if (candles.length >= 45) {
       const l = candles.slice(-45).map((c) => c.low);
@@ -382,7 +455,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 8. Üçlü Tepe (Düşüş)
+  // 8. Üçlü Tepe
   try {
     if (candles.length >= 45) {
       const h = candles.slice(-45).map((c) => c.high);
@@ -403,7 +476,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 9. Yükselen Kama (Düşüş)
+  // 9. Yükselen Kama
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
@@ -424,7 +497,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 10. Düşen Kama (Yükseliş)
+  // 10. Düşen Kama
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
@@ -445,7 +518,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 11. Boğa Bayrağı (Yükseliş)
+  // 11. Boğa Bayrağı
   try {
     if (candles.length >= 30) {
       const h = candles.slice(-30).map((c) => c.high);
@@ -469,7 +542,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // 12. Ayı Bayrağı (Düşüş)
+  // 12. Ayı Bayrağı
   try {
     if (candles.length >= 30) {
       const h = candles.slice(-30).map((c) => c.high);
@@ -707,7 +780,7 @@ async function scanMultiTimeframe(group: string = "all") {
   }
 
   if (eligibleUsers.length === 0) {
-    return { multiScanned: 0, multiCreated: 0, multiUsers: 0 };
+    return { multiScanned: 0, multiCreated: 0, multiUsers: 0, multiSignalsSaved: 0 };
   }
 
   const fearGreed = await fetchFearGreed();
@@ -736,18 +809,20 @@ async function scanMultiTimeframe(group: string = "all") {
           if (patterns.length === 0) continue;
 
           const best = patterns.reduce((max, p) => (p.confidence > max.confidence ? p : max), patterns[0]!);
+
+          // Nötr bias atla
+          if (best.bias === "nötr") continue;
+
           const lastClose = shortCandles[shortCandles.length - 1]?.close ?? 0;
+          const atr = calculateATR(shortCandles, 14);
 
-          let targetPrice = best.target ?? (best.bias === "yükseliş" ? lastClose * 1.05 : lastClose * 0.95);
-          let stopPrice = best.invalidation ?? (best.bias === "yükseliş" ? lastClose * 0.97 : lastClose * 1.03);
-
-          if (best.bias === "yükseliş") {
-            if (targetPrice <= lastClose) targetPrice = lastClose * 1.05;
-            if (stopPrice >= lastClose) stopPrice = lastClose * 0.97;
-          } else if (best.bias === "düşüş") {
-            if (targetPrice >= lastClose) targetPrice = lastClose * 0.95;
-            if (stopPrice <= lastClose) stopPrice = lastClose * 1.03;
-          }
+          // ATR bazlı hedef/stop
+          const { target: targetPrice, stop: stopPrice } = calculateATRBasedTargetStop(
+            lastClose,
+            best.bias,
+            atr,
+            target.market,
+          );
 
           tfResults.push({
             timeframe: tf,
@@ -802,7 +877,7 @@ async function scanMultiTimeframe(group: string = "all") {
           });
           if (ok) multiCreated += 1;
 
-          // Sinyali global olarak kaydet — sadece ilk kullanıcı için (duplicate olmasın)
+          // Sinyali global olarak kaydet — sadece ilk kullanıcı için
           if (ok && userId === eligibleUsers[0]) {
             const risk = Math.abs(primary.entry - primary.stop);
             const reward = Math.abs(primary.target - primary.entry);
