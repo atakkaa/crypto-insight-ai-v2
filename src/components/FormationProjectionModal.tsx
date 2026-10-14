@@ -5,6 +5,34 @@ import { useEffect, useState } from "react";
 // TİPLER
 // ==========================================================
 
+type ConditionItem = {
+  label: string;
+  met: boolean;
+  current: string;
+};
+
+type FutureFormation = {
+  name: string;
+  bias: "yükseliş" | "düşüş" | "nötr";
+  probability: number;
+  time_estimate: string;
+  target: number | null;
+  target_percent: number | null;
+  conditions: ConditionItem[];
+};
+
+type NewsEffect = {
+  count: number;
+  sentiment: number;
+  sentiment_label: string;
+  items: Array<{
+    title: string;
+    source: string;
+    sentiment: "pozitif" | "negatif" | "nötr";
+    score: number;
+  }>;
+};
+
 type ProjectionData = {
   success: boolean;
   market: string;
@@ -28,6 +56,7 @@ type ProjectionData = {
     base: { probability: number; target: number; target_percent: number; trigger: string };
     bear: { probability: number; target: number; target_percent: number; trigger: string };
   };
+  future_formations?: FutureFormation[];
   indicators?: {
     rsi: number;
     macd_histogram: number;
@@ -35,6 +64,7 @@ type ProjectionData = {
     volume_trend: "up" | "down" | "stable";
     atr: number;
   };
+  news_effect?: NewsEffect;
   similar_past?: {
     count: number;
     wins: number;
@@ -92,7 +122,6 @@ export function FormationProjectionModal({
       });
   }, [market, symbol, interval]);
 
-  // ESC ile kapat
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -107,13 +136,13 @@ export function FormationProjectionModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-background shadow-2xl"
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-border bg-background shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* BAŞLIK */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background p-4">
           <div>
-            <h2 className="text-base font-bold">🔮 Gelecek Projeksiyonu</h2>
+            <h2 className="text-base font-bold">🔮 Formasyon Gelecek Projeksiyonu</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {symbol} · {interval.toUpperCase()}
             </p>
@@ -158,7 +187,7 @@ export function FormationProjectionModal({
 
           {data && data.has_formation && data.formation && (
             <div className="space-y-4">
-              {/* FORMASYON KARTI */}
+              {/* 1. MEVCUT FORMASYON */}
               <div
                 className={`rounded-lg border p-4 ${
                   data.formation.bias === "yükseliş"
@@ -171,7 +200,7 @@ export function FormationProjectionModal({
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      Formasyon
+                      Mevcut Formasyon
                     </p>
                     <p className="mt-0.5 text-base font-bold">
                       {data.formation.name}
@@ -211,7 +240,6 @@ export function FormationProjectionModal({
                   </span>
                 </div>
 
-                {/* TAMAMLANMA */}
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Tamamlanma</span>
@@ -232,11 +260,11 @@ export function FormationProjectionModal({
                 </div>
               </div>
 
-              {/* SENARYOLAR */}
+              {/* 2. SENARYOLAR */}
               {data.scenarios && (
                 <div>
                   <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    🎯 Gelecek Senaryolar
+                    🎯 Kısa Vadeli Senaryolar
                   </p>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <ScenarioCard
@@ -264,7 +292,24 @@ export function FormationProjectionModal({
                 </div>
               )}
 
-              {/* GÖSTERGELER */}
+              {/* 3. YENİ: FORMASYON DÖNÜŞÜM ANALİZİ */}
+              {data.future_formations && data.future_formations.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-purple-400">
+                    🔄 Formasyon Dönüşüm Analizi
+                  </p>
+                  <p className="mb-3 text-[11px] text-muted-foreground">
+                    Bu formasyonun ilerleyen günlerde dönüşebileceği formasyonlar
+                  </p>
+                  <div className="space-y-3">
+                    {data.future_formations.map((ff) => (
+                      <FutureFormationCard key={ff.name} formation={ff} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 4. GÖSTERGELER */}
               {data.indicators && (
                 <div>
                   <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -311,7 +356,67 @@ export function FormationProjectionModal({
                 </div>
               )}
 
-              {/* BENZER GEÇMİŞ */}
+              {/* 5. YENİ: HABER ETKİSİ */}
+              {data.news_effect && data.news_effect.count > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    📰 Haber Etkisi ({data.news_effect.count} haber, son 48 saat)
+                  </p>
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        Toplam Sentiment
+                      </span>
+                      <span
+                        className={`num text-sm font-bold ${
+                          data.news_effect.sentiment > 15
+                            ? "text-bull"
+                            : data.news_effect.sentiment < -15
+                              ? "text-bear"
+                              : "text-muted-foreground"
+                        }`}
+                      >
+                        {data.news_effect.sentiment >= 0 ? "+" : ""}
+                        {data.news_effect.sentiment} ({data.news_effect.sentiment_label})
+                      </span>
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      {data.news_effect.items.map((item, i) => (
+                        <div
+                          key={i}
+                          className="flex items-start gap-2 border-t border-border/50 pt-2 text-[11px] first:border-0 first:pt-0"
+                        >
+                          <span
+                            className={`mt-0.5 ${
+                              item.sentiment === "pozitif"
+                                ? "text-bull"
+                                : item.sentiment === "negatif"
+                                  ? "text-bear"
+                                  : "text-muted-foreground"
+                            }`}
+                          >
+                            {item.sentiment === "pozitif"
+                              ? "🟢"
+                              : item.sentiment === "negatif"
+                                ? "🔴"
+                                : "⚪"}
+                          </span>
+                          <div className="flex-1">
+                            <p className="font-semibold">{item.title}</p>
+                            <p className="text-muted-foreground">
+                              {item.source} · Skor: {item.score >= 0 ? "+" : ""}
+                              {item.score}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 6. BENZER GEÇMİŞ */}
               {data.similar_past && data.similar_past.count > 0 && (
                 <div>
                   <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -370,7 +475,7 @@ export function FormationProjectionModal({
                 </div>
               )}
 
-              {/* GEREKÇELER */}
+              {/* 7. GEREKÇELER */}
               {data.reasoning && data.reasoning.length > 0 && (
                 <div>
                   <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -396,6 +501,107 @@ export function FormationProjectionModal({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================================
+// FORMASYON DÖNÜŞÜM KARTI
+// ==========================================================
+
+function FutureFormationCard({ formation }: { formation: FutureFormation }) {
+  const config = {
+    yükseliş: {
+      emoji: "🟢",
+      borderCls: "border-bull/40",
+      bgCls: "bg-bull/5",
+      textCls: "text-bull",
+    },
+    düşüş: {
+      emoji: "🔴",
+      borderCls: "border-bear/40",
+      bgCls: "bg-bear/5",
+      textCls: "text-bear",
+    },
+    nötr: {
+      emoji: "⚪",
+      borderCls: "border-border",
+      bgCls: "bg-card",
+      textCls: "text-muted-foreground",
+    },
+  }[formation.bias];
+
+  const metCount = formation.conditions.filter((c) => c.met).length;
+  const totalCount = formation.conditions.length;
+  const progress = Math.round((metCount / totalCount) * 100);
+
+  return (
+    <div className={`rounded-lg border ${config.borderCls} ${config.bgCls} p-3`}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className={`text-sm font-bold ${config.textCls}`}>
+            {config.emoji} {formation.name}
+          </p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">
+            Süre: {formation.time_estimate}
+            {formation.target && ` · Hedef: ${formation.target}`}
+            {formation.target_percent !== null && (
+              <span className={`ml-1 ${config.textCls}`}>
+                ({formation.target_percent >= 0 ? "+" : ""}
+                {formation.target_percent}%)
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="num text-lg font-bold">{formation.probability}%</p>
+          <p className="text-[9px] text-muted-foreground">olasılık</p>
+        </div>
+      </div>
+
+      {/* İLERLEME ÇUBUĞU */}
+      <div className="mt-2">
+        <div className="flex items-center justify-between text-[10px]">
+          <span className="text-muted-foreground">Koşullar</span>
+          <span className="num font-bold">
+            {metCount}/{totalCount} ({progress}%)
+          </span>
+        </div>
+        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+          <div
+            className={`h-full transition-all ${
+              progress >= 75
+                ? "bg-bull"
+                : progress >= 50
+                  ? "bg-amber-500"
+                  : "bg-bear"
+            }`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      {/* KOŞULLAR */}
+      <div className="mt-3 space-y-1.5">
+        {formation.conditions.map((c, i) => (
+          <div
+            key={i}
+            className="flex items-start gap-2 rounded-md bg-background/50 p-2 text-[10px]"
+          >
+            <span className="mt-0.5">
+              {c.met ? "✅" : "❌"}
+            </span>
+            <div className="flex-1">
+              <p className={c.met ? "text-foreground" : "text-muted-foreground"}>
+                {c.label}
+              </p>
+              <p className="text-[9px] text-muted-foreground">
+                Şu an: {c.current}
+              </p>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
