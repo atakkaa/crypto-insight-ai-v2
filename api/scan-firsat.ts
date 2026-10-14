@@ -2,8 +2,7 @@
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
 
 // ==========================================================
-// KALİTELİ FORMASYON MOTORU (formation-engine.server.ts'ten kopyalandı)
-// api/lib/ Vercel'de çalışmadığı için doğrudan buraya eklendi.
+// KALİTELİ FORMASYON MOTORU
 // ==========================================================
 
 type PatternLine = {
@@ -2062,6 +2061,7 @@ async function saveFormationSignal(params: {
   market: string;
   symbol: string;
   timeframe: string;
+  signalType: "long" | "short" | "multi";
   formationName: string;
   formationBias: string;
   qualityScore: number;
@@ -2087,6 +2087,7 @@ async function saveFormationSignal(params: {
         market: params.market,
         symbol: params.symbol,
         timeframe: params.timeframe,
+        signal_type: params.signalType,
         formation_name: params.formationName,
         formation_bias: params.formationBias,
         quality_score: params.qualityScore,
@@ -2341,6 +2342,7 @@ export default async function handler(request: RequestLike, response: ResponseLi
             market: result.market,
             symbol: result.symbol,
             timeframe: "1h",
+            signalType: "long",
             formationName: primaryPattern.name,
             formationBias:
               primaryPattern.direction === "bullish"

@@ -569,6 +569,61 @@ async function supabaseInsert(table: string, data: any): Promise<boolean> {
 }
 
 // ==========================================================
+// FORMASYON SİNYALİ KAYDET (ÇOKLU ZD — GLOBAL)
+// ==========================================================
+
+async function saveFormationSignal(params: {
+  market: string;
+  symbol: string;
+  timeframe: string;
+  signalType: "long" | "short" | "multi";
+  formationName: string;
+  formationBias: string;
+  qualityScore: number;
+  signalScore: number;
+  entryPrice: number;
+  targetPrice: number;
+  stopPrice: number;
+  riskReward: string;
+}) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/formation_signals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        Prefer: "return=minimal,resolution=ignore-duplicates",
+      },
+      body: JSON.stringify({
+        user_id: null,
+        market: params.market,
+        symbol: params.symbol,
+        timeframe: params.timeframe,
+        signal_type: params.signalType,
+        formation_name: params.formationName,
+        formation_bias: params.formationBias,
+        quality_score: params.qualityScore,
+        signal_score: params.signalScore,
+        entry_price: params.entryPrice,
+        target_price: params.targetPrice,
+        stop_price: params.stopPrice,
+        risk_reward: params.riskReward,
+        status: "pending",
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Formation signal kayıt hatası:", await res.text());
+    }
+  } catch (error) {
+    console.error("Formation signal fetch hatası:", error);
+  }
+}
+
+// ==========================================================
 // KARŞILAŞTIRMALI YORUM
 // ==========================================================
 
@@ -661,6 +716,7 @@ async function scanMultiTimeframe(group: string = "all") {
 
   let multiCreated = 0;
   let multiScanned = 0;
+  let multiSignalsSaved = 0;
 
   const CONCURRENCY = 5;
   for (let i = 0; i < symbols.length; i += CONCURRENCY) {
@@ -725,7 +781,7 @@ async function scanMultiTimeframe(group: string = "all") {
           );
           if (recent.length > 0) continue;
 
-          const reason = `${primary.pattern} (%${primary.confidence}) · ${primary.bias} · ÇOKLU TF`;
+          const reason = `${primary.pattern} (%${primary.confidence}) · ${primary.bias} · ÇOKLU ZD`;
 
           const ok = await supabaseInsert("short_term_notifications", {
             user_id: userId,
@@ -745,14 +801,37 @@ async function scanMultiTimeframe(group: string = "all") {
             multi_tf_data: tfResults,
           });
           if (ok) multiCreated += 1;
+
+          // Sinyali global olarak kaydet — sadece ilk kullanıcı için (duplicate olmasın)
+          if (ok && userId === eligibleUsers[0]) {
+            const risk = Math.abs(primary.entry - primary.stop);
+            const reward = Math.abs(primary.target - primary.entry);
+            const rr = risk > 0 ? `1:${(reward / risk).toFixed(1)}` : "—";
+
+            await saveFormationSignal({
+              market: target.market,
+              symbol: target.symbol,
+              timeframe: "multi",
+              signalType: "multi",
+              formationName: primary.pattern,
+              formationBias: primary.bias,
+              qualityScore: primary.confidence,
+              signalScore: primary.confidence,
+              entryPrice: primary.entry,
+              targetPrice: primary.target,
+              stopPrice: primary.stop,
+              riskReward: rr,
+            });
+            multiSignalsSaved++;
+          }
         }
       } catch (err) {
-        console.error(`Çoklu TF hatası (${target.symbol}):`, err);
+        console.error(`Çoklu ZD hatası (${target.symbol}):`, err);
       }
     }));
   }
 
-  return { multiScanned, multiCreated, multiUsers: eligibleUsers.length };
+  return { multiScanned, multiCreated, multiSignalsSaved, multiUsers: eligibleUsers.length };
 }
 
 // ==========================================================
@@ -777,7 +856,7 @@ export default async function handler(request: RequestLike, response: ResponseLi
 
     console.log(`🔍 Çoklu zaman dilimi tarama başladı (group=${group})...`);
     const result = await scanMultiTimeframe(group);
-    console.log(`✅ Çoklu TF tamamlandı (group=${group}):`, result);
+    console.log(`✅ Çoklu ZD tamamlandı (group=${group}):`, result);
 
     return response.status(200).json({
       success: true,

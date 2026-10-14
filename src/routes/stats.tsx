@@ -24,6 +24,17 @@ export const Route = createFileRoute("/stats")({
 // TİPLER
 // ==========================================================
 
+type StatBlock = {
+  total: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  avgWin: number;
+  avgLoss: number;
+  totalReturn: number;
+  expectancy: number;
+};
+
 type StatsData = {
   success: boolean;
   tier: string;
@@ -33,6 +44,7 @@ type StatsData = {
     markets: string[];
     symbol: string | null;
     bias: string | null;
+    signalType: string | null;
   };
   filterOptions: {
     formations: string[];
@@ -40,27 +52,8 @@ type StatsData = {
     symbols: string[];
     biases: string[];
   };
-  general: {
-    total: number;
-    wins: number;
-    losses: number;
-    winRate: number;
-    avgWin: number;
-    avgLoss: number;
-    totalReturn: number;
-    expectancy: number;
-  };
-  byFormation: Array<{
-    name: string;
-    total: number;
-    wins: number;
-    losses: number;
-    winRate: number;
-    avgWin: number;
-    avgLoss: number;
-    totalReturn: number;
-    expectancy: number;
-  }>;
+  general: StatBlock;
+  byFormation: Array<{ name: string } & StatBlock>;
   bySymbol: Array<{
     symbol: string;
     market: string;
@@ -83,6 +76,12 @@ type StatsData = {
     losses: number;
     winRate: number;
   }>;
+  signalTypes: {
+    long: StatBlock;
+    short: StatBlock;
+    multi: StatBlock;
+    all: StatBlock;
+  };
 };
 
 type FilterState = {
@@ -93,12 +92,16 @@ type FilterState = {
   bias: string;
 };
 
+type TabKey = "long" | "short" | "multi" | "all" | "compare";
+
 const COLORS = {
   bull: "#22c55e",
   bear: "#ef4444",
   neutral: "#a855f7",
   amber: "#f59e0b",
   blue: "#3b82f6",
+  purple: "#8b5cf6",
+  teal: "#14b8a6",
 };
 
 const MARKET_LABELS: Record<string, string> = {
@@ -125,7 +128,7 @@ function biasLabel(key: string): string {
 }
 
 // ==========================================================
-// SAYFA
+// ANA SAYFA
 // ==========================================================
 
 function StatsPage() {
@@ -336,46 +339,6 @@ function StatsPage() {
   const options = data.filterOptions;
   const isAdmin = data.tier === "admin";
 
-  // ==========================================================
-  // GRAFİK VERİLERİ
-  // ==========================================================
-  const winLossData = [
-    { name: "Başarılı", value: data.general.wins, color: COLORS.bull },
-    { name: "Başarısız", value: data.general.losses, color: COLORS.bear },
-  ].filter((d) => d.value > 0);
-
-  const formationChartData = data.byFormation.slice(0, 10).map((f) => ({
-    name: f.name.length > 15 ? f.name.slice(0, 15) + "..." : f.name,
-    fullName: f.name,
-    "Başarı %": f.winRate,
-    Toplam: f.total,
-  }));
-
-  const symbolChartData = data.bySymbol.slice(0, 10).map((s) => ({
-    name: s.symbol.replace("USDT", "").replace(".IS", "").slice(0, 10),
-    fullName: s.symbol,
-    "Başarı %": s.winRate,
-    Toplam: s.total,
-  }));
-
-  const biasData = data.byBias.map((b) => ({
-    name: biasLabel(b.bias),
-    value: b.total,
-    color:
-      b.bias === "yükseliş"
-        ? COLORS.bull
-        : b.bias === "düşüş"
-          ? COLORS.bear
-          : COLORS.neutral,
-  }));
-
-  const filteredSymbols = options.symbols.filter((s) =>
-    s.toLowerCase().includes(symbolSearch.toLowerCase()),
-  );
-
-  // ==========================================================
-  // RENDER
-  // ==========================================================
   return (
     <div className="container mx-auto max-w-7xl space-y-6 p-4">
       {/* BAŞLIK */}
@@ -390,7 +353,6 @@ function StatsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* CSV İNDİR — sadece admin */}
           {isAdmin && (
             <button
               type="button"
@@ -435,9 +397,7 @@ function StatsPage() {
           </button>
 
           {loading && (
-            <span className="text-xs text-muted-foreground">
-              Güncelleniyor...
-            </span>
+            <span className="text-xs text-muted-foreground">Güncelleniyor...</span>
           )}
         </div>
       </div>
@@ -552,25 +512,25 @@ function StatsPage() {
                 >
                   Tümü
                 </button>
-                {filteredSymbols.slice(0, 200).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() =>
-                      setFilters((prev) => ({ ...prev, symbol: s }))
-                    }
-                    className={`block w-full px-3 py-1.5 text-left text-xs hover:bg-secondary ${
-                      filters.symbol === s ? "bg-secondary font-bold" : ""
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-                {filteredSymbols.length === 0 && (
-                  <p className="px-3 py-2 text-xs text-muted-foreground">
-                    Sonuç yok.
-                  </p>
-                )}
+                {options.symbols
+                  .filter((s) =>
+                    s.toLowerCase().includes(symbolSearch.toLowerCase()),
+                  )
+                  .slice(0, 200)
+                  .map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() =>
+                        setFilters((prev) => ({ ...prev, symbol: s }))
+                      }
+                      className={`block w-full px-3 py-1.5 text-left text-xs hover:bg-secondary ${
+                        filters.symbol === s ? "bg-secondary font-bold" : ""
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
               </div>
             </div>
 
@@ -630,9 +590,7 @@ function StatsPage() {
               className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
             >
               <span>{f}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">
-                ×
-              </span>
+              <span className="text-muted-foreground group-hover:text-destructive">×</span>
             </button>
           ))}
 
@@ -644,9 +602,7 @@ function StatsPage() {
               className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
             >
               <span>{marketLabel(m)}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">
-                ×
-              </span>
+              <span className="text-muted-foreground group-hover:text-destructive">×</span>
             </button>
           ))}
 
@@ -657,9 +613,7 @@ function StatsPage() {
               className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
             >
               <span>📈 {filters.symbol}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">
-                ×
-              </span>
+              <span className="text-muted-foreground group-hover:text-destructive">×</span>
             </button>
           )}
 
@@ -670,9 +624,7 @@ function StatsPage() {
               className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
             >
               <span>{biasLabel(filters.bias)}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">
-                ×
-              </span>
+              <span className="text-muted-foreground group-hover:text-destructive">×</span>
             </button>
           )}
 
@@ -686,87 +638,280 @@ function StatsPage() {
         </div>
       )}
 
-      {/* GENEL İSTATİSTİK KARTLARI */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Toplam Sinyal"
-          value={data.general.total.toString()}
-          icon="📈"
-        />
-        <StatCard
-          title="Başarı Oranı"
-          value={`${data.general.winRate}%`}
-          icon="🎯"
-          color={
-            data.general.winRate >= 60
-              ? "text-bull"
-              : data.general.winRate >= 40
-                ? "text-amber-500"
-                : "text-bear"
-          }
-        />
-        <StatCard
-          title="Ortalama Kazanç"
-          value={`+${data.general.avgWin}%`}
-          icon="🟢"
-          color="text-bull"
-        />
-        <StatCard
-          title="Ortalama Kayıp"
-          value={`${data.general.avgLoss}%`}
-          icon="🔴"
-          color="text-bear"
-        />
-      </div>
+      {/* SEKMELİ İSTATİSTİK PANELİ */}
+      <StatsTabs data={data} activeFilterCount={activeFilterCount} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Başarılı"
-          value={data.general.wins.toString()}
-          icon="✅"
-          color="text-bull"
-        />
-        <StatCard
-          title="Başarısız"
-          value={data.general.losses.toString()}
-          icon="❌"
-          color="text-bear"
-        />
-        <StatCard
-          title="Toplam Getiri"
-          value={`${data.general.totalReturn >= 0 ? "+" : ""}${data.general.totalReturn}%`}
-          icon="💰"
-          color={data.general.totalReturn >= 0 ? "text-bull" : "text-bear"}
-        />
-        <StatCard
-          title="Beklenen Değer"
-          value={`${data.general.expectancy >= 0 ? "+" : ""}${data.general.expectancy}%`}
-          icon="⚖️"
-          color={data.general.expectancy >= 0 ? "text-bull" : "text-bear"}
-        />
-      </div>
-
-      {/* VERİ YOK */}
-      {data.general.total === 0 && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
-          <p className="text-sm font-bold text-amber-500">
-            ⏳ Bu filtre için sonuçlanmış sinyal yok
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {activeFilterCount > 0
-              ? "Filtreleri gevşetmeyi veya zaman aralığını artırmayı deneyin."
-              : "Sinyaller kaydediliyor ancak henüz hedefe ulaşmadı veya stop olmadı. Birkaç gün sonra tekrar kontrol edin."}
-          </p>
+      {/* FORMASYON BAZLI GRAFİK (filtrelenmiş) */}
+      {data.byFormation.length > 0 && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h2 className="mb-4 text-sm font-bold">
+            📋 Formasyon Başarı Oranları (İlk 10)
+          </h2>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={data.byFormation.slice(0, 10).map((f) => ({
+                  name: f.name.length > 15 ? f.name.slice(0, 15) + "..." : f.name,
+                  fullName: f.name,
+                  "Başarı %": f.winRate,
+                  Toplam: f.total,
+                }))}
+                margin={{ top: 5, right: 20, left: 0, bottom: 40 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis
+                  dataKey="name"
+                  angle={-30}
+                  textAnchor="end"
+                  height={80}
+                  tick={{ fill: "#9ca3af", fontSize: 11 }}
+                />
+                <YAxis
+                  tick={{ fill: "#9ca3af", fontSize: 11 }}
+                  domain={[0, 100]}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#1f2937",
+                    border: "1px solid #374151",
+                    borderRadius: 8,
+                    color: "#fff",
+                  }}
+                  formatter={(value: number, name: string) => [
+                    name === "Başarı %" ? `${value}%` : value,
+                    name,
+                  ]}
+                  labelFormatter={(label: string, payload: any) => {
+                    const item = payload?.[0]?.payload;
+                    return item?.fullName ?? label;
+                  }}
+                />
+                <Bar
+                  dataKey="Başarı %"
+                  fill={COLORS.blue}
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
 
-      {/* GRAFİKLER */}
-      {data.general.total > 0 && (
+      {/* COIN/HS BAZLI GRAFİK */}
+      {data.bySymbol.length > 0 && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h2 className="mb-4 text-sm font-bold">
+            🪙 Coin/Hisse Başarı Oranları (İlk 10)
+          </h2>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={data.bySymbol.slice(0, 10).map((s) => ({
+                  name: s.symbol.replace("USDT", "").replace(".IS", "").slice(0, 10),
+                  fullName: s.symbol,
+                  "Başarı %": s.winRate,
+                  Toplam: s.total,
+                }))}
+                margin={{ top: 5, right: 20, left: 0, bottom: 20 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fill: "#9ca3af", fontSize: 11 }}
+                />
+                <YAxis
+                  tick={{ fill: "#9ca3af", fontSize: 11 }}
+                  domain={[0, 100]}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#1f2937",
+                    border: "1px solid #374151",
+                    borderRadius: 8,
+                    color: "#fff",
+                  }}
+                  formatter={(value: number, name: string) => [
+                    name === "Başarı %" ? `${value}%` : value,
+                    name,
+                  ]}
+                  labelFormatter={(label: string, payload: any) => {
+                    const item = payload?.[0]?.payload;
+                    return item?.fullName ?? label;
+                  }}
+                />
+                <Bar
+                  dataKey="Başarı %"
+                  fill={COLORS.amber}
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==========================================================
+// SEKMELİ PANEL
+// ==========================================================
+
+function StatsTabs({
+  data,
+  activeFilterCount,
+}: {
+  data: StatsData;
+  activeFilterCount: number;
+}) {
+  const [activeTab, setActiveTab] = useState<TabKey>("all");
+
+  const tabs: Array<{ key: TabKey; label: string; emoji: string }> = [
+    { key: "long", label: "Uzun Vadeli", emoji: "📈" },
+    { key: "short", label: "Kısa Vadeli", emoji: "⚡" },
+    { key: "multi", label: "Çoklu ZD", emoji: "🎯" },
+    { key: "all", label: "Toplam", emoji: "📊" },
+    { key: "compare", label: "Karşılaştırma", emoji: "⚖️" },
+  ];
+
+  return (
+    <div className="rounded-lg border border-border bg-card">
+      {/* SEKME BAŞLIKLARI */}
+      <div className="flex flex-wrap gap-1 border-b border-border p-2">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`rounded-md px-3 py-2 text-xs font-bold transition-colors ${
+              activeTab === tab.key
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            {tab.emoji} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* SEKME İÇERİĞİ */}
+      <div className="p-4">
+        {activeTab === "compare" ? (
+          <CompareView data={data} />
+        ) : (
+          <SingleStatsView
+            stats={data.signalTypes[activeTab]}
+            label={
+              activeTab === "long"
+                ? "Uzun Vadeli"
+                : activeTab === "short"
+                  ? "Kısa Vadeli"
+                  : activeTab === "multi"
+                    ? "Çoklu Zaman Dilimi"
+                    : "Toplam (Kısa + Uzun + Çoklu)"
+            }
+            activeFilterCount={activeFilterCount}
+            activeTab={activeTab}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ==========================================================
+// TEK KATEGORİ İSTATİSTİK GÖRÜNÜMÜ
+// ==========================================================
+
+function SingleStatsView({
+  stats,
+  label,
+  activeFilterCount,
+  activeTab,
+}: {
+  stats: StatBlock;
+  label: string;
+  activeFilterCount: number;
+  activeTab: TabKey;
+}) {
+  const winLossData = [
+    { name: "Başarılı", value: stats.wins, color: COLORS.bull },
+    { name: "Başarısız", value: stats.losses, color: COLORS.bear },
+  ].filter((d) => d.value > 0);
+
+  return (
+    <div className="space-y-4">
+      {/* BAŞLIK */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-bold">{label}</h2>
+        {activeFilterCount > 0 && (
+          <span className="text-[11px] text-muted-foreground">
+            ⚠️ Filtreler bu sekmeyi etkilemez, sadece aşağıdaki grafikleri etkiler
+          </span>
+        )}
+      </div>
+
+      {stats.total === 0 ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+          <p className="text-sm font-bold text-amber-500">
+            ⏳ Bu kategoride henüz sonuçlanmış sinyal yok
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Sinyaller üretiliyor, sonuçlanmasını bekliyoruz.
+          </p>
+        </div>
+      ) : (
         <>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-lg border border-border bg-card p-4">
-              <h2 className="mb-4 text-sm font-bold">🥧 Başarı Dağılımı</h2>
-              <div className="h-72">
+          {/* 6 KART */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <StatCard
+              title="Toplam Sinyal"
+              value={stats.total.toString()}
+              icon="📈"
+            />
+            <StatCard
+              title="Başarı Oranı"
+              value={`${stats.winRate}%`}
+              icon="🎯"
+              color={
+                stats.winRate >= 60
+                  ? "text-bull"
+                  : stats.winRate >= 40
+                    ? "text-amber-500"
+                    : "text-bear"
+              }
+            />
+            <StatCard
+              title="Toplam Getiri"
+              value={`${stats.totalReturn >= 0 ? "+" : ""}${stats.totalReturn}%`}
+              icon="💰"
+              color={stats.totalReturn >= 0 ? "text-bull" : "text-bear"}
+            />
+            <StatCard
+              title="Ortalama Kazanç"
+              value={`+${stats.avgWin}%`}
+              icon="🟢"
+              color="text-bull"
+            />
+            <StatCard
+              title="Ortalama Kayıp"
+              value={`${stats.avgLoss}%`}
+              icon="🔴"
+              color="text-bear"
+            />
+            <StatCard
+              title="Beklenen Değer"
+              value={`${stats.expectancy >= 0 ? "+" : ""}${stats.expectancy}%`}
+              icon="⚖️"
+              color={stats.expectancy >= 0 ? "text-bull" : "text-bear"}
+            />
+          </div>
+
+          {/* BAŞARI DAĞILIMI PIE */}
+          {winLossData.length > 0 && (
+            <div className="rounded-lg border border-border bg-background p-4">
+              <h3 className="mb-3 text-sm font-bold">🥧 Başarı Dağılımı</h3>
+              <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -777,7 +922,7 @@ function StatsPage() {
                       label={({ name, value, percent }) =>
                         `${name}: ${value} (${((percent ?? 0) * 100).toFixed(0)}%)`
                       }
-                      outerRadius={90}
+                      outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"
                     >
@@ -797,141 +942,130 @@ function StatsPage() {
                 </ResponsiveContainer>
               </div>
             </div>
-
-            <div className="rounded-lg border border-border bg-card p-4">
-              <h2 className="mb-4 text-sm font-bold">🎯 AL/SAT Dağılımı</h2>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={biasData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value, percent }) =>
-                        `${name}: ${value} (${((percent ?? 0) * 100).toFixed(0)}%)`
-                      }
-                      outerRadius={90}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {biasData.map((entry, index) => (
-                        <Cell key={`cell-bias-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#1f2937",
-                        border: "1px solid #374151",
-                        borderRadius: 8,
-                        color: "#fff",
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          {formationChartData.length > 0 && (
-            <div className="rounded-lg border border-border bg-card p-4">
-              <h2 className="mb-4 text-sm font-bold">
-                📋 Formasyon Başarı Oranları (İlk 10)
-              </h2>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={formationChartData}
-                    margin={{ top: 5, right: 20, left: 0, bottom: 40 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis
-                      dataKey="name"
-                      angle={-30}
-                      textAnchor="end"
-                      height={80}
-                      tick={{ fill: "#9ca3af", fontSize: 11 }}
-                    />
-                    <YAxis
-                      tick={{ fill: "#9ca3af", fontSize: 11 }}
-                      domain={[0, 100]}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#1f2937",
-                        border: "1px solid #374151",
-                        borderRadius: 8,
-                        color: "#fff",
-                      }}
-                      formatter={(value: number, name: string) => [
-                        name === "Başarı %" ? `${value}%` : value,
-                        name,
-                      ]}
-                      labelFormatter={(label: string, payload: any) => {
-                        const item = payload?.[0]?.payload;
-                        return item?.fullName ?? label;
-                      }}
-                    />
-                    <Bar
-                      dataKey="Başarı %"
-                      fill={COLORS.blue}
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-
-          {symbolChartData.length > 0 && (
-            <div className="rounded-lg border border-border bg-card p-4">
-              <h2 className="mb-4 text-sm font-bold">
-                🪙 Coin/Hisse Başarı Oranları (İlk 10)
-              </h2>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={symbolChartData}
-                    margin={{ top: 5, right: 20, left: 0, bottom: 20 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fill: "#9ca3af", fontSize: 11 }}
-                    />
-                    <YAxis
-                      tick={{ fill: "#9ca3af", fontSize: 11 }}
-                      domain={[0, 100]}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#1f2937",
-                        border: "1px solid #374151",
-                        borderRadius: 8,
-                        color: "#fff",
-                      }}
-                      formatter={(value: number, name: string) => [
-                        name === "Başarı %" ? `${value}%` : value,
-                        name,
-                      ]}
-                      labelFormatter={(label: string, payload: any) => {
-                        const item = payload?.[0]?.payload;
-                        return item?.fullName ?? label;
-                      }}
-                    />
-                    <Bar
-                      dataKey="Başarı %"
-                      fill={COLORS.amber}
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
           )}
         </>
       )}
     </div>
+  );
+}
+
+// ==========================================================
+// KARŞILAŞTIRMA GÖRÜNÜMÜ
+// ==========================================================
+
+function CompareView({ data }: { data: StatsData }) {
+  const { long, short, multi } = data.signalTypes;
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-base font-bold">
+        ⚖️ Uzun / Kısa / Çoklu ZD Karşılaştırması
+      </h2>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-xs">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="px-3 py-2 text-left font-bold text-muted-foreground">
+                Metrik
+              </th>
+              <th className="px-3 py-2 text-center font-bold text-blue-400">
+                📈 Uzun Vadeli
+              </th>
+              <th className="px-3 py-2 text-center font-bold text-amber-400">
+                ⚡ Kısa Vadeli
+              </th>
+              <th className="px-3 py-2 text-center font-bold text-purple-400">
+                🎯 Çoklu ZD
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <CompareRow label="Toplam Sinyal" values={[long.total, short.total, multi.total]} />
+            <CompareRow
+              label="Başarılı"
+              values={[long.wins, short.wins, multi.wins]}
+              color="text-bull"
+            />
+            <CompareRow
+              label="Başarısız"
+              values={[long.losses, short.losses, multi.losses]}
+              color="text-bear"
+            />
+            <CompareRow
+              label="Başarı Oranı"
+              values={[`${long.winRate}%`, `${short.winRate}%`, `${multi.winRate}%`]}
+              colorFn={(v) => {
+                const n = parseFloat(String(v));
+                return n >= 60 ? "text-bull" : n >= 40 ? "text-amber-500" : "text-bear";
+              }}
+            />
+            <CompareRow
+              label="Ortalama Kazanç"
+              values={[`+${long.avgWin}%`, `+${short.avgWin}%`, `+${multi.avgWin}%`]}
+              color="text-bull"
+            />
+            <CompareRow
+              label="Ortalama Kayıp"
+              values={[`${long.avgLoss}%`, `${short.avgLoss}%`, `${multi.avgLoss}%`]}
+              color="text-bear"
+            />
+            <CompareRow
+              label="Toplam Getiri"
+              values={[
+                `${long.totalReturn >= 0 ? "+" : ""}${long.totalReturn}%`,
+                `${short.totalReturn >= 0 ? "+" : ""}${short.totalReturn}%`,
+                `${multi.totalReturn >= 0 ? "+" : ""}${multi.totalReturn}%`,
+              ]}
+              colorFn={(v) => (String(v).startsWith("+") ? "text-bull" : "text-bear")}
+            />
+            <CompareRow
+              label="Beklenen Değer"
+              values={[
+                `${long.expectancy >= 0 ? "+" : ""}${long.expectancy}%`,
+                `${short.expectancy >= 0 ? "+" : ""}${short.expectancy}%`,
+                `${multi.expectancy >= 0 ? "+" : ""}${multi.expectancy}%`,
+              ]}
+              colorFn={(v) => (String(v).startsWith("+") ? "text-bull" : "text-bear")}
+            />
+          </tbody>
+        </table>
+      </div>
+
+      <div className="rounded-lg border border-border bg-background p-3">
+        <p className="text-[11px] text-muted-foreground">
+          💡 İpucu: Bu tablo tüm zamanların verisini gösterir, filtrelerden etkilenmez.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function CompareRow({
+  label,
+  values,
+  color,
+  colorFn,
+}: {
+  label: string;
+  values: Array<string | number>;
+  color?: string;
+  colorFn?: (v: string | number) => string;
+}) {
+  return (
+    <tr className="border-b border-border/50">
+      <td className="px-3 py-2 font-bold text-muted-foreground">{label}</td>
+      {values.map((v, i) => (
+        <td
+          key={i}
+          className={`px-3 py-2 text-center font-bold num ${
+            colorFn ? colorFn(v) : color ?? ""
+          }`}
+        >
+          {v}
+        </td>
+      ))}
+    </tr>
   );
 }
 
@@ -951,14 +1085,14 @@ function StatCard({
   color?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <div className="rounded-lg border border-border bg-background p-3">
       <div className="flex items-center justify-between">
         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
           {title}
         </p>
-        <span className="text-lg">{icon}</span>
+        <span className="text-base">{icon}</span>
       </div>
-      <p className={`mt-2 text-2xl font-bold ${color ?? "text-foreground"}`}>
+      <p className={`mt-2 text-xl font-bold ${color ?? "text-foreground"}`}>
         {value}
       </p>
     </div>

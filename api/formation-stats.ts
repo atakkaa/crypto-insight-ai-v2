@@ -27,6 +27,7 @@ type SignalRow = {
   status: string;
   result_percent: number | null;
   signal_time: string;
+  signal_type: string | null;
 };
 
 type UserTier = "admin" | "premium" | "trial" | "free";
@@ -51,7 +52,6 @@ function toSupabaseIn(values: string[]): string {
 function csvCell(value: unknown): string {
   if (value === null || value === undefined) return "";
   const str = String(value);
-  // İçinde virgül, tırnak veya yeni satır varsa tırnak içine al
   if (str.includes(",") || str.includes('"') || str.includes("\n")) {
     return `"${str.replace(/"/g, '""')}"`;
   }
@@ -68,6 +68,7 @@ function toCsv(signals: SignalRow[]): string {
     "status",
     "result_percent",
     "signal_time",
+    "signal_type",
   ];
 
   const lines: string[] = [];
@@ -83,11 +84,11 @@ function toCsv(signals: SignalRow[]): string {
         csvCell(s.status),
         csvCell(s.result_percent),
         csvCell(s.signal_time),
+        csvCell(s.signal_type),
       ].join(","),
     );
   }
 
-  // Excel'in Türkçe karakterleri doğru görmesi için BOM ekle
   return "\uFEFF" + lines.join("\r\n");
 }
 
@@ -138,6 +139,7 @@ type Filters = {
   markets: string[];
   symbol?: string;
   bias?: string;
+  signalType?: string;
 };
 
 async function fetchSignals(filters: Filters): Promise<SignalRow[]> {
@@ -151,7 +153,7 @@ async function fetchSignals(filters: Filters): Promise<SignalRow[]> {
     const params = new URLSearchParams();
     params.set(
       "select",
-      "symbol,market,formation_name,formation_bias,status,result_percent,signal_time",
+      "symbol,market,formation_name,formation_bias,status,result_percent,signal_time,signal_type",
     );
     params.set("status", "in.(hit_target,hit_stop)");
     params.set("signal_time", `gte.${since}`);
@@ -172,6 +174,7 @@ async function fetchSignals(filters: Filters): Promise<SignalRow[]> {
 
     if (filters.symbol) params.set("symbol", `eq.${filters.symbol}`);
     if (filters.bias) params.set("formation_bias", `eq.${filters.bias}`);
+    if (filters.signalType) params.set("signal_type", `eq.${filters.signalType}`);
 
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/formation_signals?${params.toString()}`,
@@ -358,6 +361,7 @@ export default async function handler(
     const symbolRaw = request.query?.["symbol"];
     const biasRaw = request.query?.["bias"];
     const formatRaw = request.query?.["format"];
+    const signalTypeRaw = request.query?.["signalType"];
 
     const symbol = Array.isArray(symbolRaw)
       ? symbolRaw[0]?.trim() || undefined
@@ -368,8 +372,11 @@ export default async function handler(
     const format = Array.isArray(formatRaw)
       ? formatRaw[0]?.trim() || ""
       : formatRaw?.trim() || "";
+    const signalType = Array.isArray(signalTypeRaw)
+      ? signalTypeRaw[0]?.trim() || undefined
+      : signalTypeRaw?.trim() || undefined;
 
-    const filters: Filters = { days, formations, markets, symbol, bias };
+    const filters: Filters = { days, formations, markets, symbol, bias, signalType };
 
     // ==========================================================
     // CSV EXPORT (sadece admin)
@@ -400,19 +407,21 @@ export default async function handler(
     }
 
     // ==========================================================
-    // JSON (mevcut davranış)
+    // JSON (mevcut davranış + signalTypes breakdown)
     // ==========================================================
     response.setHeader("Content-Type", "application/json");
 
-    const [signals, filterOptions] = await Promise.all([
+    // Ana sorgu (filtreli) + breakdown için filtresiz sorgu
+    const [filteredSignals, allSignals, filterOptions] = await Promise.all([
       fetchSignals(filters),
+      fetchSignals({ days, formations: [], markets: [] }), // signalType breakdown için filtresiz
       fetchFilterOptions(days),
     ]);
 
-    const general = calculateStats(signals);
+    const general = calculateStats(filteredSignals);
 
     const byFormationMap = new Map<string, SignalRow[]>();
-    for (const s of signals) {
+    for (const s of filteredSignals) {
       const list = byFormationMap.get(s.formation_name) ?? [];
       list.push(s);
       byFormationMap.set(s.formation_name, list);
@@ -422,7 +431,7 @@ export default async function handler(
       .sort((a, b) => b.total - a.total);
 
     const bySymbolMap = new Map<string, SignalRow[]>();
-    for (const s of signals) {
+    for (const s of filteredSignals) {
       const list = bySymbolMap.get(s.symbol) ?? [];
       list.push(s);
       bySymbolMap.set(s.symbol, list);
@@ -438,7 +447,7 @@ export default async function handler(
       .slice(0, 50);
 
     const byMarketMap = new Map<string, SignalRow[]>();
-    for (const s of signals) {
+    for (const s of filteredSignals) {
       const list = byMarketMap.get(s.market) ?? [];
       list.push(s);
       byMarketMap.set(s.market, list);
@@ -448,7 +457,7 @@ export default async function handler(
       .sort((a, b) => b.total - a.total);
 
     const byBiasMap = new Map<string, SignalRow[]>();
-    for (const s of signals) {
+    for (const s of filteredSignals) {
       const list = byBiasMap.get(s.formation_bias) ?? [];
       list.push(s);
       byBiasMap.set(s.formation_bias, list);
@@ -456,6 +465,20 @@ export default async function handler(
     const byBias = Array.from(byBiasMap.entries())
       .map(([b, sigs]) => ({ bias: b, ...calculateStats(sigs) }))
       .sort((a, b) => b.total - a.total);
+
+    // ==========================================================
+    // SIGNAL TYPE BREAKDOWN (long / short / multi / all)
+    // ==========================================================
+    const signalTypes: Record<string, ReturnType<typeof calculateStats>> = {};
+
+    const longSignals = allSignals.filter((s) => s.signal_type === "long");
+    const shortSignals = allSignals.filter((s) => s.signal_type === "short");
+    const multiSignals = allSignals.filter((s) => s.signal_type === "multi");
+
+    signalTypes["long"] = calculateStats(longSignals);
+    signalTypes["short"] = calculateStats(shortSignals);
+    signalTypes["multi"] = calculateStats(multiSignals);
+    signalTypes["all"] = calculateStats(allSignals);
 
     return response.status(200).json({
       success: true,
@@ -466,6 +489,7 @@ export default async function handler(
         markets,
         symbol: symbol ?? null,
         bias: bias ?? null,
+        signalType: signalType ?? null,
       },
       filterOptions,
       general,
@@ -473,6 +497,7 @@ export default async function handler(
       bySymbol,
       byMarket,
       byBias,
+      signalTypes,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

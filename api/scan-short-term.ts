@@ -261,25 +261,21 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
   const recentHighs = candles.slice(-30).map((c) => c.high);
   const recentLows = candles.slice(-30).map((c) => c.low);
 
-  // ==========================================================
-  // 1. İKİLİ DİP (Yükseliş) — Hedef YUKARIDA, Stop AŞAĞIDA
-  // ==========================================================
+  // 1. İKİLİ DİP
   try {
     const minLow = Math.min(...recentLows);
     const minIdx = recentLows.indexOf(minLow);
     if (minIdx >= 0 && minIdx < 15) {
       const secondMin = Math.min(...recentLows.slice(15));
       if (Math.abs(minLow - secondMin) / minLow < 0.03 && secondMin > minLow * 0.97 && lastClose > minLow * 1.02) {
-        // Neckline: iki dip arasındaki EN YÜKSEK nokta
         const sliceStart = Math.min(minIdx + 1, 20);
         const neckline = Math.max(...recentHighs.slice(sliceStart, 30));
         const safeNeckline = Number.isFinite(neckline) && neckline > minLow
           ? neckline 
           : Math.max(...recentHighs.slice(15, 30));
 
-        // ✅ DOĞRU: Yükseliş için Hedef YUKARIDA, Stop AŞAĞIDA
-        const target = safeNeckline + (safeNeckline - minLow);   // Yukarıda
-        const invalidation = minLow * 0.98;                        // Aşağıda
+        const target = safeNeckline + (safeNeckline - minLow);
+        const invalidation = minLow * 0.98;
 
         patterns.push({
           name: "İkili Dip", bias: "yükseliş", confidence: 78,
@@ -292,25 +288,21 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 2. İKİLİ TEPE (Düşüş) — Hedef AŞAĞIDA, Stop YUKARIDA
-  // ==========================================================
+  // 2. İKİLİ TEPE
   try {
     const maxHigh = Math.max(...recentHighs);
     const maxIdx = recentHighs.indexOf(maxHigh);
     if (maxIdx >= 0 && maxIdx < 15) {
       const secondMax = Math.max(...recentHighs.slice(15));
       if (Math.abs(maxHigh - secondMax) / maxHigh < 0.03 && maxHigh * 0.97 < secondMax && lastClose < maxHigh * 0.98) {
-        // Neckline: iki tepe arasındaki EN DÜŞÜK nokta
         const sliceStart = Math.min(maxIdx + 1, 20);
         const neckline = Math.min(...recentLows.slice(sliceStart, 30));
         const safeNeckline = Number.isFinite(neckline) && neckline < maxHigh
           ? neckline 
           : Math.min(...recentLows.slice(15, 30));
 
-        // ✅ DOĞRU: Düşüş için Hedef AŞAĞIDA, Stop YUKARIDA
-        const target = safeNeckline - (maxHigh - safeNeckline);   // Aşağıda
-        const invalidation = maxHigh * 1.02;                       // Yukarıda
+        const target = safeNeckline - (maxHigh - safeNeckline);
+        const invalidation = maxHigh * 1.02;
 
         patterns.push({
           name: "İkili Tepe", bias: "düşüş", confidence: 78,
@@ -323,18 +315,15 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 3. YÜKSELEN ÜÇGEN (Yükseliş) — Hedef YUKARIDA, Stop AŞAĞIDA
-  // ==========================================================
+  // 3. YÜKSELEN ÜÇGEN
   try {
     const firstHigh = Math.max(...recentHighs.slice(0, 15));
     const secondHigh = Math.max(...recentHighs.slice(15));
     const firstLow = Math.min(...recentLows.slice(0, 15));
     const secondLow = Math.min(...recentLows.slice(15));
     if (Math.abs(firstHigh - secondHigh) / firstHigh < 0.02 && secondLow > firstLow * 1.02 && lastClose > secondHigh * 0.99) {
-      // ✅ DOĞRU: Yükseliş
-      const target = firstHigh + (firstHigh - firstLow);  // Yukarıda
-      const invalidation = secondLow * 0.98;               // Aşağıda
+      const target = firstHigh + (firstHigh - firstLow);
+      const invalidation = secondLow * 0.98;
       patterns.push({
         name: "Yükselen Üçgen", bias: "yükseliş", confidence: 80,
         reasons: [`Yatay direnç: ${firstHigh.toFixed(4)}`, `Yükselen dip`],
@@ -345,18 +334,15 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 4. DÜŞEN ÜÇGEN (Düşüş) — Hedef AŞAĞIDA, Stop YUKARIDA
-  // ==========================================================
+  // 4. DÜŞEN ÜÇGEN
   try {
     const firstHigh = Math.max(...recentHighs.slice(0, 15));
     const secondHigh = Math.max(...recentHighs.slice(15));
     const firstLow = Math.min(...recentLows.slice(0, 15));
     const secondLow = Math.min(...recentLows.slice(15));
     if (secondHigh < firstHigh * 0.98 && Math.abs(firstLow - secondLow) / firstLow < 0.02 && lastClose < secondLow * 1.01) {
-      // ✅ DOĞRU: Düşüş
-      const target = firstLow - (firstHigh - firstLow);  // Aşağıda
-      const invalidation = secondHigh * 1.02;             // Yukarıda
+      const target = firstLow - (firstHigh - firstLow);
+      const invalidation = secondHigh * 1.02;
       patterns.push({
         name: "Düşen Üçgen", bias: "düşüş", confidence: 80,
         reasons: [`Düşen direnç`, `Yatay destek: ${firstLow.toFixed(4)}`],
@@ -367,9 +353,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 5. OBO (Düşüş) — Hedef AŞAĞIDA, Stop YUKARIDA
-  // ==========================================================
+  // 5. OBO
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
@@ -379,9 +363,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       const rs = Math.max(...h.slice(26, 40));
       if (head > ls * 1.02 && head > rs * 1.02 && Math.abs(ls - rs) / ls < 0.03) {
         const neckline = Math.min(...l.slice(12, 26));
-        // ✅ DOĞRU: Düşüş
-        const target = neckline - (head - neckline);  // Aşağıda
-        const invalidation = head * 1.02;              // Yukarıda
+        const target = neckline - (head - neckline);
+        const invalidation = head * 1.02;
         patterns.push({
           name: "Omuz-Baş-Omuz", bias: "düşüş", confidence: 85,
           reasons: [`Sol: ${ls.toFixed(4)}, Baş: ${head.toFixed(4)}, Sağ: ${rs.toFixed(4)}`],
@@ -393,9 +376,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 6. TERS OBO (Yükseliş) — Hedef YUKARIDA, Stop AŞAĞIDA
-  // ==========================================================
+  // 6. TERS OBO
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
@@ -405,9 +386,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       const rs = Math.min(...l.slice(26, 40));
       if (head < ls * 0.98 && head < rs * 0.98 && Math.abs(ls - rs) / ls < 0.03) {
         const neckline = Math.max(...h.slice(12, 26));
-        // ✅ DOĞRU: Yükseliş
-        const target = neckline + (neckline - head);  // Yukarıda
-        const invalidation = head * 0.98;              // Aşağıda
+        const target = neckline + (neckline - head);
+        const invalidation = head * 0.98;
         patterns.push({
           name: "Ters OBO", bias: "yükseliş", confidence: 85,
           reasons: [`Sol: ${ls.toFixed(4)}, Baş: ${head.toFixed(4)}, Sağ: ${rs.toFixed(4)}`],
@@ -419,9 +399,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 7. ÜÇLÜ DİP (Yükseliş) — Hedef YUKARIDA, Stop AŞAĞIDA
-  // ==========================================================
+  // 7. ÜÇLÜ DİP
   try {
     if (candles.length >= 45) {
       const l = candles.slice(-45).map((c) => c.low);
@@ -431,9 +409,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       const d3 = Math.min(...l.slice(30, 45));
       if (Math.abs(d1 - d2) / d1 < 0.03 && Math.abs(d2 - d3) / d2 < 0.03 && lastClose > d1 * 1.02) {
         const neckline = Math.max(...h.slice(0, 45));
-        // ✅ DOĞRU: Yükseliş
-        const target = neckline + (neckline - d1);  // Yukarıda
-        const invalidation = d1 * 0.98;              // Aşağıda
+        const target = neckline + (neckline - d1);
+        const invalidation = d1 * 0.98;
         patterns.push({
           name: "Üçlü Dip", bias: "yükseliş", confidence: 82,
           reasons: [`Üç dip aynı seviyede`],
@@ -445,9 +422,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 8. ÜÇLÜ TEPE (Düşüş) — Hedef AŞAĞIDA, Stop YUKARIDA
-  // ==========================================================
+  // 8. ÜÇLÜ TEPE
   try {
     if (candles.length >= 45) {
       const h = candles.slice(-45).map((c) => c.high);
@@ -457,9 +432,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       const t3 = Math.max(...h.slice(30, 45));
       if (Math.abs(t1 - t2) / t1 < 0.03 && Math.abs(t2 - t3) / t2 < 0.03 && lastClose < t1 * 0.98) {
         const neckline = Math.min(...l.slice(0, 45));
-        // ✅ DOĞRU: Düşüş
-        const target = neckline - (t1 - neckline);  // Aşağıda
-        const invalidation = t1 * 1.02;              // Yukarıda
+        const target = neckline - (t1 - neckline);
+        const invalidation = t1 * 1.02;
         patterns.push({
           name: "Üçlü Tepe", bias: "düşüş", confidence: 82,
           reasons: [`Üç tepe aynı seviyede`],
@@ -471,9 +445,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 9. YÜKSELEN KAMA (Düşüş) — Hedef AŞAĞIDA, Stop YUKARIDA
-  // ==========================================================
+  // 9. YÜKSELEN KAMA
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
@@ -483,9 +455,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       const ll = Math.min(...l.slice(0, 20));
       const rl = Math.min(...l.slice(20, 40));
       if (rh > lh && rl > ll && (rh - rl) < (lh - ll) * 0.7 && lastClose < rl * 1.01) {
-        // ✅ DOĞRU: Düşüş
-        const target = rl - (rh - rl);  // Aşağıda
-        const invalidation = rh * 1.02;  // Yukarıda
+        const target = rl - (rh - rl);
+        const invalidation = rh * 1.02;
         patterns.push({
           name: "Yükselen Kama", bias: "düşüş", confidence: 78,
           reasons: [`Yükselen kama + düşüş kırılımı`],
@@ -497,9 +468,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 10. DÜŞEN KAMA (Yükseliş) — Hedef YUKARIDA, Stop AŞAĞIDA
-  // ==========================================================
+  // 10. DÜŞEN KAMA
   try {
     if (candles.length >= 40) {
       const h = candles.slice(-40).map((c) => c.high);
@@ -509,9 +478,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       const ll = Math.min(...l.slice(0, 20));
       const rl = Math.min(...l.slice(20, 40));
       if (rh < lh && rl < ll && (rh - rl) < (lh - ll) * 0.7 && lastClose > rh * 0.99) {
-        // ✅ DOĞRU: Yükseliş
-        const target = rh + (rh - rl);  // Yukarıda
-        const invalidation = rl * 0.98;  // Aşağıda
+        const target = rh + (rh - rl);
+        const invalidation = rl * 0.98;
         patterns.push({
           name: "Düşen Kama", bias: "yükseliş", confidence: 78,
           reasons: [`Düşen kama + yükseliş kırılımı`],
@@ -523,9 +491,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 11. BOĞA BAYRAĞI (Yükseliş) — Hedef YUKARIDA, Stop AŞAĞIDA
-  // ==========================================================
+  // 11. BOĞA BAYRAĞI
   try {
     if (candles.length >= 30) {
       const h = candles.slice(-30).map((c) => c.high);
@@ -538,9 +504,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       const isFlag = (fh[fh.length - 1] ?? 0) < (fh[0] ?? 0) && (fl[fl.length - 1] ?? 0) < (fl[0] ?? 0);
       if (strongRise && isFlag && lastClose > (fh[fh.length - 1] ?? 0)) {
         const flagH = (fh[0] ?? 0) - (fl[0] ?? 0);
-        // ✅ DOĞRU: Yükseliş
-        const target = lastClose + flagH;                               // Yukarıda
-        const invalidation = (fl[fl.length - 1] ?? lastClose * 0.97);    // Aşağıda
+        const target = lastClose + flagH;
+        const invalidation = (fl[fl.length - 1] ?? lastClose * 0.97);
         patterns.push({
           name: "Boğa Bayrağı", bias: "yükseliş", confidence: 80,
           reasons: [`Güçlü yükseliş + bayrak`],
@@ -552,9 +517,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 12. AYI BAYRAĞI (Düşüş) — Hedef AŞAĞIDA, Stop YUKARIDA
-  // ==========================================================
+  // 12. AYI BAYRAĞI
   try {
     if (candles.length >= 30) {
       const h = candles.slice(-30).map((c) => c.high);
@@ -567,9 +530,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       const isFlag = (fh[fh.length - 1] ?? 0) > (fh[0] ?? 0) && (fl[fl.length - 1] ?? 0) > (fl[0] ?? 0);
       if (strongDrop && isFlag && lastClose < (fl[fl.length - 1] ?? 0)) {
         const flagH = (fh[0] ?? 0) - (fl[0] ?? 0);
-        // ✅ DOĞRU: Düşüş
-        const target = lastClose - flagH;                              // Aşağıda
-        const invalidation = (fh[fh.length - 1] ?? lastClose * 1.03);   // Yukarıda
+        const target = lastClose - flagH;
+        const invalidation = (fh[fh.length - 1] ?? lastClose * 1.03);
         patterns.push({
           name: "Ayı Bayrağı", bias: "düşüş", confidence: 80,
           reasons: [`Güçlü düşüş + bayrak`],
@@ -581,9 +543,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 13. BOĞA FLAMASI (Yükseliş) — Hedef YUKARIDA, Stop AŞAĞIDA
-  // ==========================================================
+  // 13. BOĞA FLAMASI
   try {
     if (candles.length >= 30) {
       const first = closes.slice(0, 10);
@@ -596,9 +556,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       const r1 = (Math.max(...ph.slice(0, 7)) - Math.min(...pl.slice(0, 7)));
       const r2 = (Math.max(...ph.slice(7)) - Math.min(...pl.slice(7)));
       if (strongRise && r2 < r1 * 0.6 && lastClose > (Math.max(...ph) ?? 0)) {
-        // ✅ DOĞRU: Yükseliş
-        const target = lastClose + rise * 0.8;                    // Yukarıda
-        const invalidation = (Math.min(...pl) ?? lastClose * 0.97); // Aşağıda
+        const target = lastClose + rise * 0.8;
+        const invalidation = (Math.min(...pl) ?? lastClose * 0.97);
         patterns.push({
           name: "Boğa Flaması", bias: "yükseliş", confidence: 78,
           reasons: [`Güçlü yükseliş + flama`],
@@ -610,9 +569,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 14. AYI FLAMASI (Düşüş) — Hedef AŞAĞIDA, Stop YUKARIDA
-  // ==========================================================
+  // 14. AYI FLAMASI
   try {
     if (candles.length >= 30) {
       const first = closes.slice(0, 10);
@@ -625,9 +582,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       const r1 = (Math.max(...ph.slice(0, 7)) - Math.min(...pl.slice(0, 7)));
       const r2 = (Math.max(...ph.slice(7)) - Math.min(...pl.slice(7)));
       if (strongDrop && r2 < r1 * 0.6 && lastClose < (Math.min(...pl) ?? 0)) {
-        // ✅ DOĞRU: Düşüş
-        const target = lastClose - drop * 0.8;                    // Aşağıda
-        const invalidation = (Math.max(...ph) ?? lastClose * 1.03); // Yukarıda
+        const target = lastClose - drop * 0.8;
+        const invalidation = (Math.max(...ph) ?? lastClose * 1.03);
         patterns.push({
           name: "Ayı Flaması", bias: "düşüş", confidence: 78,
           reasons: [`Güçlü düşüş + flama`],
@@ -639,9 +595,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 15. FİNCAN-KULP (Yükseliş) — Hedef YUKARIDA, Stop AŞAĞIDA
-  // ==========================================================
+  // 15. FİNCAN-KULP
   try {
     if (candles.length >= 50) {
       const h = candles.slice(-50).map((c) => c.high);
@@ -654,9 +608,8 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
       const hd = (cr - hl) / cr;
       const isHandle = hd < 0.3 && hd > 0.05;
       if (isCup && isHandle && lastClose > cr) {
-        // ✅ DOĞRU: Yükseliş
-        const target = lastClose + (cr - cb);  // Yukarıda
-        const invalidation = hl * 0.98;          // Aşağıda
+        const target = lastClose + (cr - cb);
+        const invalidation = hl * 0.98;
         patterns.push({
           name: "Fincan-Kulp", bias: "yükseliş", confidence: 82,
           reasons: [`Fincan + kulp tamamlandı`],
@@ -668,9 +621,7 @@ function detectPatterns(candles: Candle[]): DetectedPattern[] {
     }
   } catch {}
 
-  // ==========================================================
-  // 16. SİMETRİK ÜÇGEN (Nötr) — Hedef YOK, Stop YOK
-  // ==========================================================
+  // 16. SİMETRİK ÜÇGEN
   try {
     if (candles.length >= 30) {
       const fh = Math.max(...recentHighs.slice(0, 15));
@@ -763,15 +714,16 @@ async function supabaseInsert(table: string, data: any): Promise<boolean> {
     return res.ok;
   } catch { return false; }
 }
+
 // ==========================================================
-// FORMASYON SİNYALİ KAYDET
+// FORMASYON SİNYALİ KAYDET (GLOBAL — user_id NULL)
 // ==========================================================
 
 async function saveFormationSignal(params: {
-  userId: string;
   market: string;
   symbol: string;
   timeframe: string;
+  signalType: "long" | "short" | "multi";
   formationName: string;
   formationBias: string;
   qualityScore: number;
@@ -793,10 +745,11 @@ async function saveFormationSignal(params: {
         Prefer: "return=minimal,resolution=ignore-duplicates",
       },
       body: JSON.stringify({
-        user_id: params.userId,
+        user_id: null,
         market: params.market,
         symbol: params.symbol,
         timeframe: params.timeframe,
+        signal_type: params.signalType,
         formation_name: params.formationName,
         formation_bias: params.formationBias,
         quality_score: params.qualityScore,
@@ -816,6 +769,7 @@ async function saveFormationSignal(params: {
     console.error("Formation signal fetch hatası:", error);
   }
 }
+
 function getDedupeHoursForTf(tf: string): number {
   switch (tf) {
     case "15m": return 1;
@@ -836,42 +790,33 @@ function validateTargetStop(
   rawTarget: number | null,
   rawStop: number | null,
 ): { target: number; stop: number } {
-  // R/R hedefleri
   const MIN_RR = 1.5;
   const IDEAL_RR = 2.0;
-  const MAX_STOP_DISTANCE = 0.03; // %3
-  const MIN_TARGET_DISTANCE = 0.015; // %1.5 — YENİ
+  const MAX_STOP_DISTANCE = 0.03;
+  const MIN_TARGET_DISTANCE = 0.015;
 
   if (bias === "nötr") {
     return { target: lastClose, stop: lastClose };
   }
 
   if (bias === "yükseliş") {
-    // Stop: raw stop VEYA %2 (hangisi daha yakınsa)
     const rawStopValue = rawStop ?? lastClose * 0.98;
     const percentStop = lastClose * 0.98;
     let stop = Math.max(rawStopValue, percentStop);
 
-    // Stop çok uzaksa kısalt
     if (lastClose - stop > lastClose * MAX_STOP_DISTANCE) {
       stop = lastClose * (1 - MAX_STOP_DISTANCE);
     }
 
-    // Geçersizse varsayılan
     if (!Number.isFinite(stop) || stop <= 0 || stop >= lastClose) {
       stop = lastClose * 0.98;
     }
 
     const risk = lastClose - stop;
-
-    // R/R hedefi
     const rrTarget = lastClose + risk * IDEAL_RR;
     const rrMinTarget = lastClose + risk * MIN_RR;
-
-    // Raw target
     const rawTargetValue = rawTarget ?? lastClose * 1.05;
 
-    // Hedef seçimi
     let target: number;
     if (rawTargetValue >= rrMinTarget) {
       target = Math.min(rawTargetValue, rrTarget);
@@ -879,13 +824,11 @@ function validateTargetStop(
       target = rrTarget;
     }
 
-    // ✅ YENİ: Minimum hedef mesafesi kontrolü
     const targetDistance = (target - lastClose) / lastClose;
     if (targetDistance < MIN_TARGET_DISTANCE) {
       target = lastClose * (1 + MIN_TARGET_DISTANCE);
     }
 
-    // Geçersizse
     if (!Number.isFinite(target) || target <= lastClose) {
       target = lastClose * 1.05;
     }
@@ -898,26 +841,19 @@ function validateTargetStop(
   const percentStop = lastClose * 1.02;
   let stop = Math.min(rawStopValue, percentStop);
 
-  // Stop çok uzaksa kısalt
   if (stop - lastClose > lastClose * MAX_STOP_DISTANCE) {
     stop = lastClose * (1 + MAX_STOP_DISTANCE);
   }
 
-  // Geçersizse
   if (!Number.isFinite(stop) || stop <= 0 || stop <= lastClose) {
     stop = lastClose * 1.02;
   }
 
   const risk = stop - lastClose;
-
-  // R/R hedefi
   const rrTarget = lastClose - risk * IDEAL_RR;
   const rrMinTarget = lastClose - risk * MIN_RR;
-
-  // Raw target
   const rawTargetValue = rawTarget ?? lastClose * 0.95;
 
-  // Hedef seçimi
   let target: number;
   if (rawTargetValue <= rrMinTarget) {
     target = Math.max(rawTargetValue, rrTarget);
@@ -925,13 +861,11 @@ function validateTargetStop(
     target = rrTarget;
   }
 
-  // ✅ YENİ: Minimum hedef mesafesi kontrolü
   const targetDistance = (lastClose - target) / lastClose;
   if (targetDistance < MIN_TARGET_DISTANCE) {
     target = lastClose * (1 - MIN_TARGET_DISTANCE);
   }
 
-  // Geçersizse
   if (!Number.isFinite(target) || target >= lastClose) {
     target = lastClose * 0.95;
   }
@@ -1016,7 +950,6 @@ async function scanShortTermForPremium(timeframe: string) {
 
         const lastClose = shortCandles[shortCandles.length - 1]?.close ?? 0;
         
-        // ✅ HEDEF/STOP YÖN DOĞRULAMASI
         const { target: targetPrice, stop } = validateTargetStop(
           best.bias,
           lastClose,
@@ -1046,27 +979,28 @@ async function scanShortTermForPremium(timeframe: string) {
             timeframe,
           });
           if (ok) created += 1;
-          // Sinyali kaydet (başarı istatistiği için)
-if (ok) {
-  const risk = Math.abs(lastClose - stop);
-  const reward = Math.abs(targetPrice - lastClose);
-  const rr = risk > 0 ? `1:${(reward / risk).toFixed(1)}` : "—";
 
-  await saveFormationSignal({
-    userId,
-    market: target.market,
-    symbol: target.symbol,
-    timeframe,
-    formationName: best.name,
-    formationBias: best.bias,
-    qualityScore: best.confidence,
-    signalScore: best.confidence,
-    entryPrice: lastClose,
-    targetPrice,
-    stopPrice: stop,
-    riskReward: rr,
-  });
-}
+          // Sinyali global olarak kaydet (başarı istatistiği için)
+          if (ok) {
+            const risk = Math.abs(lastClose - stop);
+            const reward = Math.abs(targetPrice - lastClose);
+            const rr = risk > 0 ? `1:${(reward / risk).toFixed(1)}` : "—";
+
+            await saveFormationSignal({
+              market: target.market,
+              symbol: target.symbol,
+              timeframe,
+              signalType: "short",
+              formationName: best.name,
+              formationBias: best.bias,
+              qualityScore: best.confidence,
+              signalScore: best.confidence,
+              entryPrice: lastClose,
+              targetPrice,
+              stopPrice: stop,
+              riskReward: rr,
+            });
+          }
         }
       } catch (err) { console.error(`Hata (${target.symbol}):`, err); }
     }));
@@ -1152,7 +1086,6 @@ async function scanGlobalShortTerm(timeframe: string) {
         globalScanned += 1;
         const lastClose = shortCandles[shortCandles.length - 1]?.close ?? 0;
         
-        // ✅ HEDEF/STOP YÖN DOĞRULAMASI
         const { target: targetPrice, stop } = validateTargetStop(
           best.bias,
           lastClose,
@@ -1192,48 +1125,28 @@ async function scanGlobalShortTerm(timeframe: string) {
             timeframe,
           });
           if (ok) globalCreated += 1;
-          // Sinyali kaydet (başarı istatistiği için)
-if (ok) {
-  const risk = Math.abs(lastClose - stop);
-  const reward = Math.abs(targetPrice - lastClose);
-  const rr = risk > 0 ? `1:${(reward / risk).toFixed(1)}` : "—";
 
-  await saveFormationSignal({
-    userId,
-    market: target.market,
-    symbol: target.symbol,
-    timeframe,
-    formationName: best.name,
-    formationBias: best.bias,
-    qualityScore: best.confidence,
-    signalScore: best.confidence,
-    entryPrice: lastClose,
-    targetPrice,
-    stopPrice: stop,
-    riskReward: rr,
-  });
-}
-          // Sinyali kaydet
-if (ok) {
-  const risk = Math.abs(lastClose - stop);
-  const reward = Math.abs(targetPrice - lastClose);
-  const rr = risk > 0 ? `1:${(reward / risk).toFixed(1)}` : "—";
+          // Sinyali global olarak kaydet — sadece ilk kullanıcı için (duplicate olmasın)
+          if (ok && userId === eligibleUsers[0]) {
+            const risk = Math.abs(lastClose - stop);
+            const reward = Math.abs(targetPrice - lastClose);
+            const rr = risk > 0 ? `1:${(reward / risk).toFixed(1)}` : "—";
 
-  await saveFormationSignal({
-    userId,
-    market: target.market,
-    symbol: target.symbol,
-    timeframe,
-    formationName: best.name,
-    formationBias: best.bias,
-    qualityScore: best.confidence,
-    signalScore: best.confidence,
-    entryPrice: lastClose,
-    targetPrice,
-    stopPrice: stop,
-    riskReward: rr,
-  });
-}
+            await saveFormationSignal({
+              market: target.market,
+              symbol: target.symbol,
+              timeframe,
+              signalType: "short",
+              formationName: best.name,
+              formationBias: best.bias,
+              qualityScore: best.confidence,
+              signalScore: best.confidence,
+              entryPrice: lastClose,
+              targetPrice,
+              stopPrice: stop,
+              riskReward: rr,
+            });
+          }
         }
       } catch (err) {
         console.error(`Global tarama hatası (${target.symbol}):`, err);
