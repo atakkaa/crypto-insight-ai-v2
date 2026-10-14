@@ -1,12 +1,14 @@
-// api/alarms.ts — Alarm CRUD endpoint
-// GET    /api/alarms         → kullanıcının alarmlarını listele
-// POST   /api/alarms         → yeni alarm oluştur
-// PATCH  /api/alarms?id=X    → alarm güncelle (aktif/pasif)
-// DELETE /api/alarms?id=X    → alarm sil
+// api/alarms.ts — Alarm CRUD + Cron Kontrolü (tek dosyada)
+// GET    /api/alarms             → alarmları listele
+// GET    /api/alarms?action=check → cron kontrolü (check-alarms'ın işi)
+// POST   /api/alarms             → yeni alarm
+// PATCH  /api/alarms?id=X        → güncelle
+// DELETE /api/alarms?id=X        → sil
 
 const ENV = (globalThis as any).process?.env ?? {};
 const SUPABASE_URL = String(ENV.SUPABASE_URL ?? "");
 const SUPABASE_SERVICE_ROLE_KEY = String(ENV.SUPABASE_SERVICE_ROLE_KEY ?? "");
+const CRON_SECRET = String(ENV.CRON_SECRET ?? "");
 
 type RequestLike = {
   method?: string;
@@ -23,6 +25,22 @@ type ResponseLike = {
 
 type UserTier = "admin" | "premium" | "trial" | "free";
 
+type AlarmRow = {
+  id: string;
+  user_id: string;
+  type: "price" | "formation" | "quality";
+  market: string;
+  symbol: string;
+  target_price: number | null;
+  condition: "above" | "below" | null;
+  formation_name: string | null;
+  min_quality: number | null;
+  min_score: number | null;
+  is_active: boolean;
+  trigger_count: number;
+  triggered_at: string | null;
+};
+
 // ==========================================================
 // TIER LİMİTLERİ
 // ==========================================================
@@ -33,6 +51,28 @@ const ALARM_LIMITS: Record<UserTier, number> = {
   trial: 10,
   free: 3,
 };
+
+// ==========================================================
+// YETKİ
+// ==========================================================
+
+function isCronAuthorized(request: RequestLike): boolean {
+  if (!CRON_SECRET) return true;
+
+  const headers = request.headers;
+  if (headers && typeof (headers as any).get === "function") {
+    const cronHeader = (headers as any).get("x-cron-secret");
+    if (cronHeader === CRON_SECRET) return true;
+    const auth = (headers as any).get("authorization");
+    if (auth === `Bearer ${CRON_SECRET}`) return true;
+  } else if (headers) {
+    const h = headers as Record<string, string>;
+    if (h["x-cron-secret"] === CRON_SECRET) return true;
+    if (h["authorization"] === `Bearer ${CRON_SECRET}`) return true;
+  }
+
+  return false;
+}
 
 // ==========================================================
 // KULLANICI TIER
@@ -101,6 +141,201 @@ async function supabaseFetch(
 }
 
 // ==========================================================
+// FİYAT ÇEKME
+// ==========================================================
+
+async function getCurrentPrice(symbol: string, market: string): Promise<number | null> {
+  try {
+    if (market === "crypto") {
+      const res = await fetch(
+        `https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}`,
+      );
+      if (!res.ok) return null;
+      const data = (await res.json()) as { price?: string };
+      return data.price ? Number(data.price) : null;
+    }
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`,
+      { headers: { "User-Agent": "Mozilla/5.0 FormasyonAI" } },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      chart?: { result?: Array<{ meta?: { regularMarketPrice?: number } }> };
+    };
+    const price = data.chart?.result?.[0]?.meta?.regularMarketPrice;
+    return typeof price === "number" ? price : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getRecentFormationSignal(
+  market: string,
+  symbol: string,
+  formationName: string | null,
+  minQuality: number | null,
+): Promise<{ formation_name: string; quality_score: number } | null> {
+  try {
+    const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+    const params = new URLSearchParams();
+    params.set("select", "formation_name,quality_score");
+    params.set("market", `eq.${market}`);
+    params.set("symbol", `eq.${symbol}`);
+    params.set("signal_time", `gte.${since}`);
+    params.set("order", "signal_time.desc");
+    params.set("limit", "1");
+
+    if (formationName) params.set("formation_name", `eq.${formationName}`);
+    if (minQuality && minQuality > 0) {
+      params.set("quality_score", `gte.${minQuality}`);
+    }
+
+    const res = await supabaseFetch(`formation_signals?${params.toString()}`);
+    if (!res.ok) return null;
+    const rows = (await res.json()) as Array<{
+      formation_name: string;
+      quality_score: number;
+    }>;
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ==========================================================
+// CRON KONTROLÜ (eski check-alarms)
+// ==========================================================
+
+async function handleCheckAlarms(response: ResponseLike): Promise<unknown> {
+  const startTime = Date.now();
+
+  try {
+    const alarmsRes = await supabaseFetch(
+      `alarms?is_active=eq.true&select=*&limit=1000`,
+    );
+    if (!alarmsRes.ok) {
+      return response.status(500).json({ success: false, error: "Alarmlar çekilemedi" });
+    }
+    const alarms = (await alarmsRes.json()) as AlarmRow[];
+    console.log(`🔔 ${alarms.length} aktif alarm kontrol ediliyor...`);
+
+    let triggered = 0;
+    let checked = 0;
+    let errors = 0;
+
+    for (const alarm of alarms) {
+      try {
+        let shouldTrigger = false;
+        let triggerTitle = "";
+        let triggerMessage = "";
+
+        if (alarm.type === "price") {
+          const currentPrice = await getCurrentPrice(alarm.symbol, alarm.market);
+          if (currentPrice === null) {
+            errors++;
+            continue;
+          }
+          const target = Number(alarm.target_price ?? 0);
+          if (alarm.condition === "above" && currentPrice >= target) {
+            shouldTrigger = true;
+            triggerTitle = `🔔 FİYAT ALARMI: ${alarm.symbol}`;
+            triggerMessage = `${alarm.symbol} ${target} seviyesinin üzerine çıktı. Güncel: ${currentPrice}`;
+          } else if (alarm.condition === "below" && currentPrice <= target) {
+            shouldTrigger = true;
+            triggerTitle = `🔔 FİYAT ALARMI: ${alarm.symbol}`;
+            triggerMessage = `${alarm.symbol} ${target} seviyesinin altına düştü. Güncel: ${currentPrice}`;
+          }
+        } else if (alarm.type === "formation") {
+          const signal = await getRecentFormationSignal(
+            alarm.market,
+            alarm.symbol,
+            alarm.formation_name,
+            alarm.min_quality,
+          );
+          if (signal) {
+            shouldTrigger = true;
+            triggerTitle = `🔔 FORMASYON ALARMI: ${alarm.symbol}`;
+            triggerMessage = `${signal.formation_name} formasyonu tespit edildi. Kalite: ${signal.quality_score}`;
+          }
+        } else if (alarm.type === "quality") {
+          const signal = await getRecentFormationSignal(
+            alarm.market,
+            alarm.symbol,
+            null,
+            alarm.min_quality,
+          );
+          if (signal) {
+            shouldTrigger = true;
+            triggerTitle = `🔔 KALİTE ALARMI: ${alarm.symbol}`;
+            triggerMessage = `${signal.formation_name} formasyonu (kalite: ${signal.quality_score}) tespit edildi.`;
+          }
+        }
+
+        if (shouldTrigger) {
+          // Bildirim gönder
+          await supabaseFetch("notifications", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              user_id: alarm.user_id,
+              market: alarm.market,
+              symbol: alarm.symbol,
+              type: "alarm",
+              notification_type: "alarm",
+              priority: true,
+              severity: "önemli",
+              title: triggerTitle,
+              message: triggerMessage,
+              reason: "Kurduğunuz alarm tetiklendi",
+              delivered: true,
+              is_global: false,
+            }),
+          });
+
+          // Alarmı güncelle (tek seferlik tetikleme)
+          await supabaseFetch(`alarms?id=eq.${alarm.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              is_active: false,
+              triggered_at: new Date().toISOString(),
+              trigger_count: (alarm.trigger_count ?? 0) + 1,
+              last_checked_at: new Date().toISOString(),
+            }),
+          });
+
+          triggered++;
+        } else {
+          await supabaseFetch(`alarms?id=eq.${alarm.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ last_checked_at: new Date().toISOString() }),
+          });
+          checked++;
+        }
+      } catch (err) {
+        console.error(`Alarm kontrol hatası (${alarm.id}):`, err);
+        errors++;
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ Tamamlandı: ${alarms.length} alarm, ${triggered} tetiklendi`);
+
+    return response.status(200).json({
+      success: true,
+      totalAlarms: alarms.length,
+      triggered,
+      checked,
+      errors,
+      duration,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Bilinmeyen hata";
+    return response.status(500).json({ success: false, error: message });
+  }
+}
+
+// ==========================================================
 // GET — Listele
 // ==========================================================
 
@@ -117,8 +352,6 @@ async function handleGet(
   }
 
   const alarms = (await res.json()) as unknown[];
-
-  // Tier ve limit bilgisi
   const tier = await getUserTier(userId);
   const limit = ALARM_LIMITS[tier];
 
@@ -135,6 +368,17 @@ async function handleGet(
 // POST — Oluştur
 // ==========================================================
 
+type CreateAlarmBody = {
+  type: "price" | "formation" | "quality";
+  market: string;
+  symbol: string;
+  target_price?: number;
+  condition?: "above" | "below";
+  formation_name?: string;
+  min_quality?: number;
+  min_score?: number;
+};
+
 async function handlePost(
   userId: string,
   body: any,
@@ -144,11 +388,10 @@ async function handlePost(
     return response.status(400).json({ success: false, error: "Body gerekli" });
   }
 
-  const type = String(body.type ?? "");
+  const type = String(body.type ?? "") as "price" | "formation" | "quality";
   const market = String(body.market ?? "");
   const symbol = String(body.symbol ?? "").toUpperCase();
 
-  // Validasyon
   if (!["price", "formation", "quality"].includes(type)) {
     return response.status(400).json({ success: false, error: "Geçersiz alarm tipi" });
   }
@@ -156,13 +399,10 @@ async function handlePost(
     return response.status(400).json({ success: false, error: "Market ve sembol gerekli" });
   }
 
-  // Tier limit kontrolü
   const tier = await getUserTier(userId);
   const limit = ALARM_LIMITS[tier];
 
-  const countRes = await supabaseFetch(
-    `alarms?user_id=eq.${userId}&select=id`,
-  );
+  const countRes = await supabaseFetch(`alarms?user_id=eq.${userId}&select=id`);
   if (!countRes.ok) {
     return response.status(500).json({ success: false, error: "Count hatası" });
   }
@@ -177,7 +417,6 @@ async function handlePost(
     });
   }
 
-  // Tip bazlı validasyon
   const insertData: Record<string, unknown> = {
     user_id: userId,
     type,
@@ -193,7 +432,7 @@ async function handlePost(
       return response.status(400).json({ success: false, error: "Geçersiz hedef fiyat" });
     }
     if (!["above", "below"].includes(condition)) {
-      return response.status(400).json({ success: false, error: "Geçersiz koşul (above/below)" });
+      return response.status(400).json({ success: false, error: "Geçersiz koşul" });
     }
     insertData.target_price = targetPrice;
     insertData.condition = condition;
@@ -217,7 +456,6 @@ async function handlePost(
     }
   }
 
-  // Insert
   const insertRes = await supabaseFetch("alarms", {
     method: "POST",
     headers: { Prefer: "return=representation" },
@@ -240,7 +478,7 @@ async function handlePost(
 }
 
 // ==========================================================
-// PATCH — Güncelle (aktif/pasif)
+// PATCH — Güncelle
 // ==========================================================
 
 async function handlePatch(
@@ -253,7 +491,6 @@ async function handlePatch(
     return response.status(400).json({ success: false, error: "id gerekli" });
   }
 
-  // Yetki kontrolü (kendi alarmı mı?)
   const checkRes = await supabaseFetch(
     `alarms?id=eq.${alarmId}&user_id=eq.${userId}&select=id`,
   );
@@ -271,7 +508,6 @@ async function handlePatch(
 
   if (typeof body.is_active === "boolean") {
     updateData.is_active = body.is_active;
-    // Yeniden aktif ediliyorsa trigger'ı sıfırla
     if (body.is_active === true) {
       updateData.triggered_at = null;
     }
@@ -337,18 +573,25 @@ export default async function handler(
 ) {
   response.setHeader("Content-Type", "application/json");
   response.setHeader("Cache-Control", "no-store");
-
-  // CORS
   response.setHeader("Access-Control-Allow-Origin", "*");
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type, x-user-id");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type, x-user-id, x-cron-secret");
 
   if (request.method === "OPTIONS") {
     return response.status(200).json({});
   }
 
   try {
-    // Kullanıcı ID
+    // CRON kontrolü (action=check)
+    const action = getQueryStr(request.query, "action");
+    if (action === "check") {
+      if (!isCronAuthorized(request)) {
+        return response.status(401).json({ error: "unauthorized" });
+      }
+      return await handleCheckAlarms(response);
+    }
+
+    // Kullanıcı işlemleri
     const headers = request.headers;
     let userId = "";
     if (headers && typeof headers.get === "function") {
@@ -367,15 +610,12 @@ export default async function handler(
     if (method === "GET") {
       return await handleGet(userId, response);
     }
-
     if (method === "POST") {
       return await handlePost(userId, request.body, response);
     }
-
     if (method === "PATCH") {
       return await handlePatch(userId, alarmId, request.body, response);
     }
-
     if (method === "DELETE") {
       return await handleDelete(userId, alarmId, response);
     }
