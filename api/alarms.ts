@@ -1,6 +1,6 @@
 // api/alarms.ts — Alarm CRUD + Cron Kontrolü (tek dosyada)
 // GET    /api/alarms             → alarmları listele
-// GET    /api/alarms?action=check → cron kontrolü (check-alarms'ın işi)
+// GET    /api/alarms?action=check → cron kontrolü
 // POST   /api/alarms             → yeni alarm
 // PATCH  /api/alarms?id=X        → güncelle
 // DELETE /api/alarms?id=X        → sil
@@ -203,7 +203,7 @@ async function getRecentFormationSignal(
 }
 
 // ==========================================================
-// CRON KONTROLÜ (eski check-alarms)
+// CRON KONTROLÜ
 // ==========================================================
 
 async function handleCheckAlarms(response: ResponseLike): Promise<unknown> {
@@ -272,7 +272,6 @@ async function handleCheckAlarms(response: ResponseLike): Promise<unknown> {
         }
 
         if (shouldTrigger) {
-          // Bildirim gönder
           await supabaseFetch("notifications", {
             method: "POST",
             headers: { Prefer: "return=minimal" },
@@ -292,7 +291,6 @@ async function handleCheckAlarms(response: ResponseLike): Promise<unknown> {
             }),
           });
 
-          // Alarmı güncelle (tek seferlik tetikleme)
           await supabaseFetch(`alarms?id=eq.${alarm.id}`, {
             method: "PATCH",
             body: JSON.stringify({
@@ -368,12 +366,14 @@ async function handleGet(
 // POST — Oluştur
 // ==========================================================
 
-type CreateAlarmBody = {
-  type: "price" | "formation" | "quality";
+type AlarmInsertData = {
+  user_id: string;
+  type: string;
   market: string;
   symbol: string;
+  is_active: boolean;
   target_price?: number;
-  condition?: "above" | "below";
+  condition?: string;
   formation_name?: string;
   min_quality?: number;
   min_score?: number;
@@ -388,7 +388,7 @@ async function handlePost(
     return response.status(400).json({ success: false, error: "Body gerekli" });
   }
 
-  const type = String(body.type ?? "") as "price" | "formation" | "quality";
+  const type = String(body.type ?? "");
   const market = String(body.market ?? "");
   const symbol = String(body.symbol ?? "").toUpperCase();
 
@@ -417,7 +417,7 @@ async function handlePost(
     });
   }
 
-  const insertData: Record<string, unknown> = {
+  const insertData: AlarmInsertData = {
     user_id: userId,
     type,
     market,
@@ -481,6 +481,13 @@ async function handlePost(
 // PATCH — Güncelle
 // ==========================================================
 
+type AlarmUpdateData = {
+  updated_at: string;
+  is_active?: boolean;
+  triggered_at?: string | null;
+  trigger_count?: number;
+};
+
 async function handlePatch(
   userId: string,
   alarmId: string,
@@ -502,7 +509,7 @@ async function handlePatch(
     return response.status(404).json({ success: false, error: "Alarm bulunamadı" });
   }
 
-  const updateData: Record<string, unknown> = {
+  const updateData: AlarmUpdateData = {
     updated_at: new Date().toISOString(),
   };
 
