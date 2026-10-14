@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -23,6 +25,15 @@ export const Route = createFileRoute("/stats")({
 // ==========================================================
 // TİPLER
 // ==========================================================
+
+type TimeSeriesPoint = {
+  period: string;
+  label: string;
+  winRate: number;
+  total: number;
+  wins: number;
+  losses: number;
+};
 
 type StatBlock = {
   total: number;
@@ -81,6 +92,12 @@ type StatsData = {
     short: StatBlock;
     multi: StatBlock;
     all: StatBlock;
+  };
+  timeSeries: {
+    long: TimeSeriesPoint[];
+    short: TimeSeriesPoint[];
+    multi: TimeSeriesPoint[];
+    all: TimeSeriesPoint[];
   };
 };
 
@@ -149,9 +166,6 @@ function StatsPage() {
   const [symbolSearch, setSymbolSearch] = useState("");
   const [downloadingCsv, setDownloadingCsv] = useState(false);
 
-  // ==========================================================
-  // FETCH
-  // ==========================================================
   useEffect(() => {
     if (!user) return;
 
@@ -185,9 +199,6 @@ function StatsPage() {
       });
   }, [user, filters]);
 
-  // ==========================================================
-  // AKTİF FİLTRE SAYISI
-  // ==========================================================
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.formations.length > 0) count += filters.formations.length;
@@ -197,9 +208,6 @@ function StatsPage() {
     return count;
   }, [filters]);
 
-  // ==========================================================
-  // FİLTRE YARDIMCILARI
-  // ==========================================================
   function toggleFormation(value: string) {
     setFilters((prev) => ({
       ...prev,
@@ -243,9 +251,6 @@ function StatsPage() {
     }));
   }
 
-  // ==========================================================
-  // CSV İNDİR
-  // ==========================================================
   async function downloadCsv() {
     if (!user || downloadingCsv) return;
 
@@ -286,9 +291,6 @@ function StatsPage() {
     }
   }
 
-  // ==========================================================
-  // GİRİŞ YOK
-  // ==========================================================
   if (!user) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -302,9 +304,6 @@ function StatsPage() {
     );
   }
 
-  // ==========================================================
-  // LOADING (ilk yükleme)
-  // ==========================================================
   if (loading && !data) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -315,9 +314,6 @@ function StatsPage() {
     );
   }
 
-  // ==========================================================
-  // PREMIUM GEREKLİ
-  // ==========================================================
   if (error && !data) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -428,7 +424,6 @@ function StatsPage() {
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            {/* FORMASYON */}
             <div>
               <p className="text-xs font-bold text-muted-foreground">
                 Formasyon ({options.formations.length})
@@ -460,7 +455,6 @@ function StatsPage() {
               )}
             </div>
 
-            {/* MARKET */}
             <div>
               <p className="text-xs font-bold text-muted-foreground">
                 Market ({options.markets.length})
@@ -490,7 +484,6 @@ function StatsPage() {
               )}
             </div>
 
-            {/* SEMBOL */}
             <div>
               <p className="text-xs font-bold text-muted-foreground">
                 Sembol (tek seçim)
@@ -534,7 +527,6 @@ function StatsPage() {
               </div>
             </div>
 
-            {/* BIAS */}
             <div>
               <p className="text-xs font-bold text-muted-foreground">
                 Yön (Bias)
@@ -641,7 +633,7 @@ function StatsPage() {
       {/* SEKMELİ İSTATİSTİK PANELİ */}
       <StatsTabs data={data} activeFilterCount={activeFilterCount} />
 
-      {/* FORMASYON BAZLI GRAFİK (filtrelenmiş) */}
+      {/* FORMASYON BAZLI GRAFİK */}
       {data.byFormation.length > 0 && (
         <div className="rounded-lg border border-border bg-card p-4">
           <h2 className="mb-4 text-sm font-bold">
@@ -776,7 +768,6 @@ function StatsTabs({
 
   return (
     <div className="rounded-lg border border-border bg-card">
-      {/* SEKME BAŞLIKLARI */}
       <div className="flex flex-wrap gap-1 border-b border-border p-2">
         {tabs.map((tab) => (
           <button
@@ -794,7 +785,6 @@ function StatsTabs({
         ))}
       </div>
 
-      {/* SEKME İÇERİĞİ */}
       <div className="p-4">
         {activeTab === "compare" ? (
           <CompareView data={data} />
@@ -812,6 +802,7 @@ function StatsTabs({
             }
             activeFilterCount={activeFilterCount}
             activeTab={activeTab}
+            timeSeries={data.timeSeries[activeTab]}
           />
         )}
       </div>
@@ -828,11 +819,13 @@ function SingleStatsView({
   label,
   activeFilterCount,
   activeTab,
+  timeSeries,
 }: {
   stats: StatBlock;
   label: string;
   activeFilterCount: number;
   activeTab: TabKey;
+  timeSeries: TimeSeriesPoint[];
 }) {
   const winLossData = [
     { name: "Başarılı", value: stats.wins, color: COLORS.bull },
@@ -841,7 +834,6 @@ function SingleStatsView({
 
   return (
     <div className="space-y-4">
-      {/* BAŞLIK */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-bold">{label}</h2>
         {activeFilterCount > 0 && (
@@ -862,7 +854,6 @@ function SingleStatsView({
         </div>
       ) : (
         <>
-          {/* 6 KART */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard
               title="Toplam Sinyal"
@@ -907,7 +898,6 @@ function SingleStatsView({
             />
           </div>
 
-          {/* BAŞARI DAĞILIMI PIE */}
           {winLossData.length > 0 && (
             <div className="rounded-lg border border-border bg-background p-4">
               <h3 className="mb-3 text-sm font-bold">🥧 Başarı Dağılımı</h3>
@@ -943,8 +933,109 @@ function SingleStatsView({
               </div>
             </div>
           )}
+
+          <TrendChart
+            data={timeSeries}
+            title="📈 Başarı Oranı Trendi"
+            color={
+              activeTab === "long"
+                ? "#3b82f6"
+                : activeTab === "short"
+                  ? "#f59e0b"
+                  : activeTab === "multi"
+                    ? "#8b5cf6"
+                    : "#14b8a6"
+            }
+          />
         </>
       )}
+    </div>
+  );
+}
+
+// ==========================================================
+// TREND GRAFİĞİ
+// ==========================================================
+
+function TrendChart({
+  data,
+  title,
+  color,
+}: {
+  data: TimeSeriesPoint[];
+  title: string;
+  color: string;
+}) {
+  if (data.length === 0) {
+    return (
+      <div className="rounded-lg border border-border bg-background p-4">
+        <h3 className="mb-3 text-sm font-bold">{title}</h3>
+        <div className="flex h-72 items-center justify-center text-xs text-muted-foreground">
+          ⏳ Henüz trend verisi yok
+        </div>
+      </div>
+    );
+  }
+
+  if (data.length === 1) {
+    return (
+      <div className="rounded-lg border border-border bg-background p-4">
+        <h3 className="mb-3 text-sm font-bold">{title}</h3>
+        <div className="flex h-72 items-center justify-center text-xs text-muted-foreground">
+          📊 Trend için en az 2 gün veri gerekli
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-background p-4">
+      <h3 className="mb-3 text-sm font-bold">{title}</h3>
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={data}
+            margin={{ top: 5, right: 20, left: 0, bottom: 20 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <XAxis
+              dataKey="label"
+              tick={{ fill: "#9ca3af", fontSize: 10 }}
+              angle={-30}
+              textAnchor="end"
+              height={50}
+            />
+            <YAxis
+              tick={{ fill: "#9ca3af", fontSize: 11 }}
+              domain={[0, 100]}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "#1f2937",
+                border: "1px solid #374151",
+                borderRadius: 8,
+                color: "#fff",
+              }}
+              formatter={(value: number) => [`${value}%`, "Başarı"]}
+              labelFormatter={(label: string, payload: any) => {
+                const item = payload?.[0]?.payload;
+                if (item) {
+                  return `${item.label} (${item.total} sinyal)`;
+                }
+                return label;
+              }}
+            />
+            <Line
+              type="monotone"
+              dataKey="winRate"
+              stroke={color}
+              strokeWidth={2}
+              dot={{ fill: color, r: 3 }}
+              activeDot={{ r: 6 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
@@ -1036,6 +1127,25 @@ function CompareView({ data }: { data: StatsData }) {
         <p className="text-[11px] text-muted-foreground">
           💡 İpucu: Bu tablo tüm zamanların verisini gösterir, filtrelerden etkilenmez.
         </p>
+      </div>
+
+      {/* 3 TREND GRAFİĞİ YAN YANA */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <TrendChart
+          data={data.timeSeries.long}
+          title="📈 Uzun Vadeli Trend"
+          color="#3b82f6"
+        />
+        <TrendChart
+          data={data.timeSeries.short}
+          title="⚡ Kısa Vadeli Trend"
+          color="#f59e0b"
+        />
+        <TrendChart
+          data={data.timeSeries.multi}
+          title="🎯 Çoklu ZD Trend"
+          color="#8b5cf6"
+        />
       </div>
     </div>
   );

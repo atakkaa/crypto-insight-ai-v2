@@ -48,7 +48,6 @@ function toSupabaseIn(values: string[]): string {
   return `in.(${values.map((v) => v.replace(/,/g, "")).join(",")})`;
 }
 
-// CSV hücresini güvenli hale getir
 function csvCell(value: unknown): string {
   if (value === null || value === undefined) return "";
   const str = String(value);
@@ -58,7 +57,6 @@ function csvCell(value: unknown): string {
   return str;
 }
 
-// Sinyal dizisini CSV string'e çevir
 function toCsv(signals: SignalRow[]): string {
   const headers = [
     "symbol",
@@ -309,6 +307,88 @@ function calculateStats(signals: SignalRow[]) {
 }
 
 // ==========================================================
+// ZAMAN SERİSİ HESAPLA
+// ==========================================================
+
+type TimeSeriesPoint = {
+  period: string;
+  label: string;
+  winRate: number;
+  total: number;
+  wins: number;
+  losses: number;
+};
+
+function calculateTimeSeries(
+  signals: SignalRow[],
+  days: number,
+): TimeSeriesPoint[] {
+  if (signals.length === 0) return [];
+
+  const periodType: "day" | "week" | "month" =
+    days <= 30 ? "day" : days <= 90 ? "week" : "month";
+
+  const groups = new Map<string, SignalRow[]>();
+
+  for (const s of signals) {
+    const date = new Date(s.signal_time);
+    if (isNaN(date.getTime())) continue;
+
+    let key: string;
+    if (periodType === "day") {
+      key = date.toISOString().slice(0, 10);
+    } else if (periodType === "week") {
+      const year = date.getFullYear();
+      const onejan = new Date(year, 0, 1);
+      const week = Math.ceil(
+        ((date.getTime() - onejan.getTime()) / 86400000 + onejan.getDay() + 1) / 7,
+      );
+      key = `${year}-W${String(week).padStart(2, "0")}`;
+    } else {
+      key = date.toISOString().slice(0, 7);
+    }
+
+    const list = groups.get(key) ?? [];
+    list.push(s);
+    groups.set(key, list);
+  }
+
+  const sortedKeys = Array.from(groups.keys()).sort();
+
+  const result: TimeSeriesPoint[] = [];
+
+  for (const key of sortedKeys) {
+    const sigs = groups.get(key)!;
+    const wins = sigs.filter((s) => s.status === "hit_target").length;
+    const losses = sigs.filter((s) => s.status === "hit_stop").length;
+    const total = wins + losses;
+    const winRate = total > 0 ? (wins / total) * 100 : 0;
+
+    let label: string;
+    if (periodType === "day") {
+      const d = new Date(key);
+      label = d.toLocaleDateString("tr-TR", { day: "2-digit", month: "short" });
+    } else if (periodType === "week") {
+      label = key.replace(/^\d+-/, "Hafta ");
+    } else {
+      const d = new Date(key + "-01");
+      label = d.toLocaleDateString("tr-TR", { month: "long", year: "numeric" });
+    }
+
+    result.push({
+      period: key,
+      label,
+      winRate: Math.round(winRate * 10) / 10,
+      total,
+      wins,
+      losses,
+    });
+  }
+
+  return result.slice(-30);
+}
+
+// ==========================================================
 // HANDLER
 // ==========================================================
 
@@ -324,7 +404,6 @@ export default async function handler(
   }
 
   try {
-    // 1. Kullanıcı
     const headers = request.headers;
     let userId = "";
     if (headers && typeof headers.get === "function") {
@@ -346,7 +425,6 @@ export default async function handler(
       });
     }
 
-    // 2. Filtreleri oku
     const daysParam = Number(
       Array.isArray(request.query?.["days"])
         ? request.query?.["days"]?.[0]
@@ -407,14 +485,13 @@ export default async function handler(
     }
 
     // ==========================================================
-    // JSON (mevcut davranış + signalTypes breakdown)
+    // JSON
     // ==========================================================
     response.setHeader("Content-Type", "application/json");
 
-    // Ana sorgu (filtreli) + breakdown için filtresiz sorgu
     const [filteredSignals, allSignals, filterOptions] = await Promise.all([
       fetchSignals(filters),
-      fetchSignals({ days, formations: [], markets: [] }), // signalType breakdown için filtresiz
+      fetchSignals({ days, formations: [], markets: [] }),
       fetchFilterOptions(days),
     ]);
 
@@ -480,6 +557,16 @@ export default async function handler(
     signalTypes["multi"] = calculateStats(multiSignals);
     signalTypes["all"] = calculateStats(allSignals);
 
+    // ==========================================================
+    // ZAMAN SERİSİ (her signal_type için)
+    // ==========================================================
+    const timeSeries = {
+      long: calculateTimeSeries(longSignals, days),
+      short: calculateTimeSeries(shortSignals, days),
+      multi: calculateTimeSeries(multiSignals, days),
+      all: calculateTimeSeries(allSignals, days),
+    };
+
     return response.status(200).json({
       success: true,
       tier,
@@ -498,6 +585,7 @@ export default async function handler(
       byMarket,
       byBias,
       signalTypes,
+      timeSeries,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
