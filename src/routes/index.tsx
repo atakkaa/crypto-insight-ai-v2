@@ -2098,12 +2098,18 @@ function Dashboard() {
         <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
             <span className="num text-sm font-bold uppercase tracking-[0.2em] text-primary">Formasyon AI</span>
-            <nav className="flex gap-2 text-xs">
-              <span className="rounded-md bg-secondary px-3 py-1.5 font-bold">Grafik</span>
-              <Link to="/coins" className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary">
-                Liste
-              </Link>
-            </nav>
+            <nav className="flex flex-wrap gap-2 text-xs">
+  <span className="rounded-md bg-secondary px-3 py-1.5 font-bold">Grafik</span>
+  <Link to="/coins" className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary">
+    Liste
+  </Link>
+  <Link
+    to="/alarms"
+    className="rounded-md border border-emerald-500/40 px-3 py-1.5 font-bold text-emerald-500 hover:bg-emerald-500/10"
+  >
+    🔔 Alarmlar
+  </Link>
+</nav>
             {(tierInfo?.tier === "admin" || tierInfo?.tier === "premium" || tierInfo?.tier === "trial") && (
   <Link
     to="/stats"
