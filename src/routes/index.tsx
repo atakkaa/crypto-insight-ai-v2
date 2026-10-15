@@ -17,7 +17,7 @@ import { WelcomeGate } from "@/components/WelcomeGate";
 import { useAuth } from "@/hooks/useAuth";
 import { FormationProjectionModal } from "@/components/FormationProjectionModal";
 import { MobileNav } from "@/components/MobileNav";
-import { useIsMobile } from "@/hooks/useIsMobile";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useAdmin } from "@/hooks/useAdmin";
 import { supabase } from "@/integrations/supabase/client";
 import { analyzeChart, type ChartAnalysis } from "@/lib/analysis.functions";

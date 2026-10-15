@@ -1,19 +1,20 @@
-import * as React from "react";
+// src/hooks/use-mobile.tsx
+import { useEffect, useState } from "react";
 
-const MOBILE_BREAKPOINT = 768;
+export function useIsMobile(breakpoint = 1024) {
+  const [isMobile, setIsMobile] = useState(false);
 
-export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-  React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
-    const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
-    };
-    mql.addEventListener("change", onChange);
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
-    return () => mql.removeEventListener("change", onChange);
-  }, []);
+    const check = () => setIsMobile(window.innerWidth < breakpoint);
+    check();
 
-  return !!isMobile;
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [breakpoint]);
+
+  return isMobile;
 }
