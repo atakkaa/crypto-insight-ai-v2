@@ -28,9 +28,24 @@ export function ShortTermNotificationDetailModal({
 
   const n = notification;
 
-  const biasEmoji = n.pattern_bias === "yükseliş" ? "🟢" : n.pattern_bias === "düşüş" ? "🔴" : "⚪";
-  const biasColor = n.pattern_bias === "yükseliş" ? "text-bull" : n.pattern_bias === "düşüş" ? "text-bear" : "text-muted-foreground";
-  const biasLabel = n.pattern_bias === "yükseliş" ? "YÜKSELİŞ" : n.pattern_bias === "düşüş" ? "DÜŞÜŞ" : "NÖTR";
+  const biasEmoji =
+    n.pattern_bias === "yükseliş"
+      ? "🟢"
+      : n.pattern_bias === "düşüş"
+        ? "🔴"
+        : "⚪";
+  const biasColor =
+    n.pattern_bias === "yükseliş"
+      ? "text-bull"
+      : n.pattern_bias === "düşüş"
+        ? "text-bear"
+        : "text-muted-foreground";
+  const biasLabel =
+    n.pattern_bias === "yükseliş"
+      ? "YÜKSELİŞ"
+      : n.pattern_bias === "düşüş"
+        ? "DÜŞÜŞ"
+        : "NÖTR";
   const isMulti = n.timeframe === "multi";
   const tfLabel = n.timeframe ? n.timeframe.toUpperCase() : "1H";
 
@@ -68,25 +83,29 @@ export function ShortTermNotificationDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-black/70 p-3 pt-20 backdrop-blur-sm sm:items-center sm:pt-4"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+        className="flex max-h-[calc(100vh-6rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl sm:max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* BAŞLIK */}
         <div className="flex items-start justify-between gap-3 border-b border-border bg-secondary/30 p-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${
-                isMulti
-                  ? "bg-blue-500/15 text-blue-400"
-                  : "bg-amber-500/15 text-amber-500"
-              }`}>
+              <span
+                className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+                  isMulti
+                    ? "bg-blue-500/15 text-blue-400"
+                    : "bg-amber-500/15 text-amber-500"
+                }`}
+              >
                 {isMulti ? "🔀 ÇOKLU ZAMAN DİLİMİ" : `📉 KISA VADELİ (${tfLabel})`}
               </span>
-              <span className={`rounded bg-secondary px-2 py-0.5 text-[10px] font-bold ${biasColor}`}>
+              <span
+                className={`rounded bg-secondary px-2 py-0.5 text-[10px] font-bold ${biasColor}`}
+              >
                 {biasEmoji} {biasLabel}
               </span>
               <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-bold">
@@ -118,7 +137,7 @@ export function ShortTermNotificationDetailModal({
               <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
                 🔀 Çoklu Zaman Dilimi Karşılaştırması
               </p>
-              <pre className="mt-2 whitespace-pre-wrap text-xs leading-5 text-foreground/90 font-sans">
+              <pre className="mt-2 whitespace-pre-wrap font-sans text-xs leading-5 text-foreground/90">
                 {n.multi_tf_commentary}
               </pre>
             </section>
@@ -136,7 +155,9 @@ export function ShortTermNotificationDetailModal({
               </div>
               <div className="rounded border border-border/60 bg-secondary/30 p-2">
                 <p className="text-[9px] text-muted-foreground">Yön</p>
-                <p className={`font-bold ${biasColor}`}>{biasEmoji} {n.pattern_bias}</p>
+                <p className={`font-bold ${biasColor}`}>
+                  {biasEmoji} {n.pattern_bias}
+                </p>
               </div>
               <div className="rounded border border-border/60 bg-secondary/30 p-2">
                 <p className="text-[9px] text-muted-foreground">Güven Skoru</p>
@@ -165,7 +186,9 @@ export function ShortTermNotificationDetailModal({
                 {n.target != null && (
                   <div className="rounded border border-border/60 bg-secondary/30 p-2">
                     <p className="text-[9px] text-muted-foreground">Hedef</p>
-                    <p className="num font-bold text-bull">{n.target.toFixed(4)}</p>
+                    <p className="num font-bold text-bull">
+                      {n.target.toFixed(4)}
+                    </p>
                     {rewardPercent != null && (
                       <p className="text-[9px] text-bull">
                         +{rewardPercent.toFixed(2)}%
@@ -176,7 +199,9 @@ export function ShortTermNotificationDetailModal({
                 {n.stop != null && (
                   <div className="rounded border border-border/60 bg-secondary/30 p-2">
                     <p className="text-[9px] text-muted-foreground">Stop</p>
-                    <p className="num font-bold text-bear">{n.stop.toFixed(4)}</p>
+                    <p className="num font-bold text-bear">
+                      {n.stop.toFixed(4)}
+                    </p>
                     {riskPercent != null && (
                       <p className="text-[9px] text-bear">
                         {riskPercent.toFixed(2)}%
@@ -230,7 +255,8 @@ export function ShortTermNotificationDetailModal({
                 😱 Piyasa Duyarlılığı
               </p>
               <p className="mt-2 text-xs">
-                Fear & Greed: <span className="num font-bold">{n.fear_greed}</span>{" "}
+                Fear & Greed:{" "}
+                <span className="num font-bold">{n.fear_greed}</span>{" "}
                 {fearGreedLabel && <span>({fearGreedLabel})</span>}
               </p>
             </section>

@@ -67,11 +67,11 @@ export function NotificationDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-black/70 p-3 pt-20 backdrop-blur-sm sm:items-center sm:pt-4"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+        className="flex max-h-[calc(100vh-6rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl sm:max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* BAŞLIK */}
@@ -81,7 +81,9 @@ export function NotificationDetailModal({
               <span className="rounded bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
                 {typeLabel}
               </span>
-              <span className={`rounded bg-secondary px-2 py-0.5 text-[10px] font-bold ${severityColor}`}>
+              <span
+                className={`rounded bg-secondary px-2 py-0.5 text-[10px] font-bold ${severityColor}`}
+              >
                 {n.severity === "kritik"
                   ? "🔴 KRİTİK"
                   : n.severity === "önemli"
@@ -124,7 +126,10 @@ export function NotificationDetailModal({
           )}
 
           {/* POZİSYON */}
-          {(n.ai_entry_zone || n.ai_target || n.ai_stop_loss || n.ai_risk_reward) && (
+          {(n.ai_entry_zone ||
+            n.ai_target ||
+            n.ai_stop_loss ||
+            n.ai_risk_reward) && (
             <section className="rounded-lg border border-border bg-background/50 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 🎯 Pozisyon Önerisi
@@ -153,7 +158,9 @@ export function NotificationDetailModal({
                     <span>🛑</span>
                     <div>
                       <p className="text-[9px] text-muted-foreground">Stop</p>
-                      <p className="num font-bold text-bear">{n.ai_stop_loss}</p>
+                      <p className="num font-bold text-bear">
+                        {n.ai_stop_loss}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -179,7 +186,8 @@ export function NotificationDetailModal({
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                 {n.ai_resistance && (
                   <span className="rounded border border-bear/30 bg-bear/10 px-2 py-1 text-bear">
-                    Direnç: <span className="num font-bold">{n.ai_resistance}</span>
+                    Direnç:{" "}
+                    <span className="num font-bold">{n.ai_resistance}</span>
                   </span>
                 )}
                 {n.ai_support && (
@@ -192,26 +200,36 @@ export function NotificationDetailModal({
           )}
 
           {/* TIMEFRAME */}
-          {n.data && typeof n.data === "object" && (n.data as any).timeframe && (
-            <section className="rounded-lg border border-border bg-background/50 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                📊 Zaman Dilimi Uyumu
-              </p>
-              <div className="mt-2 space-y-1 text-xs">
-                {["h1", "h4", "d1"].map((tf) => {
-                  const dir = (n.data as any).timeframe[tf];
-                  const emoji = dir === "bullish" ? "🟢" : dir === "bearish" ? "🔴" : "⚪";
-                  const label = tf === "h1" ? "1 saat" : tf === "h4" ? "4 saat" : "1 gün";
-                  return (
-                    <div key={tf} className="flex items-center justify-between">
-                      <span className="text-muted-foreground">{label}</span>
-                      <span>{emoji} {dir}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
+          {n.data &&
+            typeof n.data === "object" &&
+            (n.data as any).timeframe && (
+              <section className="rounded-lg border border-border bg-background/50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  📊 Zaman Dilimi Uyumu
+                </p>
+                <div className="mt-2 space-y-1 text-xs">
+                  {["h1", "h4", "d1"].map((tf) => {
+                    const dir = (n.data as any).timeframe[tf];
+                    const emoji =
+                      dir === "bullish"
+                        ? "🟢"
+                        : dir === "bearish"
+                          ? "🔴"
+                          : "⚪";
+                    const label =
+                      tf === "h1" ? "1 saat" : tf === "h4" ? "4 saat" : "1 gün";
+                    return (
+                      <div key={tf} className="flex items-center justify-between">
+                        <span className="text-muted-foreground">{label}</span>
+                        <span>
+                          {emoji} {dir}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
           {/* FEAR & GREED */}
           {n.fear_greed != null && (
@@ -220,46 +238,49 @@ export function NotificationDetailModal({
                 😱 Piyasa Duyarlılığı
               </p>
               <p className="mt-2 text-xs">
-                Fear & Greed: <span className="num font-bold">{n.fear_greed}</span>{" "}
+                Fear & Greed:{" "}
+                <span className="num font-bold">{n.fear_greed}</span>{" "}
                 {fearGreedLabel && <span>({fearGreedLabel})</span>}
               </p>
             </section>
           )}
 
           {/* HABERLER */}
-          {n.news_items && Array.isArray(n.news_items) && n.news_items.length > 0 && (
-            <section className="rounded-lg border border-border bg-background/50 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                📰 Haberler ({n.news_items.length})
-              </p>
-              <div className="mt-2 space-y-2">
-                {(n.news_items as any[]).slice(0, 5).map((news: any, i: number) => (
-                  <div
-                    key={i}
-                    className="rounded border border-border/60 bg-secondary/20 p-2 text-xs"
-                  >
-                    <p className="font-semibold leading-5">{news.title}</p>
-                    <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
-                      <span>{news.source}</span>
-                      {news.sentiment && (
-                        <span
-                          className={
-                            news.sentiment === "pozitif"
-                              ? "text-bull"
-                              : news.sentiment === "negatif"
-                                ? "text-bear"
-                                : ""
-                          }
-                        >
-                          {news.sentiment} ({news.sentimentScore})
-                        </span>
-                      )}
+          {n.news_items &&
+            Array.isArray(n.news_items) &&
+            n.news_items.length > 0 && (
+              <section className="rounded-lg border border-border bg-background/50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  📰 Haberler ({n.news_items.length})
+                </p>
+                <div className="mt-2 space-y-2">
+                  {(n.news_items as any[]).slice(0, 5).map((news: any, i: number) => (
+                    <div
+                      key={i}
+                      className="rounded border border-border/60 bg-secondary/20 p-2 text-xs"
+                    >
+                      <p className="font-semibold leading-5">{news.title}</p>
+                      <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                        <span>{news.source}</span>
+                        {news.sentiment && (
+                          <span
+                            className={
+                              news.sentiment === "pozitif"
+                                ? "text-bull"
+                                : news.sentiment === "negatif"
+                                  ? "text-bear"
+                                  : ""
+                            }
+                          >
+                            {news.sentiment} ({news.sentimentScore})
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+                  ))}
+                </div>
+              </section>
+            )}
 
           {/* FORMATION + INDICATOR DETAY */}
           {n.data && typeof n.data === "object" && (
@@ -269,15 +290,21 @@ export function NotificationDetailModal({
               </p>
               {(n.data as any).patterns?.length > 0 && (
                 <div className="mt-2">
-                  <p className="text-[10px] text-muted-foreground">Formasyonlar</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Formasyonlar
+                  </p>
                   <p className="text-xs">
-                    {(n.data as any).patterns.map((p: any) => `${p.name} (%${p.confidence})`).join(", ")}
+                    {(n.data as any).patterns
+                      .map((p: any) => `${p.name} (%${p.confidence})`)
+                      .join(", ")}
                   </p>
                 </div>
               )}
               {(n.data as any).indicators?.length > 0 && (
                 <div className="mt-2">
-                  <p className="text-[10px] text-muted-foreground">İndikatörler</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    İndikatörler
+                  </p>
                   <p className="text-xs">
                     {(n.data as any).indicators
                       .map((i: any) => `${i.name}: ${i.value} (${i.direction})`)
