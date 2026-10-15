@@ -13,7 +13,6 @@ export function NotificationDetailModal({
   onClose,
   onOpenSymbol,
 }: Props) {
-  // ESC tuşuna basınca kapat
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -29,7 +28,6 @@ export function NotificationDetailModal({
 
   const n = notification;
 
-  // Aksiyon emojisi
   const actionEmoji =
     n.ai_action === "AL"
       ? "🟢"
@@ -39,7 +37,6 @@ export function NotificationDetailModal({
           ? "🟡"
           : "⚪";
 
-  // Severity rengi
   const severityColor =
     n.severity === "kritik"
       ? "text-bear"
@@ -47,14 +44,12 @@ export function NotificationDetailModal({
         ? "text-warn"
         : "text-muted-foreground";
 
-  // Tier etiketi
   const typeLabel = n.is_global
     ? "🌍 GLOBAL"
     : n.priority
       ? "⭐ ÖNCELİKLİ"
       : "📢 FAVORİ";
 
-  // Fear & Greed yorumu
   const fearGreedLabel = (() => {
     const v = n.fear_greed;
     if (v == null) return null;
@@ -67,11 +62,11 @@ export function NotificationDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-black/70 p-3 pt-20 backdrop-blur-sm sm:items-center sm:pt-4"
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[calc(100vh-6rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl sm:max-h-[90vh]"
+        className="flex h-[95vh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* BAŞLIK */}
@@ -219,7 +214,10 @@ export function NotificationDetailModal({
                     const label =
                       tf === "h1" ? "1 saat" : tf === "h4" ? "4 saat" : "1 gün";
                     return (
-                      <div key={tf} className="flex items-center justify-between">
+                      <div
+                        key={tf}
+                        className="flex items-center justify-between"
+                      >
                         <span className="text-muted-foreground">{label}</span>
                         <span>
                           {emoji} {dir}
@@ -254,30 +252,32 @@ export function NotificationDetailModal({
                   📰 Haberler ({n.news_items.length})
                 </p>
                 <div className="mt-2 space-y-2">
-                  {(n.news_items as any[]).slice(0, 5).map((news: any, i: number) => (
-                    <div
-                      key={i}
-                      className="rounded border border-border/60 bg-secondary/20 p-2 text-xs"
-                    >
-                      <p className="font-semibold leading-5">{news.title}</p>
-                      <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
-                        <span>{news.source}</span>
-                        {news.sentiment && (
-                          <span
-                            className={
-                              news.sentiment === "pozitif"
-                                ? "text-bull"
-                                : news.sentiment === "negatif"
-                                  ? "text-bear"
-                                  : ""
-                            }
-                          >
-                            {news.sentiment} ({news.sentimentScore})
-                          </span>
-                        )}
+                  {(n.news_items as any[])
+                    .slice(0, 5)
+                    .map((news: any, i: number) => (
+                      <div
+                        key={i}
+                        className="rounded border border-border/60 bg-secondary/20 p-2 text-xs"
+                      >
+                        <p className="font-semibold leading-5">{news.title}</p>
+                        <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                          <span>{news.source}</span>
+                          {news.sentiment && (
+                            <span
+                              className={
+                                news.sentiment === "pozitif"
+                                  ? "text-bull"
+                                  : news.sentiment === "negatif"
+                                    ? "text-bear"
+                                    : ""
+                              }
+                            >
+                              {news.sentiment} ({news.sentimentScore})
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </section>
             )}
@@ -307,7 +307,9 @@ export function NotificationDetailModal({
                   </p>
                   <p className="text-xs">
                     {(n.data as any).indicators
-                      .map((i: any) => `${i.name}: ${i.value} (${i.direction})`)
+                      .map(
+                        (i: any) => `${i.name}: ${i.value} (${i.direction})`,
+                      )
                       .join(", ")}
                   </p>
                 </div>

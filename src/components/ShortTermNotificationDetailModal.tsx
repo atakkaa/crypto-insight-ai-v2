@@ -83,11 +83,11 @@ export function ShortTermNotificationDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-black/70 p-3 pt-20 backdrop-blur-sm sm:items-center sm:pt-4"
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[calc(100vh-6rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl sm:max-h-[90vh]"
+        className="flex h-[95vh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* BAŞLIK */}
@@ -101,7 +101,9 @@ export function ShortTermNotificationDetailModal({
                     : "bg-amber-500/15 text-amber-500"
                 }`}
               >
-                {isMulti ? "🔀 ÇOKLU ZAMAN DİLİMİ" : `📉 KISA VADELİ (${tfLabel})`}
+                {isMulti
+                  ? "🔀 ÇOKLU ZAMAN DİLİMİ"
+                  : `📉 KISA VADELİ (${tfLabel})`}
               </span>
               <span
                 className={`rounded bg-secondary px-2 py-0.5 text-[10px] font-bold ${biasColor}`}
