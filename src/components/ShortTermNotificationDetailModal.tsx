@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 import type { ShortTermNotification } from "@/lib/notifications";
 
@@ -25,15 +26,15 @@ export function ShortTermNotificationDetailModal({
     return undefined;
   }, [notification, onClose]);
 
-  // 🔒 Body scroll kilidi (mobil + masaüstü)
+  // 🔒 Body scroll kilidi
   useEffect(() => {
     if (!notification) return;
 
+    const scrollY = window.scrollY;
     const originalOverflow = document.body.style.overflow;
     const originalPosition = document.body.style.position;
     const originalTop = document.body.style.top;
     const originalWidth = document.body.style.width;
-    const scrollY = window.scrollY;
 
     document.body.style.overflow = "hidden";
     document.body.style.position = "fixed";
@@ -106,19 +107,20 @@ export function ShortTermNotificationDetailModal({
       ? Math.abs(rewardPercent / riskPercent)
       : null;
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  const modalContent = (
     <div
-      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/80 p-3 pt-[70px] backdrop-blur-sm sm:items-center sm:pt-4"
       onClick={onClose}
-      style={{ touchAction: "none" }}
     >
       <div
-        className="flex h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl"
+        className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+        style={{ maxHeight: "calc(100vh - 90px)" }}
         onClick={(e) => e.stopPropagation()}
-        style={{ touchAction: "auto" }}
       >
-        {/* BAŞLIK */}
-        <div className="flex items-start justify-between gap-3 border-b border-border bg-secondary/30 p-4">
+        {/* BAŞLIK - SABİT */}
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-secondary/30 p-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span
@@ -158,9 +160,11 @@ export function ShortTermNotificationDetailModal({
           </button>
         </div>
 
-        {/* İÇERİK - SCROLL EDİLEBİLİR */}
-        <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
-          {/* ÇOKLU ZAMAN DİLİMİ */}
+        {/* İÇERİK - KAYDIRILABİLİR */}
+        <div
+          className="flex-1 space-y-3 overflow-y-auto p-4"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           {n.multi_tf_commentary && (
             <section className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
@@ -172,7 +176,6 @@ export function ShortTermNotificationDetailModal({
             </section>
           )}
 
-          {/* FORMASYON ÖZET */}
           <section className="rounded-lg border border-border bg-background/50 p-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               🎯 Formasyon Detayı
@@ -199,7 +202,6 @@ export function ShortTermNotificationDetailModal({
             </div>
           </section>
 
-          {/* POZİSYON */}
           {(n.entry != null || n.target != null || n.stop != null) && (
             <section className="rounded-lg border border-border bg-background/50 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -248,7 +250,6 @@ export function ShortTermNotificationDetailModal({
             </section>
           )}
 
-          {/* İNDİKATÖRLER */}
           {(rsiValue || macdValue || volumeValue) && (
             <section className="rounded-lg border border-border bg-background/50 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -277,7 +278,6 @@ export function ShortTermNotificationDetailModal({
             </section>
           )}
 
-          {/* FEAR & GREED */}
           {n.fear_greed != null && (
             <section className="rounded-lg border border-border bg-background/50 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -291,7 +291,6 @@ export function ShortTermNotificationDetailModal({
             </section>
           )}
 
-          {/* GEREKÇE */}
           {n.reason && (
             <section className="rounded-lg border border-border bg-secondary/30 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -301,7 +300,6 @@ export function ShortTermNotificationDetailModal({
             </section>
           )}
 
-          {/* TARİH */}
           <p className="text-center text-[10px] text-muted-foreground">
             {new Date(n.created_at).toLocaleString("tr-TR", {
               day: "2-digit",
@@ -313,8 +311,8 @@ export function ShortTermNotificationDetailModal({
           </p>
         </div>
 
-        {/* AKSIYONLAR */}
-        <div className="flex items-center gap-2 border-t border-border bg-secondary/30 p-3">
+        {/* AKSIYONLAR - SABİT */}
+        <div className="flex shrink-0 items-center gap-2 border-t border-border bg-secondary/30 p-3">
           {onOpenSymbol && (
             <button
               type="button"
@@ -338,4 +336,6 @@ export function ShortTermNotificationDetailModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

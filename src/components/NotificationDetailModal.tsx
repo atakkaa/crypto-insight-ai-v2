@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 import type { Notification } from "@/lib/notifications";
 
@@ -25,17 +26,16 @@ export function NotificationDetailModal({
     return undefined;
   }, [notification, onClose]);
 
-  // 🔒 Body scroll kilidi (mobil + masaüstü)
+  // 🔒 Body scroll kilidi
   useEffect(() => {
     if (!notification) return;
 
+    const scrollY = window.scrollY;
     const originalOverflow = document.body.style.overflow;
     const originalPosition = document.body.style.position;
     const originalTop = document.body.style.top;
     const originalWidth = document.body.style.width;
-    const scrollY = window.scrollY;
 
-    // Body'i kilitle ve scroll pozisyonunu koru
     document.body.style.overflow = "hidden";
     document.body.style.position = "fixed";
     document.body.style.top = `-${scrollY}px`;
@@ -46,7 +46,6 @@ export function NotificationDetailModal({
       document.body.style.position = originalPosition;
       document.body.style.top = originalTop;
       document.body.style.width = originalWidth;
-      // Scroll pozisyonuna geri dön
       window.scrollTo(0, scrollY);
     };
   }, [notification]);
@@ -87,19 +86,21 @@ export function NotificationDetailModal({
     return "🚀 Aşırı Açgözlülük";
   })();
 
-  return (
+  // 🚀 PORTAL: modal'i doğrudan body altına mount et
+  if (typeof document === "undefined") return null;
+
+  const modalContent = (
     <div
-      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/80 p-3 pt-[70px] backdrop-blur-sm sm:items-center sm:pt-4"
       onClick={onClose}
-      style={{ touchAction: "none" }}
     >
       <div
-        className="flex h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl"
+        className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+        style={{ maxHeight: "calc(100vh - 90px)" }}
         onClick={(e) => e.stopPropagation()}
-        style={{ touchAction: "auto" }}
       >
-        {/* BAŞLIK */}
-        <div className="flex items-start justify-between gap-3 border-b border-border bg-secondary/30 p-4">
+        {/* BAŞLIK - SABİT */}
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-secondary/30 p-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
@@ -137,8 +138,11 @@ export function NotificationDetailModal({
           </button>
         </div>
 
-        {/* İÇERİK - SCROLL EDİLEBİLİR */}
-        <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
+        {/* İÇERİK - KAYDIRILABİLİR */}
+        <div
+          className="flex-1 space-y-3 overflow-y-auto p-4"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           {/* AI ÖZET */}
           {n.ai_summary && (
             <section className="rounded-lg border border-border bg-background/50 p-3">
@@ -368,8 +372,8 @@ export function NotificationDetailModal({
           </p>
         </div>
 
-        {/* AKSIYONLAR */}
-        <div className="flex items-center gap-2 border-t border-border bg-secondary/30 p-3">
+        {/* AKSIYONLAR - SABİT */}
+        <div className="flex shrink-0 items-center gap-2 border-t border-border bg-secondary/30 p-3">
           {onOpenSymbol && (
             <button
               type="button"
@@ -393,4 +397,6 @@ export function NotificationDetailModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
