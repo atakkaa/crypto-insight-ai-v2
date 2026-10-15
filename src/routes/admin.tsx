@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { MobileNav } from "@/components/MobileNav";
 import { useAuth } from "@/hooks/useAuth";
+import { useConfirm } from "@/hooks/useConfirm";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
@@ -112,6 +113,7 @@ const SELECT_FIELDS =
 
 function AdminPage() {
   const { user, loading: authLoading } = useAuth();
+  const confirm = useConfirm();
 
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -235,7 +237,16 @@ function AdminPage() {
   // TRIAL İPTAL
   // =========================================================
   async function cancelTrialForUser(userId: string) {
-    if (!window.confirm("Deneme iptal edilsin mi?")) return;
+    // ✅ YENİ: Custom confirm modal
+    const ok = await confirm({
+      title: "Denemeyi İptal Et",
+      message: "Bu kullanıcının deneme süresini iptal etmek istediğinize emin misiniz?",
+      confirmText: "İptal Et",
+      cancelText: "Vazgeç",
+      variant: "destructive",
+    });
+    if (!ok) return;
+
     setBusyUserId(userId);
     const { error } = await (supabase as any)
       .from("profiles")
@@ -287,11 +298,20 @@ function AdminPage() {
       toast.error("Kendi rolünüzü değiştiremezsiniz");
       return;
     }
-    if (
-      !window.confirm("Bu kullanıcının rolünü değiştirmek istiyor musunuz?")
-    ) {
-      return;
-    }
+
+    // ✅ YENİ: Custom confirm modal
+    const willBeAdmin = current !== "admin";
+    const ok = await confirm({
+      title: willBeAdmin ? "Admin Yetkisi Ver" : "Admin Yetkisini Kaldır",
+      message: willBeAdmin
+        ? "Bu kullanıcıya admin yetkisi vermek istediğinize emin misiniz?"
+        : "Bu kullanıcının admin yetkisini kaldırmak istediğinize emin misiniz?",
+      confirmText: willBeAdmin ? "Admin Yap" : "Yetkiyi Kaldır",
+      cancelText: "Vazgeç",
+      variant: willBeAdmin ? "default" : "destructive",
+    });
+    if (!ok) return;
+
     setBusyUserId(userId);
     const newVal = current === "admin" ? "user" : "admin";
     const { error } = await (supabase as any)
@@ -318,7 +338,17 @@ function AdminPage() {
       toast.error("Kendi hesabınızı silemezsiniz");
       return;
     }
-    if (!window.confirm(`${email ?? userId} silinsin mi?`)) return;
+
+    // ✅ YENİ: Custom confirm modal
+    const ok = await confirm({
+      title: "Kullanıcıyı Sil",
+      message: `${email ?? userId} adlı kullanıcıyı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`,
+      confirmText: "Kalıcı Olarak Sil",
+      cancelText: "Vazgeç",
+      variant: "destructive",
+    });
+    if (!ok) return;
+
     setBusyUserId(userId);
     const { error } = await (supabase as any)
       .from("profiles")
