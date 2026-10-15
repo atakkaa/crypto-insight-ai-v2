@@ -1,10 +1,12 @@
-# Formasyon AI — Proje Durum Raporu
+# AE Analiz — Proje Durum Raporu
 
-**Son Güncelleme:** 2026-10-14 (Gece)
+**Son Güncelleme:** 2026-10-15 (Öğleden Sonra)
 
 ## 🎯 Proje Nedir?
 
 Kripto ve hisse senedi piyasaları için otomatik formasyon tespiti ve bildirim sistemi.
+
+**Marka Adı:** AE Analiz (eski: Formasyon AI)
 
 **Ana Bileşenler:**
 - Motor (16 formasyon tespiti)
@@ -15,6 +17,10 @@ Kripto ve hisse senedi piyasaları için otomatik formasyon tespiti ve bildirim 
 - ATR bazlı akıllı hedef/stop sistemi
 - Kullanıcı alarm sistemi (fiyat/formasyon/kalite)
 - Piyasa özet sayfası (günlük/haftalık)
+- Formasyon gelecek projeksiyonu (3 senaryo)
+- Formasyon dönüşüm analizi (3 dönüşüm + koşullar)
+- Haber etkisi entegrasyonu
+- **PWA + Mobil uyumluluk** (YENİ)
 
 ---
 
@@ -22,12 +28,15 @@ Kripto ve hisse senedi piyasaları için otomatik formasyon tespiti ve bildirim 
 
 | # | Öğe | Dosya |
 |---|---|---|
-| 1-22 | Önceki oturum (motor, istatistik, ATR, backtest, alarm vs.) | - |
-| 23 | Alarm sistemi (fiyat/formasyon/kalite) | api/alarms.ts + src/routes/alarms.tsx |
-| 24 | Alarm cron kontrolü (action=check) | api/alarms.ts |
-| 25 | Piyasa özet sayfası (günlük/haftalık) | api/market-summary.ts + src/routes/market-summary.tsx |
-| 26 | Ana sayfa header'a Piyasa Özeti + Alarmlar linkleri | src/routes/index.tsx |
-| 27 | PROJE-DURUMU.md güncellemesi | PROJE-DURUMU.md |
+| 1-32 | Önceki tüm özellikler | - |
+| 33 | Marka adı "AE Analiz" olarak değiştirildi | Tüm sayfalar |
+| 34 | PWA manifest + sw.js (offline + cache) | public/manifest.json, public/sw.js |
+| 35 | PWA meta etiketleri | src/routes/__root.tsx |
+| 36 | İkonlar (icon-192, icon-512, apple-touch-icon) | public/ |
+| 37 | Mobil hook (use-mobile.tsx) | src/hooks/use-mobile.tsx |
+| 38 | Mobil navigasyon (hamburger + alt tab bar) | src/components/MobileNav.tsx |
+| 39 | Koşullu admin linki (sadece admin görür) | src/components/MobileNav.tsx |
+| 40 | Ana sayfa mobil layout | src/routes/index.tsx |
 
 ---
 
@@ -35,43 +44,51 @@ Kripto ve hisse senedi piyasaları için otomatik formasyon tespiti ve bildirim 
 
 | # | Öğe | Öncelik | Durum |
 |---|---|---|---|
-| 1 | YOLO sunucuya taşıma | Düşük | BEKLİYOR |
-| 2 | YOLO yeniden eğitme (16 formasyon) | Düşük | BEKLİYOR |
-| 3 | Kullanıcı karşılaştırma sayfası (opsiyonel) | Düşük | FİKİR |
-| 4 | Bildirim istatistikleri sayfası (opsiyonel) | Düşük | FİKİR |
+| 1 | **Diğer sayfaların mobil uyumluluğu** | YÜKSEK | SIRADAKİ |
+| 2 | YOLO sunucuya taşıma | Düşük | BEKLİYOR |
+| 3 | YOLO yeniden eğitme | Düşük | BEKLİYOR |
 
 ---
 
 ## 📁 Önemli Dosyalar
 
-### API Endpoint'leri (api/ klasörü — 11 function)
-- api/scan-firsat.ts — Uzun vadeli tarama (ATR bazlı)
-- api/scan-short-term.ts — Kısa vadeli tarama (ATR bazlı)
+### API (11 function)
+- api/scan-firsat.ts — Uzun vadeli tarama
+- api/scan-short-term.ts — Kısa vadeli tarama
 - api/scan-multi-timeframe.ts — Çoklu zaman dilimi
-- api/check-signals.ts — Sonuç takip (cron, optimize)
-- api/formation-stats.ts — İstatistik API (5 sekme + CSV)
-- api/backtest.ts — Backtest aracı (admin)
-- api/alarms.ts — Alarm CRUD + Cron Kontrolü (birleşik)
-- api/market-summary.ts — Piyasa özet istatistikleri (YENİ)
-- api/start-trial.ts — 7 günlük deneme
+- api/check-signals.ts — Sonuç takip cron
+- api/formation-stats.ts — İstatistik API
+- api/backtest.ts — Backtest aracı
+- api/alarms.ts — Alarm + cron + start-trial
+- api/market-summary.ts — Piyasa özeti
+- api/formation-projection.ts — Projeksiyon + dönüşüm
 - api/dnd-summary.ts — Gece özeti
 - api/binance-proxy.ts — Binance proxy
 
-**ÖNEMLİ:** `api/lib/` klasörü **silindi** (Vercel 12 function limiti). Şu an **11 function** var. Yeni API eklerken **12'yi geçmeyecek** şekilde planla. Gerekirse iki endpoint'i birleştir.
-
-### Frontend
-- src/routes/index.tsx — Ana sayfa (nav'a Piyasa Özeti + Alarmlar eklendi)
+### Frontend Routes
+- src/routes/index.tsx — Ana sayfa (mobil uyumlu)
 - src/routes/stats.tsx — İstatistik (5 sekme + trend)
-- src/routes/backtest.tsx — Backtest (admin)
-- src/routes/admin.tsx — Admin paneli
+- src/routes/backtest.tsx — Backtest
+- src/routes/admin.tsx — Admin
 - src/routes/alarms.tsx — Alarmlar
-- src/routes/market-summary.tsx — Piyasa Özeti (YENİ)
-- src/routes/coins.tsx — Coin listesi
-- src/routes/settings.tsx — Ayarlar
-- src/routes/short-term-notifications.tsx — Kısa vadeli bildirimler
+- src/routes/market-summary.tsx — Piyasa Özeti
+- src/routes/coins.tsx
+- src/routes/settings.tsx
+- src/routes/short-term-notifications.tsx
+- src/routes/__root.tsx — PWA meta + html lang
+
+### Frontend Components
+- src/components/MobileNav.tsx — Mobil hamburger + alt tab bar (YENİ)
+- src/components/FormationProjectionModal.tsx — Projeksiyon modal
 - src/components/NotificationBell.tsx
 - src/components/ShortTermNotificationBell.tsx
 - src/components/CandleChart.tsx
+- src/components/AssetInfoPanel.tsx
+- src/components/AnalysisPanels.tsx
+- src/components/FormationEvaluationPanel.tsx
+
+### Hooks
+- src/hooks/use-mobile.tsx — Mobil algılama (YENİ — sidebar.tsx de kullanıyor)
 
 ### Lib
 - src/lib/notifications.ts
@@ -80,29 +97,28 @@ Kripto ve hisse senedi piyasaları için otomatik formasyon tespiti ve bildirim 
 - src/lib/notification-yolo-filter.ts
 - src/lib/push.ts
 
+### Public
+- public/manifest.json — PWA manifest (AE Analiz)
+- public/sw.js — Service Worker (cache + push)
+- public/icon-192.png — PWA ikon
+- public/icon-512.png — PWA ikon
+- public/apple-touch-icon.png — Apple ikon
+- public/favicon.ico — Favicon
+
 ---
 
 ## 🔑 Supabase Tabloları
 
 ### formation_signals
-- id, user_id (null), market, symbol, timeframe, signal_type
-- formation_name, formation_bias, quality_score, signal_score
-- entry_price, target_price, stop_price, risk_reward
-- status (pending/hit_target/hit_stop/expired)
-- result_price, result_percent, signal_time, result_time, updated_at
-
-**signal_type:** long / short / multi
+- signal_type: long / short / multi
+- status: pending / hit_target / hit_stop / expired
 
 ### alarms
-- id, user_id, type (price/formation/quality)
-- market, symbol
-- target_price, condition (above/below)
-- formation_name, min_quality, min_score
-- is_active, triggered_at, trigger_count
-- last_checked_at, created_at, updated_at
+- type: price / formation / quality
+- is_active, trigger_count, triggered_at
 
 ### Diğer
-notifications, short_term_notifications, favorites, priority_assets, short_term_tracking, profiles, market_cache, news_cache
+notifications, short_term_notifications, favorites, priority_assets, profiles, market_cache, news_cache
 
 ---
 
@@ -111,14 +127,15 @@ notifications, short_term_notifications, favorites, priority_assets, short_term_
 /api/scan-short-term?tf=1h
 /api/scan-multi-timeframe?group=1
 /api/check-signals (x-cron-secret)
-/api/formation-stats?days=30&formation=X&signalType=long
-/api/formation-stats?format=csv (admin)
-/api/backtest?days=30&minQuality=65 (admin)
+/api/formation-stats?days=30
+/api/backtest?days=30 (admin)
 /api/alarms (GET/POST/PATCH/DELETE)
-/api/alarms?action=check (cron, x-cron-secret)
-/api/market-summary?period=daily|weekly (YENİ)
-/api/start-trial
+/api/alarms?action=check (cron)
+/api/alarms?action=start-trial&userId=X
+/api/market-summary?period=daily|weekly
+/api/formation-projection?market=X&symbol=Y&interval=1h
 /api/dnd-summary
+/api/binance-proxy?path=X
 ---
 
 ## ⚙️ Vercel Env
@@ -139,70 +156,50 @@ notifications, short_term_notifications, favorites, priority_assets, short_term_
 Kripto 1, 2 / ASYA 1, 2, 3 / BIST 1-5 / AVRUPA 1, 2
 
 ### Kısa Vadeli
-- Kısa Vadeli Premium Tarama (15 dk)
-- Kısa Vadeli 15m (15 dk) / 1h (30 dk) / 4h (1 saat)
+Premium Tarama (15 dk), 15m (15 dk), 1h (30 dk), 4h (1 saat)
 
 ### Çoklu ZD
-- Çoklu TF - Grup 2, 3 (30 dk)
+Grup 2, 3 (30 dk)
 
 ### Diğer
-- **Formation Signals Check** → `/api/check-signals` (1 saat)
-- **Check Alarms** → `/api/alarms?action=check` (15 dk)
-- **DND Sabah Özeti** (günde 1, 08:00)
+- Formation Signals Check → /api/check-signals (1 saat)
+- Check Alarms → /api/alarms?action=check (15 dk)
+- DND Sabah Özeti (günde 1, 08:00)
 
-**Tüm cron job'larda `x-cron-secret: Ata12345678.` header'ı olmalı.**
-
----
-
-## 🎯 Bugün Yapılanlar (2026-10-14)
-
-### Sabah:
-1. Detaylı filtreler (formasyon, market, sembol, bias)
-2. CSV export (admin)
-3. 5 sekmeli panel
-4. Zaman serisi trend grafiği
-5. signal_type ayrımı (long/short/multi)
-6. ATR bazlı hedef/stop sistemi
-7. Min 1:2 R/R zorunlu
-8. check-signals optimizasyonu (30sn → 3.7sn)
-9. Backtest aracı
-
-### Akşam:
-10. **Alarm sistemi** (fiyat/formasyon/kalite)
-11. **api/alarms.ts** (CRUD + cron birleşik)
-12. **Supabase alarms tablosu**
-13. **Vercel 12 function limiti çözümü** (api/lib silindi)
-14. **Piyasa özet sayfası** (günlük/haftalık)
-15. **PROJE-DURUMU.md güncellemesi**
+**Tüm cron job'larda x-cron-secret: Ata12345678. header'ı.**
 
 ---
 
-## 📊 Başarı Oranı (2026-10-14 itibariyle)
+## 🎯 Bugüne Kadar Yapılanlar
+
+### 2026-10-12 (İlk Oturum)
+formation_signals tablosu, check-signals cron, İstatistik API
+
+### 2026-10-14 (Sabah)
+Detaylı filtreler + CSV, 5 sekmeli panel + trend, signal_type, ATR bazlı hedef/stop, check-signals optimizasyon, Backtest aracı
+
+### 2026-10-14 (Akşam)
+Alarm sistemi, api/alarms.ts, Supabase alarms tablosu, Vercel 12 function limiti çözümü, Piyasa özeti, Formasyon projeksiyonu, start-trial birleştirme
+
+### 2026-10-15 (Sabah)
+Formasyon dönüşüm analizi, Koşullar + progress bar, Haber etkisi
+
+### 2026-10-15 (Öğleden Sonra)
+Marka adı AE Analiz, PWA manifest + sw.js, PWA meta etiketleri, İkonlar, use-mobile.tsx, MobileNav.tsx (hamburger + alt tab bar), Koşullu admin linki, Ana sayfa mobil layout
+
+---
+
+## 📊 Başarı Oranı (2026-10-15 itibariyle)
 
 **30 günlük:**
 - Toplam sinyal: 56
 - Başarı: %42.9
 - Ort. kazanç: +0.84%
 - Ort. kayıp: -2.25%
-- Toplam getiri: -51.83% ❌
-- Beklenen değer: -0.93% ❌
+- Toplam getiri: -51.83%
+- Beklenen değer: -0.93%
 
-**Sorun:** R/R ters (kayıp > kazanç)
-**Çözüm:** ATR sistemi yeni sinyallerde uygulanıyor. 2-3 hafta sonra görülecek.
-
----
-
-## 🎯 Sıradaki İşler
-
-### 1. YOLO Entegrasyonu (Düşük Öncelik)
-- YOLO sunucuya taşıma (Oracle Cloud VPS)
-- Python FastAPI + YOLO servisi
-- 16 formasyon için yeniden eğitme
-
-### 2. Opsiyonel Fikirler
-- **Kullanıcı Karşılaştırma Sayfası:** Favoriler yan yana
-- **Bildirim İstatistikleri:** Kullanıcı kaç bildirim aldı
-- **Trend Alarmı:** Belirli bir coin trend değiştirirse bildir
+**Çözüm:** ATR sistemi yeni sinyallerde. 2-3 hafta sonra görülecek.
 
 ---
 
@@ -216,34 +213,60 @@ Kripto 1, 2 / ASYA 1, 2, 3 / BIST 1-5 / AVRUPA 1, 2
 | trial | 10 | 3 | 10 | ✅ | ✅ |
 | free | 5 | 0 | 3 | ❌ | ❌ |
 
-### Erişim Kontrolü
+### Erişim
 - /stats → Premium + Admin + Trial
-- /backtest → Sadece Admin
-- /admin → Sadece Admin
+- /backtest → Admin
+- /admin → Admin
 - /alarms → Herkes (limitli)
 - /market-summary → Herkes
 
 ### Vercel Function Kuralı
 - Hobby plan: Max 12 function
-- Her api/*.ts = 1 function
-- api/_lib/ (alt çizgili) → sayılmaz
-- **Şu an: 11 function** (1 slot kaldı)
+- Şu an: 11 function (1 slot kaldı)
 - Yeni API eklerken dikkat!
 
-### ATR Kuralı (Kesin)Hedef = max(%2, ATR × 2)
+### ATR KuralıHedef = max(%2, ATR × 2)
 Stop (crypto) = max(%1.5, ATR × 1)
 Stop (hisse) = max(%1, ATR × 1)
 R/R = min 1:2 zorunlu
-ATR periyodu = 14 mum
 ### Cron Secret
-- Değer: Ata12345678.
+- Ata12345678.
 - Header: x-cron-secret
 
-### ATR ve Hedef/Stop Hesaplama
-Fonksiyonlar:
-- `calculateATR(candles, period)` → her scan dosyasında
-- `calculateATRBasedTargetStop(...)` → her scan dosyasında
-- Hedef/stop **volatiliteye göre** dinamik
+### PWA Kurulumu
+- Android: Chrome → Menü → "Ana ekrana ekle"
+- iOS: Safari → Paylaş → "Ana Ekrana Ekle"
+- Manifest: `public/manifest.json`
+- Service Worker: `public/sw.js`
+
+### Mobil Navigasyon
+- `MobileNav.tsx` → 1024px altı ekranlarda gösterilir
+- Hamburger menü (☰) → tüm linkler
+- Alt tab bar → 5 sekme (Grafik, Özet, Alarm, Kısa, Ayar)
+- Admin linki → **sadece admin görür**
+
+### Önemli Hook Kuralı
+- `use-mobile.tsx` → Hem `index.tsx` hem `sidebar.tsx` kullanıyor
+- `useIsMobile.ts` **SİLİNDİ** (çakışma çıkardı)
+
+---
+
+## 🎯 Sıradaki İşler
+
+### 1. Diğer Sayfaların Mobil Uyumluluğu (SIRADAKİ)
+- `/stats` — 5 sekmeli panel mobil
+- `/alarms` — alarm listesi mobil
+- `/market-summary` — piyasa özeti mobil
+- `/short-term-notifications` — mobil
+- `/coins` — coin listesi mobil
+- `/settings` — ayarlar mobil
+- `/backtest` — backtest mobil (düşük öncelik, admin)
+- `/admin` — admin mobil (düşük öncelik)
+
+### 2. YOLO Entegrasyonu
+- YOLO sunucuya taşıma
+- Python FastAPI + YOLO servisi
+- 16 formasyon için yeniden eğitme
 
 ---
 
@@ -251,38 +274,25 @@ Fonksiyonlar:
 
 **Şunu yaz:**
 
-"PROJE-DURUMU.md dosyasını oku ve kaldığımız yerden devam et."
-
-Ben dosyayı okuyup hemen anlarım ve kaldığımız yerden devam ederiz.
+"PROJE-DURUMU.md dosyasını oku ve kaldığımız yerden devam et. Sıradaki iş: Diğer sayfaların mobil uyumluluğu."
 
 ---
 
 ## 🔄 Değişiklik Geçmişi
 
-### 2026-10-12 (Önceki Oturum)
-- formation_signals tablosu
-- check-signals cron
-- İstatistik API
-- Min hedef mesafesi (%1.5)
+### 2026-10-12
+formation_signals tablosu, cron, istatistik API
 
-### 2026-10-14 (Bugün - Sabah)
-- Detaylı filtreler + CSV
-- 5 sekmeli panel + trend grafiği
-- signal_type (long/short/multi)
-- ATR bazlı hedef/stop
-- check-signals optimizasyon (30sn → 3.7sn)
-- Backtest aracı
+### 2026-10-14
+Detaylı filtreler + CSV, 5 sekmeli panel, signal_type, ATR hedef/stop, check-signals optimizasyon, Backtest, Alarm sistemi, Piyasa özeti, Formasyon projeksiyonu, start-trial birleştirme, 11 function
 
-### 2026-10-14 (Bugün - Akşam)
-- Alarm sistemi (fiyat/formasyon/kalite)
-- api/alarms.ts (CRUD + cron birleşik)
-- src/routes/alarms.tsx
-- Supabase alarms tablosu
-- Vercel 12 function limiti çözümü (api/lib silindi)
-- Piyasa özet sayfası (günlük/haftalık)
-- api/market-summary.ts + src/routes/market-summary.tsx
-- Ana sayfa header'a 2 link (Piyasa Özeti + Alarmlar)
+### 2026-10-15
+Formasyon dönüşüm analizi, Koşullar + progress, Haber etkisi, Marka adı AE Analiz, PWA kurulumu, use-mobile hook, MobileNav, Koşullu admin linki, Ana sayfa mobil layout
 
 ---
 
 **Son Commit:**
+fix(hooks): use-mobile.tsx geri getirildi (sidebar.tsx bağımlılığı)
+
+**Sıradaki Hedef:**
+Diğer sayfaların mobil uyumluluğu (stats, alarms, market-summary, short-term-notifications, coins, settings)
