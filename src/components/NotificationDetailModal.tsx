@@ -13,6 +13,7 @@ export function NotificationDetailModal({
   onClose,
   onOpenSymbol,
 }: Props) {
+  // ESC ile kapat
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -23,6 +24,32 @@ export function NotificationDetailModal({
     }
     return undefined;
   }, [notification, onClose]);
+
+  // 🔒 Body scroll kilidi (mobil + masaüstü)
+  useEffect(() => {
+    if (!notification) return;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalPosition = document.body.style.position;
+    const originalTop = document.body.style.top;
+    const originalWidth = document.body.style.width;
+    const scrollY = window.scrollY;
+
+    // Body'i kilitle ve scroll pozisyonunu koru
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.position = originalPosition;
+      document.body.style.top = originalTop;
+      document.body.style.width = originalWidth;
+      // Scroll pozisyonuna geri dön
+      window.scrollTo(0, scrollY);
+    };
+  }, [notification]);
 
   if (!notification) return null;
 
@@ -62,12 +89,14 @@ export function NotificationDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
+      style={{ touchAction: "none" }}
     >
       <div
-        className="flex h-[95vh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl"
+        className="flex h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
+        style={{ touchAction: "auto" }}
       >
         {/* BAŞLIK */}
         <div className="flex items-start justify-between gap-3 border-b border-border bg-secondary/30 p-4">
@@ -101,15 +130,15 @@ export function NotificationDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs hover:bg-secondary"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-sm hover:bg-secondary"
             aria-label="Kapat"
           >
             ✕
           </button>
         </div>
 
-        {/* İÇERİK */}
-        <div className="flex-1 space-y-3 overflow-y-auto p-4">
+        {/* İÇERİK - SCROLL EDİLEBİLİR */}
+        <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
           {/* AI ÖZET */}
           {n.ai_summary && (
             <section className="rounded-lg border border-border bg-background/50 p-3">
@@ -348,7 +377,7 @@ export function NotificationDetailModal({
                 onOpenSymbol(n.market, n.symbol);
                 onClose();
               }}
-              className="flex-1 rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90"
+              className="min-h-[44px] flex-1 rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90"
             >
               🚀 Coin Detayına Git
             </button>
@@ -356,7 +385,7 @@ export function NotificationDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-border px-4 py-2 text-xs font-bold hover:bg-secondary"
+            className="min-h-[44px] rounded-md border border-border px-4 py-2 text-xs font-bold hover:bg-secondary"
           >
             ❌ Kapat
           </button>
