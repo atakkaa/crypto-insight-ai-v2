@@ -15,6 +15,7 @@ import { LimitReachedModal } from "@/components/LimitReachedModal";
 import { useUserTier } from "@/hooks/useUserTier";
 import { WelcomeGate } from "@/components/WelcomeGate";
 import { useAuth } from "@/hooks/useAuth";
+import { useConfirm } from "@/hooks/useConfirm";
 import { FormationProjectionModal } from "@/components/FormationProjectionModal";
 import { MobileNav } from "@/components/MobileNav";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -353,6 +354,7 @@ function stockListForMarket(market: Market): StockListItem[] {
   if (market === "asia") return ASIA_TOP_50;
   return EUROPE_TOP_50;
 }
+
 function IndicatorPanel({
   analysis,
   loading,
@@ -922,15 +924,18 @@ function FormationAlertPanel({
 
 const EMPTY_USER_DRAWING_LINES: import("@/components/CandleChart").TradingViewLine[] = [];
 const EMPTY_FORMATION_MESSAGES: FormationChatMessage[] = [];
+
 function Dashboard() {
-    // ==========================================================
+  const confirm = useConfirm();
+
+  // ==========================================================
   // ONBOARDING TURU STATE
   // ==========================================================
   const [runTour, setRunTour] = useState(false);
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { isAdmin } = useAdmin();
-    const { tierInfo } = useUserTier();
+  const { tierInfo } = useUserTier();
   const [limitModal, setLimitModal] = useState<{
     open: boolean;
     type: "favorites" | "priority";
@@ -966,11 +971,13 @@ function Dashboard() {
   const [formationChats, setFormationChats] = useState<FormationChatStore>({});
   const [formationEvaluationOpen, setFormationEvaluationOpen] = useState<Record<string, boolean>>({});
   const [showFormationCloseDialog, setShowFormationCloseDialog] = useState(false);
-    // ==========================================================
+
+  // ==========================================================
   // KISA VADELİ TAKİP (FREE ÜYE LİMİTİ)
   // ==========================================================
   const [shortTermTracked, setShortTermTracked] = useState<Array<{ market: string; symbol: string }>>([]);
   const [shortTermModal, setShortTermModal] = useState(false);
+
   // ==========================================================
   // KISA VADELİ ANALİZ STATE'LERİ
   // ==========================================================
@@ -978,7 +985,8 @@ function Dashboard() {
   const [shortTermAnalyzing, setShortTermAnalyzing] = useState(false);
   const [showShortTerm, setShowShortTerm] = useState(false);
   const [projectionModalOpen, setProjectionModalOpen] = useState(false);
-    const isMobile = useIsMobile();
+
+  const isMobile = useIsMobile();
   const shortTermCacheKey = `formasyon-ai-short-term-v1`;
   const runAnalysis = useServerFn(analyzeChart);
   const loadStock = useServerFn(getStockCandles);
@@ -1065,24 +1073,8 @@ function Dashboard() {
       ? list.filter((item) => `${item.symbol} ${item.name}`.toUpperCase().includes(q))
       : list;
   }, [market, search]);
-    // Service Worker kaydı (PWA + Push için)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!("serviceWorker" in navigator)) {
-      console.warn("Service Worker desteklenmiyor");
-      return;
-    }
 
-    void navigator.serviceWorker
-      .register("/sw.js")
-      .then((registration) => {
-        console.log("✅ Service Worker kaydedildi:", registration.scope);
-      })
-      .catch((error) => {
-        console.error("❌ Service Worker kaydedilemedi:", error);
-      });
-  }, []);
-    // Service Worker kaydı (PWA + Push için)
+  // Service Worker kaydı (PWA + Push için)
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) {
@@ -1111,20 +1103,9 @@ function Dashboard() {
       }
     })();
   }, [user]);
-    // Kullanıcı giriş yapınca push aboneliği oluştur
-  useEffect(() => {
-    if (!user) return;
-
-    void (async () => {
-      const granted = await requestPushPermission();
-      if (granted) {
-        await subscribeToPush(user.id);
-      }
-    })();
-  }, [user]);
 
   // ==========================================================
-  // ONBOARDING KONTROLÜ - YENİ EKLENEN
+  // ONBOARDING KONTROLÜ
   // ==========================================================
   useEffect(() => {
     if (!user) return;
@@ -1287,7 +1268,7 @@ function Dashboard() {
     }
   }, []);
 
-    // ==========================================================
+  // ==========================================================
   // KISA VADELİ TAKİP LİSTESİNİ ÇEK
   // ==========================================================
   useEffect(() => {
@@ -1309,6 +1290,7 @@ function Dashboard() {
         }
       });
   }, [user]);
+
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -1385,6 +1367,7 @@ function Dashboard() {
         p.symbol === assetSymbol &&
         p.market === assetMarket,
     );
+
   // ==========================================================
   // FAVORİ + ÖNCELİKLİ BİRLEŞTİRME
   // ==========================================================
@@ -1445,7 +1428,7 @@ function Dashboard() {
     });
   }
 
-    async function toggleFavoriteAsset(assetMarket: Market, assetSymbol: string) {
+  async function toggleFavoriteAsset(assetMarket: Market, assetSymbol: string) {
     const currentlyFavorite = isFavoriteAsset(assetMarket, assetSymbol);
 
     // LİMİT KONTROLÜ — favori eklerken
@@ -1526,7 +1509,7 @@ function Dashboard() {
     }
   }
 
-    function togglePriorityAsset(
+  function togglePriorityAsset(
     assetMarket: Market,
     assetSymbol: string,
   ) {
@@ -1607,13 +1590,19 @@ function Dashboard() {
     setPriorityPromptAsset(null);
   }
 
-    async function removeAllFavorites() {
+  async function removeAllFavorites() {
     if (favorites.length === 0) return;
 
-    const confirmed = window.confirm(
-      "Tüm favorileri ve bu favorilere bağlı öncelikleri kaldırmak istediğinize emin misiniz?",
-    );
-    if (!confirmed) return;
+    // ✅ YENİ: Custom confirm modal
+    const ok = await confirm({
+      title: "Tüm Favorileri Kaldır",
+      message:
+        "Tüm favorileri ve bu favorilere bağlı öncelikleri kaldırmak istediğinize emin misiniz?",
+      confirmText: "Tümünü Kaldır",
+      cancelText: "Vazgeç",
+      variant: "destructive",
+    });
+    if (!ok) return;
 
     // Local state sıfırla (hızlı UX)
     setFavorites([]);
@@ -1845,6 +1834,7 @@ function Dashboard() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSymbol, interval, market, candles.length > 0, newsSignature]);
+
   // ==========================================================
   // KISA VADELİ ANALİZ - LOCALSTORAGE'DAN YÜKLE
   // ==========================================================
@@ -1870,7 +1860,7 @@ function Dashboard() {
   // ==========================================================
   // KISA VADELİ ANALİZ - ÇALIŞTIR
   // ==========================================================
-    async function runShortTermAnalysis() {
+  async function runShortTermAnalysis() {
     if (candles.length < 20) {
       toast.error("Kısa vadeli analiz için en az 20 mum gerekli.");
       return;
@@ -1987,14 +1977,25 @@ function Dashboard() {
   // ==========================================================
   // KISA VADELİ ANALİZ - TÜMÜNÜ TEMİZLE
   // ==========================================================
-  function clearAllShortTermAnalyses() {
-    if (!window.confirm("Tüm kısa vadeli analizler silinsin mi?")) return;
+  async function clearAllShortTermAnalyses() {
+    // ✅ YENİ: Custom confirm modal
+    const ok = await confirm({
+      title: "Tüm Kısa Vadeli Analizleri Sil",
+      message:
+        "Tüm kısa vadeli analizleri silmek istediğinize emin misiniz? Bu işlem geri alınamaz.",
+      confirmText: "Hepsini Sil",
+      cancelText: "Vazgeç",
+      variant: "destructive",
+    });
+    if (!ok) return;
+
     window.localStorage.removeItem(shortTermCacheKey);
     setShortTermAnalysis(null);
     setShowShortTerm(false);
     toast.success("Tüm kısa vadeli analizler temizlendi.");
   }
-    // ==========================================================
+
+  // ==========================================================
   // ONBOARDING TURU BAŞLATMA
   // ==========================================================
   useEffect(() => {
@@ -2005,6 +2006,7 @@ function Dashboard() {
       setTimeout(() => setRunTour(true), 1500);
     }
   }, []);
+
   // === GİRİŞ YAPMAMIŞ KULLANICIYA WELCOME EKRANI ===
   if (!user) {
     return <WelcomeGate />;
@@ -2013,15 +2015,16 @@ function Dashboard() {
   return (
     <>
       <div className="min-h-screen">
-              {projectionModalOpen && (
-        <FormationProjectionModal
-          market={market}
-          symbol={activeSymbol}
-          interval={interval}
-          onClose={() => setProjectionModalOpen(false)}
-        />
-      )}
-                {/* ========================================================== */}
+        {projectionModalOpen && (
+          <FormationProjectionModal
+            market={market}
+            symbol={activeSymbol}
+            interval={interval}
+            onClose={() => setProjectionModalOpen(false)}
+          />
+        )}
+
+        {/* ========================================================== */}
         {/* ONBOARDING TOOLTIP TURU */}
         {/* ========================================================== */}
         <Joyride
@@ -2090,16 +2093,16 @@ function Dashboard() {
           ]}
           continuous
           styles={{
-          tooltip: {
-    borderRadius: 12,
-    backgroundColor: "#ffffff",
-    color: "#1f2937",
-  },
-  buttonPrimary: {
-    backgroundColor: "#f59e0b",
-    color: "#ffffff",
-  },
-}}
+            tooltip: {
+              borderRadius: 12,
+              backgroundColor: "#ffffff",
+              color: "#1f2937",
+            },
+            buttonPrimary: {
+              backgroundColor: "#f59e0b",
+              color: "#ffffff",
+            },
+          }}
           locale={{
             back: "Geri",
             close: "Kapat",
@@ -2108,6 +2111,7 @@ function Dashboard() {
             skip: "Atla",
           }}
         />
+
         {/* MOBİL NAVİGASYON */}
         {isMobile && (
           <MobileNav
@@ -2234,6 +2238,7 @@ function Dashboard() {
             </div>
           </header>
         )}
+
         {/* LİMİT AŞIMI MODALI */}
         <LimitReachedModal
           open={limitModal.open}
@@ -2246,7 +2251,8 @@ function Dashboard() {
               : tierInfo?.limits.priority ?? 0
           }
         />
-                {/* KISA VADELİ ANALİZ LİMİT MODALI */}
+
+        {/* KISA VADELİ ANALİZ LİMİT MODALI */}
         <LimitReachedModal
           open={shortTermModal}
           onClose={() => setShortTermModal(false)}
@@ -2254,6 +2260,7 @@ function Dashboard() {
           currentTier={tierInfo?.tier ?? "free"}
           currentLimit={tierInfo?.limits.shortTermTracking ?? 2}
         />
+
         {priorityPromptAsset && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
@@ -2296,10 +2303,10 @@ function Dashboard() {
           </div>
         )}
 
-                <main className={`mx-auto grid max-w-7xl gap-4 px-4 py-4 lg:grid-cols-[280px_minmax(0,1fr)_340px] ${isMobile ? "pb-24" : ""}`}>
+        <main className={`mx-auto grid max-w-7xl gap-4 px-4 py-4 lg:grid-cols-[280px_minmax(0,1fr)_340px] ${isMobile ? "pb-24" : ""}`}>
           <aside className="panel h-fit p-4">
             <div className="market-tabs grid grid-cols-5 gap-1 rounded-lg bg-secondary p-1">
-            {(Object.keys(MARKET_LABELS) as Market[]).map((m) => (
+              {(Object.keys(MARKET_LABELS) as Market[]).map((m) => (
                 <button
                   key={m}
                   onClick={() => {
@@ -2373,7 +2380,7 @@ function Dashboard() {
               </div>
             )}
 
-                        {combinedFavorites.length > 0 && (
+            {combinedFavorites.length > 0 && (
               <div className="favorites-panel mt-4 rounded-lg border border-border bg-card p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs uppercase tracking-wider text-muted-foreground">⭐ Favoriler</p>
@@ -2468,7 +2475,7 @@ function Dashboard() {
                   <span className="text-[10px] text-muted-foreground">Kalıcı</span>
                 </div>
                 <ul className="mt-2 space-y-1">
-                                   {customItems.filter((item) => item.market === market).map((item) => (
+                  {customItems.filter((item) => item.market === market).map((item) => (
                     <li key={item.id} className="flex items-center gap-1">
                       <button
                         onClick={() => openCustomAsset(item)}
@@ -2692,46 +2699,48 @@ function Dashboard() {
                   )}
                 </div>
               </div>
-                          {/* KISA VADELİ ANALİZ BUTONU */}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-               <button
-  type="button"
-  onClick={() => void runShortTermAnalysis()}
-  disabled={shortTermAnalyzing || candles.length < 20}
-  className="short-term-button rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
->
-  {shortTermAnalyzing
-    ? "⏳ Analiz ediliyor..."
-    : tierInfo?.tier === "free"
-      ? `📉 Kısa Vadeli Analiz (${shortTermTracked.length}/${tierInfo?.limits.shortTermTracking ?? 2})`
-      : "📉 Kısa Vadeli (20-30 Mum) Formasyon Değerlendir"}
-</button>
-<button
-  type="button"
-  onClick={() => setProjectionModalOpen(true)}
-  className="rounded-md border border-purple-500/40 bg-purple-500/10 px-3 py-1.5 text-xs font-bold text-purple-400 hover:bg-purple-500/20"
->
-  🔮 Gelecek Projeksiyonu
-</button>
 
-              {shortTermAnalysis && (
+              {/* KISA VADELİ ANALİZ BUTONU */}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => clearShortTermForCurrentSymbol()}
-                  className="rounded-md border border-destructive/30 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10"
+                  onClick={() => void runShortTermAnalysis()}
+                  disabled={shortTermAnalyzing || candles.length < 20}
+                  className="short-term-button rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
                 >
-                  🗑️ Bu Sembolü Temizle
+                  {shortTermAnalyzing
+                    ? "⏳ Analiz ediliyor..."
+                    : tierInfo?.tier === "free"
+                      ? `📉 Kısa Vadeli Analiz (${shortTermTracked.length}/${tierInfo?.limits.shortTermTracking ?? 2})`
+                      : "📉 Kısa Vadeli (20-30 Mum) Formasyon Değerlendir"}
                 </button>
-              )}
+                <button
+                  type="button"
+                  onClick={() => setProjectionModalOpen(true)}
+                  className="rounded-md border border-purple-500/40 bg-purple-500/10 px-3 py-1.5 text-xs font-bold text-purple-400 hover:bg-purple-500/20"
+                >
+                  🔮 Gelecek Projeksiyonu
+                </button>
 
-              <button
-                type="button"
-                onClick={() => clearAllShortTermAnalyses()}
-                className="ml-auto rounded-md border border-border px-3 py-1.5 text-xs font-bold hover:bg-secondary"
-              >
-                🗑️ Tüm Kısa Vadeli Analizleri Temizle
-              </button>
-            </div>
+                {shortTermAnalysis && (
+                  <button
+                    type="button"
+                    onClick={() => clearShortTermForCurrentSymbol()}
+                    className="rounded-md border border-destructive/30 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10"
+                  >
+                    🗑️ Bu Sembolü Temizle
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => clearAllShortTermAnalyses()}
+                  className="ml-auto rounded-md border border-border px-3 py-1.5 text-xs font-bold hover:bg-secondary"
+                >
+                  🗑️ Tüm Kısa Vadeli Analizleri Temizle
+                </button>
+              </div>
+
               <div className="mt-3 overflow-hidden rounded-md bg-card p-2">
                 <CandleChart
                   candles={candles}
@@ -2801,6 +2810,7 @@ function Dashboard() {
                 </div>
               </div>
             )}
+
             {/* UZUN VADELİ ANALİZ AÇILIR PENCERE */}
             <details className="panel p-4" open>
               <summary className="cursor-pointer text-sm font-bold">
@@ -2916,13 +2926,13 @@ function Dashboard() {
                       </div>
 
                       {shortTermAnalysis.pattern.bias === shortTermAnalysis.indicatorAnalysis?.direction && (
-  <div className="rounded-lg border border-bull/40 bg-bull/10 p-3">
-    <p className="text-xs font-bold text-bull">✅ UYUMLU SONUÇ</p>
-    <p className="mt-1 text-xs text-muted-foreground">
-      Kısa vadede formasyon ve indikatörler aynı yönü gösteriyor: <strong>{shortTermAnalysis.pattern.bias}</strong>.
-    </p>
-  </div>
-)}
+                        <div className="rounded-lg border border-bull/40 bg-bull/10 p-3">
+                          <p className="text-xs font-bold text-bull">✅ UYUMLU SONUÇ</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Kısa vadede formasyon ve indikatörler aynı yönü gösteriyor: <strong>{shortTermAnalysis.pattern.bias}</strong>.
+                          </p>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <p className="text-sm text-muted-foreground">Analiz yapılamadı.</p>
@@ -2930,6 +2940,7 @@ function Dashboard() {
                 </div>
               </details>
             )}
+
             <FormationAlertPanel
               symbol={activeSymbol}
               analysis={analysis}
