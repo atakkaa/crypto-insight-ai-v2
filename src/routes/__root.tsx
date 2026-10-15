@@ -1,3 +1,4 @@
+import { ConfirmProvider } from "@/hooks/useConfirm";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -175,7 +176,9 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <ConfirmProvider>
+        <Outlet />
+      </ConfirmProvider>
     </QueryClientProvider>
   );
 }
