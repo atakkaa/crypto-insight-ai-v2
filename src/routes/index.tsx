@@ -16,6 +16,8 @@ import { useUserTier } from "@/hooks/useUserTier";
 import { WelcomeGate } from "@/components/WelcomeGate";
 import { useAuth } from "@/hooks/useAuth";
 import { FormationProjectionModal } from "@/components/FormationProjectionModal";
+import { MobileNav } from "@/components/MobileNav";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { useAdmin } from "@/hooks/useAdmin";
 import { supabase } from "@/integrations/supabase/client";
 import { analyzeChart, type ChartAnalysis } from "@/lib/analysis.functions";
@@ -976,6 +978,7 @@ function Dashboard() {
   const [shortTermAnalyzing, setShortTermAnalyzing] = useState(false);
   const [showShortTerm, setShowShortTerm] = useState(false);
   const [projectionModalOpen, setProjectionModalOpen] = useState(false);
+    const isMobile = useIsMobile();
   const shortTermCacheKey = `formasyon-ai-short-term-v1`;
   const runAnalysis = useServerFn(analyzeChart);
   const loadStock = useServerFn(getStockCandles);
@@ -2105,105 +2108,132 @@ function Dashboard() {
             skip: "Atla",
           }}
         />
-        <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
-          <span className="num text-sm font-bold uppercase tracking-[0.2em] text-primary">
-  AE Analiz
-</span>
-           <nav className="flex flex-wrap gap-2 text-xs">
-  <span className="rounded-md bg-secondary px-3 py-1.5 font-bold">Grafik</span>
-  <Link to="/coins" className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary">
-    Liste
-  </Link>
-  <Link
-    to="/market-summary"
-    className="rounded-md border border-cyan-500/40 px-3 py-1.5 font-bold text-cyan-400 hover:bg-cyan-500/10"
-  >
-    📊 Piyasa Özeti
-  </Link>
-  <Link
-    to="/alarms"
-    className="rounded-md border border-emerald-500/40 px-3 py-1.5 font-bold text-emerald-500 hover:bg-emerald-500/10"
-  >
-    🔔 Alarmlar
-  </Link>
-</nav>
-            {(tierInfo?.tier === "admin" || tierInfo?.tier === "premium" || tierInfo?.tier === "trial") && (
-  <Link
-    to="/stats"
-    className="rounded-md border border-purple-500/40 px-3 py-1.5 text-xs font-bold text-purple-400 hover:bg-purple-500/10"
-  >
-    📊 İstatistikler
-  </Link>
-)}
-                        <Link
-              to="/settings"
-              className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
-            >
-              ⚙️ Ayarlar
-            </Link>
-            <Link
-  to="/short-term-notifications"
-  className="rounded-md border border-amber-500/40 px-3 py-1.5 text-xs font-bold text-amber-500 hover:bg-amber-500/10"
->
-  📉 Kısa Vadeli
-</Link>
-            <div className="ml-auto flex items-center gap-2 text-sm">
-              {isAdmin && (
-  <Link
-    to="/admin"
-    className="rounded-md border border-amber-500/40 px-2.5 py-1.5 text-xs font-bold text-amber-500 hover:bg-amber-500/10"
-    title="Admin Paneli"
-  >
-    👑
-  </Link>
-)}
-<div className="notification-bell">
-              <NotificationBell
-                onOpenSymbol={(m, s) => {
-                  setMarket(m as Market);
-                  if (m !== "crypto") {
-                    setStockSymbol(s);
-                    setStockInput(s);
-                  } else {
-                    setSymbol(s);
-                  }
-                }}
-              />
-              </div>
-              <ShortTermNotificationBell
-  onOpenSymbol={(m, s) => {
-    setMarket(m as Market);
-    if (m !== "crypto") {
-      setStockSymbol(s);
-      setStockInput(s);
-    } else {
-      setSymbol(s);
-    }
-  }}
-/>
+        {/* MOBİL NAVİGASYON */}
+        {isMobile && (
+          <MobileNav
+            onOpenSymbol={(m, s) => {
+              setMarket(m as Market);
+              if (m !== "crypto") {
+                setStockSymbol(s);
+                setStockInput(s);
+              } else {
+                setSymbol(s);
+              }
+            }}
+          />
+        )}
 
-              {user ? (
-                <>
-                  <span className="hidden text-xs text-muted-foreground sm:inline">{user.email}</span>
-                  <button
-                    onClick={() => void signOut()}
-                    className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-secondary"
-                  >
-                    Çıkış
-                  </button>
-                </>
-              ) : (
+        {/* MASAÜSTÜ HEADER (SADECE BÜYÜK EKRANDA) */}
+        {!isMobile && (
+          <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
+            <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
+              <span className="num text-sm font-bold uppercase tracking-[0.2em] text-primary">
+                AE Analiz
+              </span>
+              <nav className="flex flex-wrap gap-2 text-xs">
+                <span className="rounded-md bg-secondary px-3 py-1.5 font-bold">Grafik</span>
+                <Link to="/coins" className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary">
+                  Liste
+                </Link>
                 <Link
-                  to="/auth"
-                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+                  to="/market-summary"
+                  className="rounded-md border border-cyan-500/40 px-3 py-1.5 font-bold text-cyan-400 hover:bg-cyan-500/10"
                 >
-                  Giriş / Kayıt
+                  📊 Piyasa Özeti
+                </Link>
+                <Link
+                  to="/alarms"
+                  className="rounded-md border border-emerald-500/40 px-3 py-1.5 font-bold text-emerald-500 hover:bg-emerald-500/10"
+                >
+                  🔔 Alarmlar
+                </Link>
+              </nav>
+              {(tierInfo?.tier === "admin" || tierInfo?.tier === "premium" || tierInfo?.tier === "trial") && (
+                <Link
+                  to="/stats"
+                  className="rounded-md border border-purple-500/40 px-3 py-1.5 text-xs font-bold text-purple-400 hover:bg-purple-500/10"
+                >
+                  📊 İstatistikler
                 </Link>
               )}
+              <Link
+                to="/settings"
+                className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
+              >
+                ⚙️ Ayarlar
+              </Link>
+              <Link
+                to="/short-term-notifications"
+                className="rounded-md border border-amber-500/40 px-3 py-1.5 text-xs font-bold text-amber-500 hover:bg-amber-500/10"
+              >
+                📉 Kısa Vadeli
+              </Link>
+              <div className="ml-auto flex items-center gap-2 text-sm">
+                {isAdmin && (
+                  <>
+                    <Link
+                      to="/admin"
+                      className="rounded-md border border-amber-500/40 px-2.5 py-1.5 text-xs font-bold text-amber-500 hover:bg-amber-500/10"
+                      title="Admin Paneli"
+                    >
+                      👑
+                    </Link>
+                    <Link
+                      to="/backtest"
+                      className="rounded-md border border-purple-500/40 px-2.5 py-1.5 text-xs font-bold text-purple-400 hover:bg-purple-500/10"
+                      title="Backtest Aracı"
+                    >
+                      🧪
+                    </Link>
+                  </>
+                )}
+                <div className="notification-bell">
+                  <NotificationBell
+                    onOpenSymbol={(m, s) => {
+                      setMarket(m as Market);
+                      if (m !== "crypto") {
+                        setStockSymbol(s);
+                        setStockInput(s);
+                      } else {
+                        setSymbol(s);
+                      }
+                    }}
+                  />
+                </div>
+                <ShortTermNotificationBell
+                  onOpenSymbol={(m, s) => {
+                    setMarket(m as Market);
+                    if (m !== "crypto") {
+                      setStockSymbol(s);
+                      setStockInput(s);
+                    } else {
+                      setSymbol(s);
+                    }
+                  }}
+                />
+
+                {user ? (
+                  <>
+                    <span className="hidden text-xs text-muted-foreground sm:inline">{user.email}</span>
+                    <button
+                      onClick={() => void signOut()}
+                      className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-secondary"
+                    >
+                      Çıkış
+                    </button>
+                  </>
+                ) : (
+                  <Link
+                    to="/auth"
+                    className="rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+                  >
+                    Giriş / Kayıt
+                  </Link>
+                )}
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
+        )}
         {/* LİMİT AŞIMI MODALI */}
         <LimitReachedModal
           open={limitModal.open}
@@ -2266,7 +2296,7 @@ function Dashboard() {
           </div>
         )}
 
-        <main className="mx-auto grid max-w-7xl gap-4 px-4 py-4 lg:grid-cols-[280px_minmax(0,1fr)_340px]">
+                <main className={`mx-auto grid max-w-7xl gap-4 px-4 py-4 lg:grid-cols-[280px_minmax(0,1fr)_340px] ${isMobile ? "pb-24" : ""}`}>
           <aside className="panel h-fit p-4">
             <div className="market-tabs grid grid-cols-5 gap-1 rounded-lg bg-secondary p-1">
             {(Object.keys(MARKET_LABELS) as Market[]).map((m) => (
