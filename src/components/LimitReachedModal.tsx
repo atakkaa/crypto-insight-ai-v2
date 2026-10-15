@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -22,7 +23,42 @@ export function LimitReachedModal({
   const { user } = useAuth();
   const [trialStarting, setTrialStarting] = useState(false);
 
+  // ESC ile kapat
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
+  // 🔒 Body scroll kilidi
+  useEffect(() => {
+    if (!open) return;
+
+    const scrollY = window.scrollY;
+    const originalOverflow = document.body.style.overflow;
+    const originalPosition = document.body.style.position;
+    const originalTop = document.body.style.top;
+    const originalWidth = document.body.style.width;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.position = originalPosition;
+      document.body.style.top = originalTop;
+      document.body.style.width = originalWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
   if (!open) return null;
+  if (typeof document === "undefined") return null;
 
   const title =
     limitType === "favorites"
@@ -60,33 +96,48 @@ export function LimitReachedModal({
     setTrialStarting(false);
   }
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
-        <div className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/15">
-            <span className="text-3xl">🔒</span>
-          </div>
-          <h2 className="mt-3 text-lg font-bold">{title}</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {description}
-          </p>
-          {currentTier === "free" && (
-            <p className="mt-2 text-xs text-amber-500">
-              {limitType === "short_term"
-                ? "💡 1 haftalık ücretsiz deneme başlatarak sınırsız kısa vadeli analiz yapabilirsiniz"
-                : "💡 1 haftalık ücretsiz deneme başlatarak limitleri artırabilirsiniz"}
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={onClose}
+      style={{ touchAction: "none" }}
+    >
+      <div
+        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+        style={{ touchAction: "auto" }}
+      >
+        {/* İÇERİK */}
+        <div
+          className="flex-1 overflow-y-auto overscroll-contain p-6"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          <div className="text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/15">
+              <span className="text-3xl">🔒</span>
+            </div>
+            <h2 className="mt-3 text-lg font-bold">{title}</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {description}
             </p>
-          )}
+            {currentTier === "free" && (
+              <p className="mt-2 text-xs text-amber-500">
+                {limitType === "short_term"
+                  ? "💡 1 haftalık ücretsiz deneme başlatarak sınırsız kısa vadeli analiz yapabilirsiniz"
+                  : "💡 1 haftalık ücretsiz deneme başlatarak limitleri artırabilirsiniz"}
+              </p>
+            )}
+          </div>
         </div>
 
-        <div className="mt-5 space-y-2">
+        {/* AKSİYONLAR */}
+        <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-secondary/30 p-4">
           {currentTier === "free" && (
             <button
               type="button"
               disabled={trialStarting}
               onClick={() => void handleStartTrial()}
-              className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="min-h-[44px] w-full rounded-md bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {trialStarting ? "Başlatılıyor..." : "🚀 1 Hafta Ücretsiz Dene"}
             </button>
@@ -94,7 +145,7 @@ export function LimitReachedModal({
 
           <a
             href="/settings"
-            className="block w-full rounded-md border border-border px-4 py-2.5 text-center text-sm font-bold hover:bg-secondary"
+            className="flex min-h-[44px] w-full items-center justify-center rounded-md border border-border px-4 py-2.5 text-center text-sm font-bold hover:bg-secondary"
           >
             ⭐ Premium'a Geç
           </a>
@@ -102,7 +153,7 @@ export function LimitReachedModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-full rounded-md px-4 py-2 text-xs text-muted-foreground hover:bg-secondary"
+            className="min-h-[44px] w-full rounded-md px-4 py-2 text-xs text-muted-foreground hover:bg-secondary"
           >
             Vazgeç
           </button>
@@ -110,4 +161,6 @@ export function LimitReachedModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

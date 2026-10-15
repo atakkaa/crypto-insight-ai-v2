@@ -1,5 +1,6 @@
 // src/components/FormationProjectionModal.tsx
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 // ==========================================================
 // TİPLER
@@ -122,6 +123,7 @@ export function FormationProjectionModal({
       });
   }, [market, symbol, interval]);
 
+  // ESC ile kapat
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -130,19 +132,47 @@ export function FormationProjectionModal({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  return (
+  // 🔒 Body scroll kilidi
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    const originalOverflow = document.body.style.overflow;
+    const originalPosition = document.body.style.position;
+    const originalTop = document.body.style.top;
+    const originalWidth = document.body.style.width;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.position = originalPosition;
+      document.body.style.top = originalTop;
+      document.body.style.width = originalWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
+  if (typeof document === "undefined") return null;
+
+  const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
+      style={{ touchAction: "none" }}
     >
       <div
-        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-border bg-background shadow-2xl"
+        className="flex h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-background shadow-2xl sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
+        style={{ touchAction: "auto" }}
       >
         {/* BAŞLIK */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background p-4">
-          <div>
-            <h2 className="text-base font-bold">🔮 Formasyon Gelecek Projeksiyonu</h2>
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-secondary/30 p-4">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-bold">
+              🔮 Formasyon Gelecek Projeksiyonu
+            </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {symbol} · {interval.toUpperCase()}
             </p>
@@ -150,14 +180,18 @@ export function FormationProjectionModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-border px-2.5 py-1 text-xs font-bold hover:bg-secondary"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-sm hover:bg-secondary"
+            aria-label="Kapat"
           >
             ✕
           </button>
         </div>
 
-        {/* İÇERİK */}
-        <div className="p-4">
+        {/* İÇERİK - SCROLL */}
+        <div
+          className="flex-1 overflow-y-auto overscroll-contain p-4"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           {loading && (
             <div className="flex h-40 items-center justify-center">
               <p className="text-sm text-muted-foreground">Hesaplanıyor...</p>
@@ -209,10 +243,10 @@ export function FormationProjectionModal({
                       <span
                         className={
                           data.formation.bias === "yükseliş"
-                            ? "text-bull font-bold"
+                            ? "font-bold text-bull"
                             : data.formation.bias === "düşüş"
-                              ? "text-bear font-bold"
-                              : "text-muted-foreground font-bold"
+                              ? "font-bold text-bear"
+                              : "font-bold text-muted-foreground"
                         }
                       >
                         {data.formation.bias === "yükseliş"
@@ -243,7 +277,9 @@ export function FormationProjectionModal({
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Tamamlanma</span>
-                    <span className="num font-bold">{data.formation.completion}%</span>
+                    <span className="num font-bold">
+                      {data.formation.completion}%
+                    </span>
                   </div>
                   <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-secondary">
                     <div
@@ -292,7 +328,7 @@ export function FormationProjectionModal({
                 </div>
               )}
 
-              {/* 3. YENİ: FORMASYON DÖNÜŞÜM ANALİZİ */}
+              {/* 3. FORMASYON DÖNÜŞÜM */}
               {data.future_formations && data.future_formations.length > 0 && (
                 <div>
                   <p className="mb-2 text-xs font-bold uppercase tracking-wider text-purple-400">
@@ -315,7 +351,7 @@ export function FormationProjectionModal({
                   <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                     📊 Göstergeler
                   </p>
-                  <div className="grid gap-2 sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <IndicatorBox
                       label="RSI"
                       value={data.indicators.rsi.toString()}
@@ -356,7 +392,7 @@ export function FormationProjectionModal({
                 </div>
               )}
 
-              {/* 5. YENİ: HABER ETKİSİ */}
+              {/* 5. HABER ETKİSİ */}
               {data.news_effect && data.news_effect.count > 0 && (
                 <div>
                   <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -377,7 +413,8 @@ export function FormationProjectionModal({
                         }`}
                       >
                         {data.news_effect.sentiment >= 0 ? "+" : ""}
-                        {data.news_effect.sentiment} ({data.news_effect.sentiment_label})
+                        {data.news_effect.sentiment} (
+                        {data.news_effect.sentiment_label})
                       </span>
                     </div>
 
@@ -495,15 +532,29 @@ export function FormationProjectionModal({
               {/* UYARI */}
               <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
                 <p className="text-[10px] text-amber-500">
-                  ⚠️ Bu projeksiyon olasılık tahminidir. Yatırım tavsiyesi değildir.
+                  ⚠️ Bu projeksiyon olasılık tahminidir. Yatırım tavsiyesi
+                  değildir.
                 </p>
               </div>
             </div>
           )}
         </div>
+
+        {/* ALT BUTON — MOBİLDE KOLAY KAPATMA */}
+        <div className="flex shrink-0 items-center gap-2 border-t border-border bg-secondary/30 p-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-[44px] flex-1 rounded-md border border-border px-4 py-2 text-xs font-bold hover:bg-secondary"
+          >
+            ❌ Kapat
+          </button>
+        </div>
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
 
 // ==========================================================
@@ -560,7 +611,6 @@ function FutureFormationCard({ formation }: { formation: FutureFormation }) {
         </div>
       </div>
 
-      {/* İLERLEME ÇUBUĞU */}
       <div className="mt-2">
         <div className="flex items-center justify-between text-[10px]">
           <span className="text-muted-foreground">Koşullar</span>
@@ -582,18 +632,19 @@ function FutureFormationCard({ formation }: { formation: FutureFormation }) {
         </div>
       </div>
 
-      {/* KOŞULLAR */}
       <div className="mt-3 space-y-1.5">
         {formation.conditions.map((c, i) => (
           <div
             key={i}
             className="flex items-start gap-2 rounded-md bg-background/50 p-2 text-[10px]"
           >
-            <span className="mt-0.5">
-              {c.met ? "✅" : "❌"}
-            </span>
+            <span className="mt-0.5">{c.met ? "✅" : "❌"}</span>
             <div className="flex-1">
-              <p className={c.met ? "text-foreground" : "text-muted-foreground"}>
+              <p
+                className={
+                  c.met ? "text-foreground" : "text-muted-foreground"
+                }
+              >
                 {c.label}
               </p>
               <p className="text-[9px] text-muted-foreground">
@@ -649,7 +700,9 @@ function ScenarioCard({
   }[type];
 
   return (
-    <div className={`rounded-lg border ${config.borderCls} ${config.bgCls} p-3`}>
+    <div
+      className={`rounded-lg border ${config.borderCls} ${config.bgCls} p-3`}
+    >
       <div className="flex items-center justify-between">
         <p className={`text-xs font-bold ${config.textCls}`}>
           {config.emoji} {config.label}
