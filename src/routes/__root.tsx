@@ -17,7 +17,9 @@ function NotFoundComponent() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Sayfa Bulunamadı</h2>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">
+          Sayfa Bulunamadı
+        </h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Aradığınız sayfa mevcut değil veya taşınmış olabilir.
         </p>
@@ -34,11 +36,19 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    reportLovableError(error, {
+      boundary: "tanstack_root_error_component",
+    });
   }, [error]);
 
   return (
@@ -72,21 +82,41 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+export const Route = createRootRouteWithContext<{
+  queryClient: QueryClient;
+}>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=5" },
+      {
+        name: "viewport",
+        content: "width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover",
+      },
       { name: "theme-color", content: "#f5a623" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      {
+        name: "apple-mobile-web-app-status-bar-style",
+        content: "black-translucent",
+      },
       { name: "apple-mobile-web-app-title", content: "AE Analiz" },
       { name: "mobile-web-app-capable", content: "yes" },
+      { name: "format-detection", content: "telephone=no" },
       { title: "AE Analiz — Kripto ve Borsa Analizi" },
-      { name: "description", content: "Yapay zeka destekli kripto ve borsa analizi. Formasyon, indikatör ve haber bildirimleri." },
+      {
+        name: "description",
+        content:
+          "Yapay zeka destekli kripto ve borsa analizi. Formasyon, indikatör ve haber bildirimleri.",
+      },
       { name: "author", content: "AE Analiz" },
-      { property: "og:title", content: "AE Analiz — Kripto ve Borsa Analizi" },
-      { property: "og:description", content: "Yapay zeka destekli kripto ve borsa analizi. Formasyon, indikatör ve haber bildirimleri." },
+      {
+        property: "og:title",
+        content: "AE Analiz — Kripto ve Borsa Analizi",
+      },
+      {
+        property: "og:description",
+        content:
+          "Yapay zeka destekli kripto ve borsa analizi. Formasyon, indikatör ve haber bildirimleri.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -96,8 +126,28 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: appCss,
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      {
+        rel: "icon",
+        href: "/icon-192.png",
+        type: "image/png",
+        sizes: "192x192",
+      },
+      {
+        rel: "icon",
+        href: "/icon-512.png",
+        type: "image/png",
+        sizes: "512x512",
+      },
       { rel: "manifest", href: "/manifest.json" },
-      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      {
+        rel: "apple-touch-icon",
+        href: "/apple-touch-icon.png",
+        sizes: "180x180",
+      },
+      {
+        rel: "apple-touch-icon-precomposed",
+        href: "/apple-touch-icon.png",
+      },
     ],
   }),
   shellComponent: RootShell,
