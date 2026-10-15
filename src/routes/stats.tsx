@@ -1,5 +1,5 @@
 // src/routes/stats.tsx
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   BarChart,
@@ -16,6 +16,7 @@ import {
   Cell,
 } from "recharts";
 
+import { MobileNav } from "@/components/MobileNav";
 import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/stats")({
@@ -291,40 +292,64 @@ function StatsPage() {
     }
   }
 
+  // Giriş yok
   if (!user) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="text-center">
-          <p className="text-lg font-bold">🔒 Giriş Yapın</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            İstatistikleri görmek için giriş yapın.
+      <div className="min-h-screen pb-24 lg:pb-0">
+        <div className="lg:hidden">
+          <MobileNav onOpenSymbol={() => {}} />
+        </div>
+        <div className="flex min-h-[60vh] items-center justify-center px-4">
+          <div className="text-center">
+            <p className="text-lg font-bold">🔒 Giriş Yapın</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              İstatistikleri görmek için giriş yapın.
+            </p>
+            <Link
+              to="/auth"
+              className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+            >
+              Giriş Yap
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Yükleniyor
+  if (loading && !data) {
+    return (
+      <div className="min-h-screen pb-24 lg:pb-0">
+        <div className="lg:hidden">
+          <MobileNav onOpenSymbol={() => {}} />
+        </div>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <p className="text-sm text-muted-foreground">
+            İstatistikler yükleniyor...
           </p>
         </div>
       </div>
     );
   }
 
-  if (loading && !data) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-muted-foreground">
-          İstatistikler yükleniyor...
-        </p>
-      </div>
-    );
-  }
-
+  // Hata / Premium değil
   if (error && !data) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="max-w-md text-center">
-          <p className="text-4xl">🔒</p>
-          <p className="mt-3 text-lg font-bold">Premium Üyelere Özel</p>
-          <p className="mt-2 text-sm text-muted-foreground">{error}</p>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Formasyon başarı oranlarını ve istatistiklerini görmek için premium
-            üyeliğe geçin.
-          </p>
+      <div className="min-h-screen pb-24 lg:pb-0">
+        <div className="lg:hidden">
+          <MobileNav onOpenSymbol={() => {}} />
+        </div>
+        <div className="flex min-h-[60vh] items-center justify-center px-4">
+          <div className="max-w-md text-center">
+            <p className="text-4xl">🔒</p>
+            <p className="mt-3 text-lg font-bold">Premium Üyelere Özel</p>
+            <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+            <p className="mt-4 text-xs text-muted-foreground">
+              Formasyon başarı oranlarını ve istatistiklerini görmek için
+              premium üyeliğe geçin.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -336,429 +361,491 @@ function StatsPage() {
   const isAdmin = data.tier === "admin";
 
   return (
-    <div className="container mx-auto max-w-7xl space-y-4 p-3 sm:space-y-6 sm:p-4">
-      {/* BAŞLIK */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
-        <div>
-          <h1 className="text-xl font-bold sm:text-2xl">
-            📊 Başarı İstatistikleri
-          </h1>
-          <p className="text-xs text-muted-foreground sm:text-sm">
-            Sonuçlanmış sinyallerin başarı oranları ve performansı
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => void downloadCsv()}
-              disabled={downloadingCsv || loading}
-              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-bold text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50 sm:px-3 sm:text-xs"
-              title="Mevcut filtrelerle CSV indir"
-            >
-              {downloadingCsv ? "⏳" : "📥 CSV"}
-            </button>
-          )}
-
-          <label className="text-[11px] text-muted-foreground sm:text-xs">
-            Zaman:
-          </label>
-          <select
-            value={filters.days}
-            onChange={(e) =>
-              setFilters((prev) => ({ ...prev, days: Number(e.target.value) }))
-            }
-            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-[11px] sm:px-3 sm:text-xs"
-          >
-            <option value={7}>7 gün</option>
-            <option value={30}>30 gün</option>
-            <option value={90}>90 gün</option>
-            <option value={365}>1 yıl</option>
-          </select>
-
-          <button
-            type="button"
-            onClick={() => setPanelOpen((v) => !v)}
-            className={`rounded-md border px-2.5 py-1.5 text-[11px] font-bold transition-colors sm:px-3 sm:text-xs ${
-              panelOpen || activeFilterCount > 0
-                ? "border-primary/50 bg-primary/10 text-primary"
-                : "border-border hover:bg-secondary"
-            }`}
-          >
-            ⚙️ <span className="hidden sm:inline">Filtreler</span>
-            {activeFilterCount > 0 && (
-              <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-
-          {loading && (
-            <span className="text-[11px] text-muted-foreground">
-              Güncelleniyor...
-            </span>
-          )}
-        </div>
+    <div className="min-h-screen pb-24 lg:pb-0">
+      {/* ========== MOBİL HEADER ========== */}
+      <div className="lg:hidden">
+        <MobileNav onOpenSymbol={() => {}} />
       </div>
 
-      {/* GELİŞMİŞ FİLTRE PANELİ */}
-      {panelOpen && (
-        <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-xs font-bold sm:text-sm">
-              🔍 GELİŞMİŞ FİLTRELER
-            </h2>
-            <div className="flex items-center gap-2">
+      {/* ========== MASAÜSTÜ HEADER ========== */}
+      <header className="sticky top-0 z-20 hidden border-b border-border bg-background/90 backdrop-blur lg:block">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
+          <Link
+            to="/"
+            className="num text-sm font-bold uppercase tracking-[0.2em] text-primary"
+          >
+            AE Analiz
+          </Link>
+          <nav className="flex gap-2 text-xs">
+            <Link
+              to="/"
+              className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
+            >
+              Grafik
+            </Link>
+            <Link
+              to="/coins"
+              className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
+            >
+              Liste
+            </Link>
+            <Link
+              to="/market-summary"
+              className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
+            >
+              Piyasa Özeti
+            </Link>
+            <span className="rounded-md bg-primary/15 px-3 py-1.5 font-bold text-primary">
+              📊 İstatistikler
+            </span>
+          </nav>
+          <div className="ml-auto truncate text-xs text-muted-foreground">
+            {user?.email}
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl space-y-4 px-3 py-4 sm:px-4 sm:py-6">
+        {/* BAŞLIK */}
+        <section className="panel p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
+            <div>
+              <h1 className="text-xl font-bold sm:text-2xl">
+                📊 Başarı İstatistikleri
+              </h1>
+              <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+                Sonuçlanmış sinyallerin başarı oranları ve performansı
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => void downloadCsv()}
+                  disabled={downloadingCsv || loading}
+                  className="min-h-[40px] rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50"
+                  title="Mevcut filtrelerle CSV indir"
+                >
+                  {downloadingCsv ? "⏳" : "📥 CSV"}
+                </button>
+              )}
+
+              <label className="text-xs text-muted-foreground">Zaman:</label>
+              <select
+                value={filters.days}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    days: Number(e.target.value),
+                  }))
+                }
+                className="min-h-[40px] rounded-md border border-border bg-background px-3 py-1.5 text-xs"
+              >
+                <option value={7}>7 gün</option>
+                <option value={30}>30 gün</option>
+                <option value={90}>90 gün</option>
+                <option value={365}>1 yıl</option>
+              </select>
+
               <button
                 type="button"
-                onClick={clearAllFilters}
-                disabled={activeFilterCount === 0}
-                className="rounded-md border border-border px-2 py-1 text-[10px] font-bold hover:bg-secondary disabled:opacity-40 sm:px-2.5 sm:text-[11px]"
+                onClick={() => setPanelOpen((v) => !v)}
+                className={`min-h-[40px] rounded-md border px-3 py-1.5 text-xs font-bold transition-colors ${
+                  panelOpen || activeFilterCount > 0
+                    ? "border-primary/50 bg-primary/10 text-primary"
+                    : "border-border hover:bg-secondary"
+                }`}
               >
-                🧹 Temizle
+                ⚙️ Filtreler
+                {activeFilterCount > 0 && (
+                  <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                )}
               </button>
-              <button
-                type="button"
-                onClick={() => setPanelOpen(false)}
-                className="rounded-md border border-border px-2 py-1 text-xs hover:bg-secondary"
-                aria-label="Paneli kapat"
-              >
-                ✕
-              </button>
+
+              {loading && (
+                <span className="text-xs text-muted-foreground">
+                  Güncelleniyor...
+                </span>
+              )}
             </div>
           </div>
+        </section>
 
-          <div className="mt-4 grid gap-3 lg:grid-cols-2 lg:gap-4">
-            {/* FORMASYON */}
-            <div>
-              <p className="text-xs font-bold text-muted-foreground">
-                Formasyon ({options.formations.length})
-              </p>
-              {options.formations.length === 0 ? (
-                <p className="mt-2 text-xs text-muted-foreground">Veri yok.</p>
-              ) : (
-                <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-border bg-background p-2 lg:max-h-48">
-                  <div className="flex flex-wrap gap-1.5">
-                    {options.formations.map((f) => {
-                      const active = filters.formations.includes(f);
+        {/* GELİŞMİŞ FİLTRE PANELİ */}
+        {panelOpen && (
+          <section className="panel p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold">🔍 GELİŞMİŞ FİLTRELER</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  disabled={activeFilterCount === 0}
+                  className="min-h-[36px] rounded-md border border-border px-2.5 py-1 text-xs font-bold hover:bg-secondary disabled:opacity-40"
+                >
+                  🧹 Temizle
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPanelOpen(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-sm hover:bg-secondary"
+                  aria-label="Paneli kapat"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-2 lg:gap-4">
+              {/* FORMASYON */}
+              <div>
+                <p className="text-xs font-bold text-muted-foreground">
+                  Formasyon ({options.formations.length})
+                </p>
+                {options.formations.length === 0 ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Veri yok.
+                  </p>
+                ) : (
+                  <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-border bg-background p-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {options.formations.map((f) => {
+                        const active = filters.formations.includes(f);
+                        return (
+                          <button
+                            key={f}
+                            type="button"
+                            onClick={() => toggleFormation(f)}
+                            className={`min-h-[32px] rounded-md border px-2.5 py-1 text-[11px] transition-colors ${
+                              active
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border hover:bg-secondary"
+                            }`}
+                          >
+                            {f}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* MARKET */}
+              <div>
+                <p className="text-xs font-bold text-muted-foreground">
+                  Market ({options.markets.length})
+                </p>
+                {options.markets.length === 0 ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Veri yok.
+                  </p>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {options.markets.map((m) => {
+                      const active = filters.markets.includes(m);
                       return (
                         <button
-                          key={f}
+                          key={m}
                           type="button"
-                          onClick={() => toggleFormation(f)}
-                          className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                          onClick={() => toggleMarket(m)}
+                          className={`min-h-[36px] rounded-md border px-3 py-1.5 text-xs transition-colors ${
                             active
                               ? "border-primary bg-primary text-primary-foreground"
                               : "border-border hover:bg-secondary"
                           }`}
                         >
-                          {f}
+                          {marketLabel(m)}
                         </button>
                       );
                     })}
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
 
-            {/* MARKET */}
-            <div>
-              <p className="text-xs font-bold text-muted-foreground">
-                Market ({options.markets.length})
-              </p>
-              {options.markets.length === 0 ? (
-                <p className="mt-2 text-xs text-muted-foreground">Veri yok.</p>
-              ) : (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {options.markets.map((m) => {
-                    const active = filters.markets.includes(m);
-                    return (
+              {/* SEMBOL */}
+              <div>
+                <p className="text-xs font-bold text-muted-foreground">
+                  Sembol (tek seçim)
+                </p>
+                <input
+                  type="text"
+                  value={symbolSearch}
+                  onChange={(e) => setSymbolSearch(e.target.value)}
+                  placeholder="Ara: BTC, THYAO, AAPL..."
+                  className="mt-2 min-h-[44px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                />
+                <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-border bg-background">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFilters((prev) => ({ ...prev, symbol: "" }))
+                    }
+                    className={`block w-full px-3 py-2.5 text-left text-xs hover:bg-secondary ${
+                      filters.symbol === "" ? "bg-secondary font-bold" : ""
+                    }`}
+                  >
+                    Tümü
+                  </button>
+                  {options.symbols
+                    .filter((s) =>
+                      s.toLowerCase().includes(symbolSearch.toLowerCase()),
+                    )
+                    .slice(0, 200)
+                    .map((s) => (
                       <button
-                        key={m}
+                        key={s}
                         type="button"
-                        onClick={() => toggleMarket(m)}
-                        className={`rounded-md border px-2.5 py-1 text-[11px] transition-colors ${
-                          active
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border hover:bg-secondary"
+                        onClick={() =>
+                          setFilters((prev) => ({ ...prev, symbol: s }))
+                        }
+                        className={`block w-full px-3 py-2.5 text-left text-xs hover:bg-secondary ${
+                          filters.symbol === s ? "bg-secondary font-bold" : ""
                         }`}
                       >
-                        {marketLabel(m)}
+                        {s}
                       </button>
-                    );
-                  })}
+                    ))}
                 </div>
-              )}
-            </div>
-
-            {/* SEMBOL */}
-            <div>
-              <p className="text-xs font-bold text-muted-foreground">
-                Sembol (tek seçim)
-              </p>
-              <input
-                type="text"
-                value={symbolSearch}
-                onChange={(e) => setSymbolSearch(e.target.value)}
-                placeholder="Ara: BTC, THYAO, AAPL..."
-                className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
-              />
-              <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-border bg-background lg:max-h-48">
-                <button
-                  type="button"
-                  onClick={() => setFilters((prev) => ({ ...prev, symbol: "" }))}
-                  className={`block w-full px-3 py-1.5 text-left text-xs hover:bg-secondary ${
-                    filters.symbol === "" ? "bg-secondary font-bold" : ""
-                  }`}
-                >
-                  Tümü
-                </button>
-                {options.symbols
-                  .filter((s) =>
-                    s.toLowerCase().includes(symbolSearch.toLowerCase()),
-                  )
-                  .slice(0, 200)
-                  .map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() =>
-                        setFilters((prev) => ({ ...prev, symbol: s }))
-                      }
-                      className={`block w-full px-3 py-1.5 text-left text-xs hover:bg-secondary ${
-                        filters.symbol === s ? "bg-secondary font-bold" : ""
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
               </div>
-            </div>
 
-            {/* BIAS */}
-            <div>
-              <p className="text-xs font-bold text-muted-foreground">
-                Yön (Bias)
-              </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setFilters((prev) => ({ ...prev, bias: "" }))}
-                  className={`rounded-md border px-2.5 py-1 text-[11px] ${
-                    filters.bias === ""
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border hover:bg-secondary"
-                  }`}
-                >
-                  Tümü
-                </button>
-                {options.biases.map((b) => (
+              {/* BIAS */}
+              <div>
+                <p className="text-xs font-bold text-muted-foreground">
+                  Yön (Bias)
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
                   <button
-                    key={b}
                     type="button"
-                    onClick={() => setFilters((prev) => ({ ...prev, bias: b }))}
-                    className={`rounded-md border px-2.5 py-1 text-[11px] ${
-                      filters.bias === b
-                        ? b === "yükseliş"
-                          ? "border-bull bg-bull text-bull-foreground"
-                          : b === "düşüş"
-                            ? "border-bear bg-bear text-bear-foreground"
-                            : "border-primary bg-primary text-primary-foreground"
+                    onClick={() =>
+                      setFilters((prev) => ({ ...prev, bias: "" }))
+                    }
+                    className={`min-h-[36px] rounded-md border px-3 py-1.5 text-xs ${
+                      filters.bias === ""
+                        ? "border-primary bg-primary text-primary-foreground"
                         : "border-border hover:bg-secondary"
                     }`}
                   >
-                    {biasLabel(b)}
+                    Tümü
                   </button>
-                ))}
+                  {options.biases.map((b) => (
+                    <button
+                      key={b}
+                      type="button"
+                      onClick={() =>
+                        setFilters((prev) => ({ ...prev, bias: b }))
+                      }
+                      className={`min-h-[36px] rounded-md border px-3 py-1.5 text-xs ${
+                        filters.bias === b
+                          ? b === "yükseliş"
+                            ? "border-bull bg-bull text-bull-foreground"
+                            : b === "düşüş"
+                              ? "border-bear bg-bear text-bear-foreground"
+                              : "border-primary bg-primary text-primary-foreground"
+                          : "border-border hover:bg-secondary"
+                      }`}
+                    >
+                      {biasLabel(b)}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </section>
+        )}
 
-      {/* AKTİF FİLTRE CHIP'LERİ */}
-      {activeFilterCount > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-bold text-muted-foreground">
-            Aktif:
-          </span>
+        {/* AKTİF FİLTRE CHIP'LERİ */}
+        {activeFilterCount > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold text-muted-foreground">
+              Aktif:
+            </span>
 
-          {filters.formations.map((f) => (
-            <button
-              key={`chip-form-${f}`}
-              type="button"
-              onClick={() => removeFormation(f)}
-              className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
-            >
-              <span>{f}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">
-                ×
-              </span>
-            </button>
-          ))}
-
-          {filters.markets.map((m) => (
-            <button
-              key={`chip-mkt-${m}`}
-              type="button"
-              onClick={() => removeMarket(m)}
-              className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
-            >
-              <span>{marketLabel(m)}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">
-                ×
-              </span>
-            </button>
-          ))}
-
-          {filters.symbol && (
-            <button
-              type="button"
-              onClick={() => setFilters((prev) => ({ ...prev, symbol: "" }))}
-              className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
-            >
-              <span>📈 {filters.symbol}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">
-                ×
-              </span>
-            </button>
-          )}
-
-          {filters.bias && (
-            <button
-              type="button"
-              onClick={() => setFilters((prev) => ({ ...prev, bias: "" }))}
-              className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
-            >
-              <span>{biasLabel(filters.bias)}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">
-                ×
-              </span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={clearAllFilters}
-            className="text-[11px] font-bold text-destructive hover:underline"
-          >
-            Tümünü Temizle
-          </button>
-        </div>
-      )}
-
-      {/* SEKMELİ İSTATİSTİK PANELİ */}
-      <StatsTabs data={data} activeFilterCount={activeFilterCount} />
-
-      {/* FORMASYON BAZLI GRAFİK */}
-      {data.byFormation.length > 0 && (
-        <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
-          <h2 className="mb-3 text-xs font-bold sm:mb-4 sm:text-sm">
-            📋 Formasyon Başarı Oranları (İlk 10)
-          </h2>
-          <div className="h-72 sm:h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={data.byFormation.slice(0, 10).map((f) => ({
-                  name: f.name.length > 15 ? f.name.slice(0, 15) + "..." : f.name,
-                  fullName: f.name,
-                  "Başarı %": f.winRate,
-                  Toplam: f.total,
-                }))}
-                margin={{ top: 5, right: 10, left: -10, bottom: 40 }}
+            {filters.formations.map((f) => (
+              <button
+                key={`chip-form-${f}`}
+                type="button"
+                onClick={() => removeFormation(f)}
+                className="group flex min-h-[32px] items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis
-                  dataKey="name"
-                  angle={-30}
-                  textAnchor="end"
-                  height={80}
-                  tick={{ fill: "#9ca3af", fontSize: 10 }}
-                />
-                <YAxis
-                  tick={{ fill: "#9ca3af", fontSize: 10 }}
-                  domain={[0, 100]}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#1f2937",
-                    border: "1px solid #374151",
-                    borderRadius: 8,
-                    color: "#fff",
-                  }}
-                  formatter={(value: number, name: string) => [
-                    name === "Başarı %" ? `${value}%` : value,
-                    name,
-                  ]}
-                  labelFormatter={(label: string, payload: any) => {
-                    const item = payload?.[0]?.payload;
-                    return item?.fullName ?? label;
-                  }}
-                />
-                <Bar
-                  dataKey="Başarı %"
-                  fill={COLORS.blue}
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+                <span>{f}</span>
+                <span className="text-muted-foreground group-hover:text-destructive">
+                  ×
+                </span>
+              </button>
+            ))}
 
-      {/* COIN/HS BAZLI GRAFİK */}
-      {data.bySymbol.length > 0 && (
-        <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
-          <h2 className="mb-3 text-xs font-bold sm:mb-4 sm:text-sm">
-            🪙 Coin/Hisse Başarı Oranları (İlk 10)
-          </h2>
-          <div className="h-72 sm:h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={data.bySymbol.slice(0, 10).map((s) => ({
-                  name: s.symbol.replace("USDT", "").replace(".IS", "").slice(0, 10),
-                  fullName: s.symbol,
-                  "Başarı %": s.winRate,
-                  Toplam: s.total,
-                }))}
-                margin={{ top: 5, right: 10, left: -10, bottom: 20 }}
+            {filters.markets.map((m) => (
+              <button
+                key={`chip-mkt-${m}`}
+                type="button"
+                onClick={() => removeMarket(m)}
+                className="group flex min-h-[32px] items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fill: "#9ca3af", fontSize: 10 }}
-                />
-                <YAxis
-                  tick={{ fill: "#9ca3af", fontSize: 10 }}
-                  domain={[0, 100]}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#1f2937",
-                    border: "1px solid #374151",
-                    borderRadius: 8,
-                    color: "#fff",
-                  }}
-                  formatter={(value: number, name: string) => [
-                    name === "Başarı %" ? `${value}%` : value,
-                    name,
-                  ]}
-                  labelFormatter={(label: string, payload: any) => {
-                    const item = payload?.[0]?.payload;
-                    return item?.fullName ?? label;
-                  }}
-                />
-                <Bar
-                  dataKey="Başarı %"
-                  fill={COLORS.amber}
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+                <span>{marketLabel(m)}</span>
+                <span className="text-muted-foreground group-hover:text-destructive">
+                  ×
+                </span>
+              </button>
+            ))}
+
+            {filters.symbol && (
+              <button
+                type="button"
+                onClick={() =>
+                  setFilters((prev) => ({ ...prev, symbol: "" }))
+                }
+                className="group flex min-h-[32px] items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
+              >
+                <span>📈 {filters.symbol}</span>
+                <span className="text-muted-foreground group-hover:text-destructive">
+                  ×
+                </span>
+              </button>
+            )}
+
+            {filters.bias && (
+              <button
+                type="button"
+                onClick={() => setFilters((prev) => ({ ...prev, bias: "" }))}
+                className="group flex min-h-[32px] items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
+              >
+                <span>{biasLabel(filters.bias)}</span>
+                <span className="text-muted-foreground group-hover:text-destructive">
+                  ×
+                </span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="text-[11px] font-bold text-destructive hover:underline"
+            >
+              Tümünü Temizle
+            </button>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* SEKMELİ İSTATİSTİK PANELİ */}
+        <StatsTabs data={data} activeFilterCount={activeFilterCount} />
+
+        {/* FORMASYON BAZLI GRAFİK */}
+        {data.byFormation.length > 0 && (
+          <section className="panel p-4 sm:p-5">
+            <h2 className="mb-3 text-sm font-bold sm:mb-4">
+              📋 Formasyon Başarı Oranları (İlk 10)
+            </h2>
+            <div className="h-72 sm:h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={data.byFormation.slice(0, 10).map((f) => ({
+                    name:
+                      f.name.length > 15 ? f.name.slice(0, 15) + "..." : f.name,
+                    fullName: f.name,
+                    "Başarı %": f.winRate,
+                    Toplam: f.total,
+                  }))}
+                  margin={{ top: 5, right: 10, left: -10, bottom: 40 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis
+                    dataKey="name"
+                    angle={-30}
+                    textAnchor="end"
+                    height={80}
+                    tick={{ fill: "#9ca3af", fontSize: 10 }}
+                  />
+                  <YAxis
+                    tick={{ fill: "#9ca3af", fontSize: 10 }}
+                    domain={[0, 100]}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      border: "1px solid #374151",
+                      borderRadius: 8,
+                      color: "#fff",
+                    }}
+                    formatter={(value: number, name: string) => [
+                      name === "Başarı %" ? `${value}%` : value,
+                      name,
+                    ]}
+                    labelFormatter={(label: string, payload: any) => {
+                      const item = payload?.[0]?.payload;
+                      return item?.fullName ?? label;
+                    }}
+                  />
+                  <Bar
+                    dataKey="Başarı %"
+                    fill={COLORS.blue}
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        )}
+
+        {/* COIN/HS BAZLI GRAFİK */}
+        {data.bySymbol.length > 0 && (
+          <section className="panel p-4 sm:p-5">
+            <h2 className="mb-3 text-sm font-bold sm:mb-4">
+              🪙 Coin/Hisse Başarı Oranları (İlk 10)
+            </h2>
+            <div className="h-72 sm:h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={data.bySymbol.slice(0, 10).map((s) => ({
+                    name: s.symbol
+                      .replace("USDT", "")
+                      .replace(".IS", "")
+                      .slice(0, 10),
+                    fullName: s.symbol,
+                    "Başarı %": s.winRate,
+                    Toplam: s.total,
+                  }))}
+                  margin={{ top: 5, right: 10, left: -10, bottom: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: "#9ca3af", fontSize: 10 }}
+                  />
+                  <YAxis
+                    tick={{ fill: "#9ca3af", fontSize: 10 }}
+                    domain={[0, 100]}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      border: "1px solid #374151",
+                      borderRadius: 8,
+                      color: "#fff",
+                    }}
+                    formatter={(value: number, name: string) => [
+                      name === "Başarı %" ? `${value}%` : value,
+                      name,
+                    ]}
+                    labelFormatter={(label: string, payload: any) => {
+                      const item = payload?.[0]?.payload;
+                      return item?.fullName ?? label;
+                    }}
+                  />
+                  <Bar
+                    dataKey="Başarı %"
+                    fill={COLORS.amber}
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        )}
+      </main>
     </div>
   );
 }
@@ -785,16 +872,16 @@ function StatsTabs({
   ];
 
   return (
-    <div className="rounded-lg border border-border bg-card">
+    <section className="panel">
       {/* SEKME BAŞLIKLARI — MOBİLDE YATAY SCROLL */}
-      <div className="flex overflow-x-auto border-b border-border p-2 lg:flex-wrap">
+      <div className="-mx-3 flex overflow-x-auto border-b border-border px-3 py-2 sm:-mx-4 sm:px-4 lg:flex-wrap lg:px-4">
         <div className="flex gap-1">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-colors ${
+              className={`min-h-[40px] whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-colors ${
                 activeTab === tab.key
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-secondary"
@@ -827,7 +914,7 @@ function StatsTabs({
           />
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -1113,7 +1200,11 @@ function CompareView({ data }: { data: StatsData }) {
             />
             <CompareRow
               label="Başarı Oranı"
-              values={[`${long.winRate}%`, `${short.winRate}%`, `${multi.winRate}%`]}
+              values={[
+                `${long.winRate}%`,
+                `${short.winRate}%`,
+                `${multi.winRate}%`,
+              ]}
               colorFn={(v) => {
                 const n = parseFloat(String(v));
                 return n >= 60
@@ -1125,12 +1216,20 @@ function CompareView({ data }: { data: StatsData }) {
             />
             <CompareRow
               label="Ort. Kazanç"
-              values={[`+${long.avgWin}%`, `+${short.avgWin}%`, `+${multi.avgWin}%`]}
+              values={[
+                `+${long.avgWin}%`,
+                `+${short.avgWin}%`,
+                `+${multi.avgWin}%`,
+              ]}
               color="text-bull"
             />
             <CompareRow
               label="Ort. Kayıp"
-              values={[`${long.avgLoss}%`, `${short.avgLoss}%`, `${multi.avgLoss}%`]}
+              values={[
+                `${long.avgLoss}%`,
+                `${short.avgLoss}%`,
+                `${multi.avgLoss}%`,
+              ]}
               color="text-bear"
             />
             <CompareRow
@@ -1205,7 +1304,7 @@ function CompareRow({
       {values.map((v, i) => (
         <td
           key={i}
-          className={`px-3 py-2 text-center font-bold num ${
+          className={`num px-3 py-2 text-center font-bold ${
             colorFn ? colorFn(v) : color ?? ""
           }`}
         >
@@ -1240,7 +1339,7 @@ function StatCard({
         <span className="text-sm sm:text-base">{icon}</span>
       </div>
       <p
-        className={`mt-1.5 text-lg font-bold sm:mt-2 sm:text-xl ${color ?? "text-foreground"}`}
+        className={`num mt-1.5 text-lg font-bold sm:mt-2 sm:text-xl ${color ?? "text-foreground"}`}
       >
         {value}
       </p>

@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { MobileNav } from "@/components/MobileNav";
 import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/alarms")({
@@ -122,6 +123,7 @@ function AlarmsPage() {
 
   useEffect(() => {
     if (user) void loadAlarms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   async function createAlarm() {
@@ -239,12 +241,23 @@ function AlarmsPage() {
 
   if (!user) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="text-center">
-          <p className="text-lg font-bold">🔒 Giriş Yapın</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Alarmları görmek için giriş yapın.
-          </p>
+      <div className="min-h-screen pb-24 lg:pb-0">
+        <div className="lg:hidden">
+          <MobileNav onOpenSymbol={() => {}} />
+        </div>
+        <div className="flex min-h-[60vh] items-center justify-center px-4">
+          <div className="text-center">
+            <p className="text-lg font-bold">🔒 Giriş Yapın</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Alarmları görmek için giriş yapın.
+            </p>
+            <Link
+              to="/auth"
+              className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+            >
+              Giriş Yap
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -254,175 +267,225 @@ function AlarmsPage() {
   const canCreate = used < limit;
 
   return (
-    <div className="container mx-auto max-w-5xl space-y-4 p-3 sm:space-y-6 sm:p-4">
-      {/* BAŞLIK */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
-        <div>
-          <h1 className="text-xl font-bold sm:text-2xl">🔔 Alarmlar</h1>
-          <p className="text-xs text-muted-foreground sm:text-sm">
-            Fiyat, formasyon ve kalite alarmları kurun
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-md border border-border bg-secondary px-2.5 py-1 text-[11px] font-bold sm:px-3 sm:py-1.5 sm:text-xs">
-            {used} / {limit === 999 ? "∞" : limit}
-          </span>
-          <Link
-            to="/"
-            className="rounded-md border border-border px-2.5 py-1 text-[11px] hover:bg-secondary sm:px-3 sm:py-1.5 sm:text-xs"
-          >
-            ← Geri
-          </Link>
-        </div>
+    <div className="min-h-screen pb-24 lg:pb-0">
+      {/* ========== MOBİL HEADER ========== */}
+      <div className="lg:hidden">
+        <MobileNav onOpenSymbol={() => {}} />
       </div>
 
-      {/* YENİ ALARM BUTONU */}
-      {!showForm && (
-        <button
-          type="button"
-          onClick={() => setShowForm(true)}
-          disabled={!canCreate}
-          className="w-full rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 p-3 text-xs font-bold text-primary hover:bg-primary/10 disabled:opacity-50 sm:p-4 sm:text-sm"
-        >
-          {canCreate ? "＋ YENİ ALARM OLUŞTUR" : `⚠️ Limite ulaştınız (${limit})`}
-        </button>
-      )}
-
-      {/* YENİ ALARM FORMU */}
-      {showForm && (
-        <div className="rounded-lg border border-primary/40 bg-card p-3 sm:p-4">
-          <div className="mb-3 flex items-center justify-between sm:mb-4">
-            <h2 className="text-sm font-bold sm:text-base">🔔 Yeni Alarm</h2>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="rounded-md border border-border px-2 py-1 text-xs hover:bg-secondary"
+      {/* ========== MASAÜSTÜ HEADER ========== */}
+      <header className="sticky top-0 z-20 hidden border-b border-border bg-background/90 backdrop-blur lg:block">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
+          <Link
+            to="/"
+            className="num text-sm font-bold uppercase tracking-[0.2em] text-primary"
+          >
+            AE Analiz
+          </Link>
+          <nav className="flex gap-2 text-xs">
+            <Link
+              to="/"
+              className="rounded-md border border-border px-3 py-1.5 hover:bg-secondary"
             >
-              ✕
-            </button>
+              Grafik
+            </Link>
+            <span className="rounded-md bg-primary/15 px-3 py-1.5 font-bold text-primary">
+              🔔 Alarmlar
+            </span>
+          </nav>
+          <div className="ml-auto truncate text-xs text-muted-foreground">
+            {user?.email}
           </div>
+        </div>
+      </header>
 
-          {/* TİP SEÇİMİ */}
-          <div className="mb-3 flex flex-wrap gap-1.5 sm:mb-4 sm:gap-2">
-            <button
-              type="button"
-              onClick={() => setNewType("price")}
-              className={`rounded-md border px-2.5 py-1.5 text-[11px] font-bold sm:px-3 sm:text-xs ${
-                newType === "price"
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border hover:bg-secondary"
-              }`}
-            >
-              💰 Fiyat
-            </button>
-            <button
-              type="button"
-              onClick={() => setNewType("formation")}
-              className={`rounded-md border px-2.5 py-1.5 text-[11px] font-bold sm:px-3 sm:text-xs ${
-                newType === "formation"
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border hover:bg-secondary"
-              }`}
-            >
-              📊 Formasyon
-            </button>
-            <button
-              type="button"
-              onClick={() => setNewType("quality")}
-              className={`rounded-md border px-2.5 py-1.5 text-[11px] font-bold sm:px-3 sm:text-xs ${
-                newType === "quality"
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border hover:bg-secondary"
-              }`}
-            >
-              ⭐ Kalite
-            </button>
-          </div>
-
-          {/* MARKET + SEMBOL */}
-          <div className="grid gap-3 sm:grid-cols-2">
+      <main className="mx-auto max-w-5xl space-y-4 px-3 py-4 sm:px-4 sm:py-6">
+        {/* BAŞLIK */}
+        <section className="panel p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <label className="text-xs font-bold text-muted-foreground">
-                Market
-              </label>
-              <select
-                value={newMarket}
-                onChange={(e) => setNewMarket(e.target.value)}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              <h1 className="text-xl font-bold sm:text-2xl">🔔 Alarmlar</h1>
+              <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+                Fiyat, formasyon ve kalite alarmları kurun
+              </p>
+            </div>
+            <span className="rounded-md border border-border bg-secondary px-3 py-1.5 text-xs font-bold">
+              {used} / {limit === 999 ? "∞" : limit}
+            </span>
+          </div>
+        </section>
+
+        {/* YENİ ALARM BUTONU */}
+        {!showForm && (
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            disabled={!canCreate}
+            className="min-h-[48px] w-full rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 p-3 text-sm font-bold text-primary hover:bg-primary/10 disabled:opacity-50"
+          >
+            {canCreate
+              ? "＋ YENİ ALARM OLUŞTUR"
+              : `⚠️ Limite ulaştınız (${limit})`}
+          </button>
+        )}
+
+        {/* YENİ ALARM FORMU */}
+        {showForm && (
+          <section className="panel border-primary/40 p-4 sm:p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-bold sm:text-lg">🔔 Yeni Alarm</h2>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-sm hover:bg-secondary"
+                aria-label="Kapat"
               >
-                <option value="crypto">KRİPTO</option>
-                <option value="bist">BIST</option>
-                <option value="us">ABD</option>
-                <option value="asia">ASYA</option>
-                <option value="europe">AVRUPA</option>
-              </select>
+                ✕
+              </button>
             </div>
-            <div>
-              <label className="text-xs font-bold text-muted-foreground">
-                Sembol
-              </label>
-              <input
-                type="text"
-                value={newSymbol}
-                onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
-                placeholder="BTCUSDT, THYAO.IS..."
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
 
-          {/* TİP BAZLI ALANLAR */}
-          {newType === "price" && (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {/* TİP SEÇİMİ — yatay kaydırılabilir */}
+            <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+              <button
+                type="button"
+                onClick={() => setNewType("price")}
+                className={`min-h-[40px] shrink-0 rounded-md border px-3 py-2 text-xs font-bold ${
+                  newType === "price"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border hover:bg-secondary"
+                }`}
+              >
+                💰 Fiyat
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewType("formation")}
+                className={`min-h-[40px] shrink-0 rounded-md border px-3 py-2 text-xs font-bold ${
+                  newType === "formation"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border hover:bg-secondary"
+                }`}
+              >
+                📊 Formasyon
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewType("quality")}
+                className={`min-h-[40px] shrink-0 rounded-md border px-3 py-2 text-xs font-bold ${
+                  newType === "quality"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border hover:bg-secondary"
+                }`}
+              >
+                ⭐ Kalite
+              </button>
+            </div>
+
+            {/* MARKET + SEMBOL */}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="text-xs font-bold text-muted-foreground">
-                  Hedef Fiyat
+                  Market
+                </label>
+                <select
+                  value={newMarket}
+                  onChange={(e) => setNewMarket(e.target.value)}
+                  className="mt-1 min-h-[44px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                >
+                  <option value="crypto">KRİPTO</option>
+                  <option value="bist">BIST</option>
+                  <option value="us">ABD</option>
+                  <option value="asia">ASYA</option>
+                  <option value="europe">AVRUPA</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-muted-foreground">
+                  Sembol
                 </label>
                 <input
-                  type="number"
-                  value={newTargetPrice}
-                  onChange={(e) => setNewTargetPrice(e.target.value)}
-                  placeholder="70000"
-                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  type="text"
+                  value={newSymbol}
+                  onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
+                  placeholder="BTCUSDT, THYAO.IS..."
+                  className="num mt-1 min-h-[44px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
               </div>
-              <div>
-                <label className="text-xs font-bold text-muted-foreground">
-                  Koşul
-                </label>
-                <select
-                  value={newCondition}
-                  onChange={(e) =>
-                    setNewCondition(e.target.value as "above" | "below")
-                  }
-                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                >
-                  <option value="above">Üzerine çıkarsa (↑)</option>
-                  <option value="below">Altına düşerse (↓)</option>
-                </select>
-              </div>
             </div>
-          )}
 
-          {newType === "formation" && (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-bold text-muted-foreground">
-                  Formasyon
-                </label>
-                <select
-                  value={newFormationName}
-                  onChange={(e) => setNewFormationName(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                >
-                  {FORMATION_OPTIONS.map((f) => (
-                    <option key={f} value={f}>
-                      {f}
-                    </option>
-                  ))}
-                </select>
+            {/* TİP BAZLI ALANLAR */}
+            {newType === "price" && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs font-bold text-muted-foreground">
+                    Hedef Fiyat
+                  </label>
+                  <input
+                    type="number"
+                    value={newTargetPrice}
+                    onChange={(e) => setNewTargetPrice(e.target.value)}
+                    placeholder="70000"
+                    className="num mt-1 min-h-[44px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-muted-foreground">
+                    Koşul
+                  </label>
+                  <select
+                    value={newCondition}
+                    onChange={(e) =>
+                      setNewCondition(e.target.value as "above" | "below")
+                    }
+                    className="mt-1 min-h-[44px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="above">Üzerine çıkarsa (↑)</option>
+                    <option value="below">Altına düşerse (↓)</option>
+                  </select>
+                </div>
               </div>
-              <div>
+            )}
+
+            {newType === "formation" && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs font-bold text-muted-foreground">
+                    Formasyon
+                  </label>
+                  <select
+                    value={newFormationName}
+                    onChange={(e) => setNewFormationName(e.target.value)}
+                    className="mt-1 min-h-[44px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  >
+                    {FORMATION_OPTIONS.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-muted-foreground">
+                    Min Kalite:{" "}
+                    <span className="text-foreground">{newMinQuality}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={50}
+                    max={100}
+                    step={1}
+                    value={newMinQuality}
+                    onChange={(e) =>
+                      setNewMinQuality(Number(e.target.value))
+                    }
+                    className="mt-3 h-8 w-full"
+                  />
+                </div>
+              </div>
+            )}
+
+            {newType === "quality" && (
+              <div className="mt-4">
                 <label className="text-xs font-bold text-muted-foreground">
                   Min Kalite:{" "}
                   <span className="text-foreground">{newMinQuality}</span>
@@ -434,80 +497,62 @@ function AlarmsPage() {
                   step={1}
                   value={newMinQuality}
                   onChange={(e) => setNewMinQuality(Number(e.target.value))}
-                  className="mt-2 w-full"
+                  className="mt-3 h-8 w-full"
                 />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Kalite puanı {newMinQuality} ve üzeri olan sinyaller için
+                  alarm kurar
+                </p>
               </div>
-            </div>
-          )}
+            )}
 
-          {newType === "quality" && (
-            <div className="mt-3">
-              <label className="text-xs font-bold text-muted-foreground">
-                Min Kalite:{" "}
-                <span className="text-foreground">{newMinQuality}</span>
-              </label>
-              <input
-                type="range"
-                min={50}
-                max={100}
-                step={1}
-                value={newMinQuality}
-                onChange={(e) => setNewMinQuality(Number(e.target.value))}
-                className="mt-2 w-full"
-              />
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Kalite puanı {newMinQuality} ve üzeri olan sinyaller için alarm
-                kurar
-              </p>
+            {/* BUTONLAR */}
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => void createAlarm()}
+                disabled={creating}
+                className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              >
+                {creating ? "⏳ Oluşturuluyor..." : "🔔 Alarm Oluştur"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="min-h-[48px] rounded-md border border-border px-4 py-2 text-sm font-bold hover:bg-secondary"
+              >
+                İptal
+              </button>
             </div>
-          )}
+          </section>
+        )}
 
-          {/* BUTONLAR */}
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => void createAlarm()}
-              disabled={creating}
-              className="rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:text-sm"
-            >
-              {creating ? "⏳ Oluşturuluyor..." : "🔔 Alarm Oluştur"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="rounded-md border border-border px-4 py-2 text-xs font-bold hover:bg-secondary sm:text-sm"
-            >
-              İptal
-            </button>
+        {/* ALARM LİSTESİ */}
+        {loading ? (
+          <div className="flex h-40 items-center justify-center">
+            <p className="text-sm text-muted-foreground">Yükleniyor...</p>
           </div>
-        </div>
-      )}
-
-      {/* ALARM LİSTESİ */}
-      {loading ? (
-        <div className="flex h-40 items-center justify-center">
-          <p className="text-sm text-muted-foreground">Yükleniyor...</p>
-        </div>
-      ) : alarms.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card p-8 text-center sm:p-12">
-          <p className="text-3xl sm:text-4xl">🔔</p>
-          <p className="mt-3 text-sm font-bold sm:mt-4">Henüz alarm kurmadınız</p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Yukarıdaki butonla ilk alarmınızı oluşturun
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2 sm:space-y-3">
-          {alarms.map((alarm) => (
-            <AlarmCard
-              key={alarm.id}
-              alarm={alarm}
-              onDelete={() => void deleteAlarm(alarm.id)}
-              onToggle={() => void toggleActive(alarm.id, alarm.is_active)}
-            />
-          ))}
-        </div>
-      )}
+        ) : alarms.length === 0 ? (
+          <section className="panel p-8 text-center sm:p-12">
+            <p className="text-4xl">🔔</p>
+            <p className="mt-4 text-sm font-bold">Henüz alarm kurmadınız</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Yukarıdaki butonla ilk alarmınızı oluşturun
+            </p>
+          </section>
+        ) : (
+          <div className="space-y-2 sm:space-y-3">
+            {alarms.map((alarm) => (
+              <AlarmCard
+                key={alarm.id}
+                alarm={alarm}
+                onDelete={() => void deleteAlarm(alarm.id)}
+                onToggle={() => void toggleActive(alarm.id, alarm.is_active)}
+              />
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   );
 }
@@ -551,9 +596,9 @@ function AlarmCard({
       : { label: "PASİF", cls: "bg-secondary text-muted-foreground" };
 
   return (
-    <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+    <div className="panel p-3 sm:p-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start gap-3">
           <span className="text-xl sm:text-2xl">
             {alarm.type === "price"
               ? "💰"
@@ -562,51 +607,56 @@ function AlarmCard({
                 : "⭐"}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold sm:text-sm">
+            <p className="text-sm font-bold">
               {typeLabel} — {alarm.symbol}
             </p>
-            <p className="text-[11px] text-muted-foreground sm:text-xs">
+            <p className="mt-0.5 text-[11px] text-muted-foreground sm:text-xs">
               {MARKET_LABELS[alarm.market] ?? alarm.market} · {conditionLabel}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
           <span
-            className={`rounded-md px-2 py-1 text-[10px] font-bold sm:px-2.5 sm:py-1 ${statusBadge.cls}`}
+            className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${statusBadge.cls}`}
           >
             {statusBadge.label}
           </span>
 
           {alarm.trigger_count > 0 && (
             <span className="text-[10px] text-muted-foreground">
-              {alarm.trigger_count}×
+              {alarm.trigger_count}× tetiklendi
             </span>
           )}
 
-          <button
-            type="button"
-            onClick={onToggle}
-            className="rounded-md border border-border px-2 py-1 text-[10px] font-bold hover:bg-secondary sm:px-2.5"
-          >
-            {alarm.is_active ? "⏸" : "▶"}
-          </button>
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={onToggle}
+              className="min-h-[40px] min-w-[40px] rounded-md border border-border px-3 text-sm font-bold hover:bg-secondary"
+              aria-label={alarm.is_active ? "Pasife al" : "Aktifleştir"}
+            >
+              {alarm.is_active ? "⏸" : "▶"}
+            </button>
 
-          <button
-            type="button"
-            onClick={onDelete}
-            className="rounded-md border border-destructive/30 px-2 py-1 text-[10px] font-bold text-destructive hover:bg-destructive/10 sm:px-2.5"
-          >
-            🗑️
-          </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="min-h-[40px] min-w-[40px] rounded-md border border-destructive/30 px-3 text-sm font-bold text-destructive hover:bg-destructive/10"
+              aria-label="Sil"
+            >
+              🗑️
+            </button>
+          </div>
         </div>
-      </div>
 
-      {alarm.triggered_at && (
-        <p className="mt-2 text-[10px] text-muted-foreground sm:text-[11px]">
-          Son tetiklenme: {new Date(alarm.triggered_at).toLocaleString("tr-TR")}
-        </p>
-      )}
+        {alarm.triggered_at && (
+          <p className="text-[10px] text-muted-foreground sm:text-[11px]">
+            Son tetiklenme:{" "}
+            {new Date(alarm.triggered_at).toLocaleString("tr-TR")}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
