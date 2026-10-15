@@ -76,7 +76,9 @@ export async function fetchNotifications(
 // BİLDİRİMİ OKUNDU İŞARETLE
 // =====================================================
 
-export async function markNotificationRead(notificationId: string): Promise<boolean> {
+export async function markNotificationRead(
+  notificationId: string,
+): Promise<boolean> {
   const { error } = await (supabase as any)
     .from("notifications")
     .update({ read: true })
@@ -89,7 +91,9 @@ export async function markNotificationRead(notificationId: string): Promise<bool
   return true;
 }
 
-export async function markAllNotificationsRead(userId: string): Promise<boolean> {
+export async function markAllNotificationsRead(
+  userId: string,
+): Promise<boolean> {
   const { error } = await (supabase as any)
     .from("notifications")
     .update({ read: true })
@@ -107,7 +111,9 @@ export async function markAllNotificationsRead(userId: string): Promise<boolean>
 // BİLDİRİM SİL
 // =====================================================
 
-export async function deleteNotification(notificationId: string): Promise<boolean> {
+export async function deleteNotification(
+  notificationId: string,
+): Promise<boolean> {
   const { error } = await (supabase as any)
     .from("notifications")
     .delete()
@@ -134,15 +140,21 @@ export async function clearAllNotifications(userId: string): Promise<boolean> {
 }
 
 // =====================================================
-// REALTIME ABONELİK
+// REALTIME ABONELİK — UZUN VADELİ BİLDİRİMLER
 // =====================================================
 
 export function subscribeToNotifications(
   userId: string,
   onNewNotification: (notification: Notification) => void,
 ): () => void {
+  // Her subscriber için eşsiz kanal adı
+  // (aynı sayfada 2 kez açılırsa Supabase çakışmasın diye)
+  const uniqueId = `${userId}-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+
   const channel = supabase
-    .channel(`notifications:${userId}`)
+    .channel(`notifications:${uniqueId}`)
     .on(
       "postgres_changes",
       {
@@ -308,12 +320,22 @@ export async function clearAllShortTermNotifications(
   return true;
 }
 
+// =====================================================
+// REALTIME ABONELİK — KISA VADELİ BİLDİRİMLER
+// =====================================================
+
 export function subscribeToShortTermNotifications(
   userId: string,
   onNewNotification: (notification: ShortTermNotification) => void,
 ): () => void {
+  // Her subscriber için eşsiz kanal adı
+  // (aynı sayfada 2 kez açılırsa Supabase çakışmasın diye)
+  const uniqueId = `${userId}-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+
   const channel = supabase
-    .channel(`short_term_notifications:${userId}`)
+    .channel(`short_term_notifications:${uniqueId}`)
     .on(
       "postgres_changes",
       {

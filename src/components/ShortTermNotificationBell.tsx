@@ -151,7 +151,7 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
         </button>
 
         {open && (
-          <div className="absolute right-0 top-full z-50 mt-2 w-[440px] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-background shadow-2xl">
+          <div className="fixed inset-x-2 top-16 z-[90] max-h-[80vh] overflow-y-auto rounded-xl border border-border bg-background shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-[440px]">
             <div className="flex items-center justify-between border-b border-border p-3">
               <div>
                 <h3 className="text-sm font-bold">📉 KISA VADELİ BİLDİRİMLER</h3>
