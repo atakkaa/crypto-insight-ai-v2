@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { MobileNav } from "@/components/MobileNav";
 import { useAuth } from "@/hooks/useAuth";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export const Route = createFileRoute("/alarms")({
   head: () => ({
@@ -81,6 +82,8 @@ const FORMATION_OPTIONS = [
 
 function AlarmsPage() {
   const { user } = useAuth();
+  const confirm = useConfirm();
+
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [loading, setLoading] = useState(true);
   const [tier, setTier] = useState<string>("free");
@@ -188,7 +191,16 @@ function AlarmsPage() {
 
   async function deleteAlarm(id: string) {
     if (!user) return;
-    if (!window.confirm("Bu alarmı silmek istediğinize emin misiniz?")) return;
+
+    // ✅ YENİ: Custom confirm modal
+    const ok = await confirm({
+      title: "Alarmı Sil",
+      message: "Bu alarmı silmek istediğinize emin misiniz?",
+      confirmText: "Sil",
+      cancelText: "Vazgeç",
+      variant: "destructive",
+    });
+    if (!ok) return;
 
     try {
       const res = await fetch(`/api/alarms?id=${id}`, {
