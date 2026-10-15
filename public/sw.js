@@ -1,9 +1,106 @@
-// public/sw.js — Service Worker for PWA + Push Notifications
+// public/sw.js — Service Worker for PWA + Push Notifications + Offline Cache
 
-const CACHE_NAME = "formasyon-ai-v1";
+const CACHE_NAME = "formasyon-ai-v2";
+const RUNTIME_CACHE = "formasyon-ai-runtime";
+
+const PRECACHE_URLS = [
+  "/",
+  "/favicon.ico",
+  "/manifest.json",
+];
 
 // ============================================
-// 1. PUSH BİLDİRİMİ AL
+// 1. INSTALL — Precache
+// ============================================
+
+self.addEventListener("install", (event) => {
+  console.log("✅ Service Worker kuruluyor...");
+  event.waitUntil(
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => {
+        return cache.addAll(PRECACHE_URLS).catch((err) => {
+          console.warn("Precache hatası (kritik değil):", err);
+        });
+      })
+      .then(() => self.skipWaiting()),
+  );
+});
+
+// ============================================
+// 2. ACTIVATE — Eski cache'leri temizle
+// ============================================
+
+self.addEventListener("activate", (event) => {
+  console.log("✅ Service Worker aktif");
+  event.waitUntil(
+    caches
+      .keys()
+      .then((cacheNames) => {
+        return Promise.all(
+          cacheNames
+            .filter((name) => name !== CACHE_NAME && name !== RUNTIME_CACHE)
+            .map((name) => {
+              console.log("🗑️ Eski cache siliniyor:", name);
+              return caches.delete(name);
+            }),
+        );
+      })
+      .then(() => self.clients.claim()),
+  );
+});
+
+// ============================================
+// 3. FETCH — Cache stratejisi
+// ============================================
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  if (request.method !== "GET") return;
+
+  if (url.pathname.startsWith("/api/")) return;
+
+  if (url.hostname.includes("supabase")) return;
+
+  if (
+    url.hostname.includes("binance") ||
+    url.hostname.includes("yahoo")
+  ) {
+    return;
+  }
+
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        if (response && response.status === 200) {
+          const responseClone = response.clone();
+          caches.open(RUNTIME_CACHE).then((cache) => {
+            cache.put(request, responseClone);
+          });
+        }
+        return response;
+      })
+      .catch(() => {
+        return caches.match(request).then((cachedResponse) => {
+          if (cachedResponse) return cachedResponse;
+
+          if (request.headers.get("accept")?.includes("text/html")) {
+            return caches.match("/");
+          }
+
+          return new Response("Offline", {
+            status: 503,
+            statusText: "Offline",
+          });
+        });
+      }),
+  );
+});
+
+// ============================================
+// 4. PUSH BİLDİRİMİ AL
 // ============================================
 
 self.addEventListener("push", (event) => {
@@ -31,7 +128,7 @@ self.addEventListener("push", (event) => {
 });
 
 // ============================================
-// 2. BİLDİRİME TIKLAMA
+// 5. BİLDİRİME TIKLAMA
 // ============================================
 
 self.addEventListener("notificationclick", (event) => {
@@ -40,35 +137,23 @@ self.addEventListener("notificationclick", (event) => {
   const urlToOpen = event.notification.data?.url || "/";
 
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && "focus" in client) {
-          return client.focus().then(() => client.navigate(urlToOpen));
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          if (client.url.includes(self.location.origin) && "focus" in client) {
+            return client.focus().then(() => client.navigate(urlToOpen));
+          }
         }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
-      }
-    }),
+        if (clients.openWindow) {
+          return clients.openWindow(urlToOpen);
+        }
+      }),
   );
 });
 
 // ============================================
-// 3. SERVICE WORKER KURULUM
-// ============================================
-
-self.addEventListener("install", (event) => {
-  console.log("✅ Service Worker kuruldu");
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", (event) => {
-  console.log("✅ Service Worker aktif");
-  event.waitUntil(clients.claim());
-});
-
-// ============================================
-// 4. MESAJ DİNLEME (Test için)
+// 6. MESAJ DİNLEME (Test için)
 // ============================================
 
 self.addEventListener("message", (event) => {
@@ -78,5 +163,9 @@ self.addEventListener("message", (event) => {
       icon: "/favicon.ico",
       badge: "/favicon.ico",
     });
+  }
+
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
   }
 });

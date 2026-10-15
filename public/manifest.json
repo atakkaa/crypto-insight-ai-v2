@@ -1,6 +1,6 @@
 {
-  "name": "Formasyon AI — Kripto ve Borsa Analizi",
-  "short_name": "Formasyon AI",
+  "name": "AE Analiz — Kripto ve Borsa Analizi",
+  "short_name": "AE Analiz",
   "description": "Yapay zeka destekli kripto ve borsa analizi. Formasyon, indikatör ve haber bildirimleri.",
   "start_url": "/",
   "display": "standalone",
@@ -8,5 +8,42 @@
   "theme_color": "#f5a623",
   "orientation": "portrait",
   "scope": "/",
-  "lang": "tr"
+  "lang": "tr",
+  "categories": ["finance", "productivity", "business"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Alarmlar",
+      "url": "/alarms",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Piyasa Özeti",
+      "url": "/market-summary",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "İstatistikler",
+      "url": "/stats",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
 }

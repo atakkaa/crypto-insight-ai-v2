@@ -15,6 +15,7 @@ import { Route as AlarmsRouteImport } from './routes/alarms'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BacktestRouteImport } from './routes/backtest'
 import { Route as CoinsRouteImport } from './routes/coins'
+import { Route as MarketSummaryRouteImport } from './routes/market-summary'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -50,6 +51,11 @@ const BacktestRoute = BacktestRouteImport.update({
 const CoinsRoute = CoinsRouteImport.update({
   id: '/coins',
   path: '/coins',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketSummaryRoute = MarketSummaryRouteImport.update({
+  id: '/market-summary',
+  path: '/market-summary',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -90,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/backtest': typeof BacktestRoute
   '/coins': typeof CoinsRoute
+  '/market-summary': typeof MarketSummaryRoute
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
@@ -104,6 +111,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/backtest': typeof BacktestRoute
   '/coins': typeof CoinsRoute
+  '/market-summary': typeof MarketSummaryRoute
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
@@ -119,6 +127,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/backtest': typeof BacktestRoute
   '/coins': typeof CoinsRoute
+  '/market-summary': typeof MarketSummaryRoute
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
@@ -135,6 +144,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/backtest'
     | '/coins'
+    | '/market-summary'
     | '/onboarding'
     | '/reset-password'
     | '/settings'
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/backtest'
     | '/coins'
+    | '/market-summary'
     | '/onboarding'
     | '/reset-password'
     | '/settings'
@@ -163,6 +174,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/backtest'
     | '/coins'
+    | '/market-summary'
     | '/onboarding'
     | '/reset-password'
     | '/settings'
@@ -178,6 +190,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   BacktestRoute: typeof BacktestRoute
   CoinsRoute: typeof CoinsRoute
+  MarketSummaryRoute: typeof MarketSummaryRoute
   OnboardingRoute: typeof OnboardingRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
@@ -228,6 +241,13 @@ declare module '@tanstack/react-router' {
       path: '/coins'
       fullPath: '/coins'
       preLoaderRoute: typeof CoinsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/market-summary': {
+      id: '/market-summary'
+      path: '/market-summary'
+      fullPath: '/market-summary'
+      preLoaderRoute: typeof MarketSummaryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding': {
@@ -282,6 +302,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   BacktestRoute: BacktestRoute,
   CoinsRoute: CoinsRoute,
+  MarketSummaryRoute: MarketSummaryRoute,
   OnboardingRoute: OnboardingRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
