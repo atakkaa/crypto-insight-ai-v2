@@ -29,7 +29,12 @@ export function MobileNav({
       {/* ÜST HEADER (MOBİL) */}
       {/* ========================================================== */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
-        <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <div
+          className="flex items-center justify-between gap-2 px-3 py-2"
+          style={{
+            paddingTop: "max(0.5rem, env(safe-area-inset-top))",
+          }}
+        >
           {/* HAMBURGER BUTONU */}
           <button
             type="button"
@@ -89,6 +94,10 @@ export function MobileNav({
           <div
             className="relative z-10 h-full w-72 max-w-[85vw] overflow-y-auto border-r border-border bg-background"
             onClick={(e) => e.stopPropagation()}
+            style={{
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "env(safe-area-inset-bottom)",
+            }}
           >
             {/* MENÜ BAŞLIĞI */}
             <div className="sticky top-0 flex items-center justify-between border-b border-border bg-background px-4 py-3">
@@ -214,9 +223,14 @@ export function MobileNav({
       )}
 
       {/* ========================================================== */}
-      {/* ALT TAB BAR (MOBİL) */}
+      {/* ALT TAB BAR (MOBİL) — SAFE AREA DESTEKLİ */}
       {/* ========================================================== */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur">
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur"
+        style={{
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
+      >
         <div className="grid grid-cols-5">
           <TabLink to="/" emoji="📈" label="Grafik" />
           <TabLink to="/market-summary" emoji="📊" label="Özet" />
