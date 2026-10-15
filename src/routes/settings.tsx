@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { MobileNav } from "@/components/MobileNav";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useDndSettings,
@@ -13,7 +14,7 @@ import { useUserTier, startTrial } from "@/hooks/useUserTier";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
-    meta: [{ title: "Ayarlar — Formasyon AI" }],
+    meta: [{ title: "Ayarlar — AE Analiz" }],
   }),
   component: SettingsPage,
 });
@@ -95,7 +96,6 @@ function SettingsPage() {
 
   const current = local ?? settings;
 
-  // Global kısa vadeli bildirim ayarını çek
   useEffect(() => {
     if (!user) return;
     void (supabase as any)
@@ -238,14 +238,20 @@ function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
+    <div className="min-h-screen pb-24 lg:pb-0">
+      {/* ========== MOBİL HEADER ========== */}
+      <div className="lg:hidden">
+        <MobileNav onOpenSymbol={() => {}} />
+      </div>
+
+      {/* ========== MASAÜSTÜ HEADER ========== */}
+      <header className="sticky top-0 z-20 hidden border-b border-border bg-background/90 backdrop-blur lg:block">
         <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-3">
           <Link
             to="/"
             className="num text-sm font-bold uppercase tracking-[0.2em] text-primary"
           >
-            Formasyon AI
+            AE Analiz
           </Link>
           <nav className="flex gap-2 text-xs">
             <Link
@@ -258,16 +264,16 @@ function SettingsPage() {
               ⚙️ Ayarlar
             </span>
           </nav>
-          <div className="ml-auto text-xs text-muted-foreground">
+          <div className="ml-auto truncate text-xs text-muted-foreground">
             {user?.email}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl space-y-4 px-4 py-6">
+      <main className="mx-auto max-w-4xl space-y-4 px-3 py-4 sm:px-4 sm:py-6">
         {/* BAŞLIK */}
-        <section className="panel p-5">
-          <h1 className="text-xl font-bold">⚙️ Bildirim Ayarları</h1>
+        <section className="panel p-4 sm:p-5">
+          <h1 className="text-lg font-bold sm:text-xl">⚙️ Bildirim Ayarları</h1>
           <p className="mt-1 text-xs text-muted-foreground">
             Sessiz saatler, bildirim tercihleri ve hesap ayarlarınızı buradan
             yönetin.
@@ -276,17 +282,17 @@ function SettingsPage() {
 
         {/* TIER BADGE */}
         {tierInfo && (
-          <section className="panel p-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
+          <section className="panel p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-4">
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Hesap Durumu
                 </p>
                 <div className="mt-2 flex items-center gap-2">
-                  <span className={`text-3xl ${tierInfo.color}`}>
+                  <span className={`text-2xl sm:text-3xl ${tierInfo.color}`}>
                     {tierInfo.emoji}
                   </span>
-                  <span className={`text-xl font-bold ${tierInfo.color}`}>
+                  <span className={`text-lg font-bold sm:text-xl ${tierInfo.color}`}>
                     {tierInfo.label}
                   </span>
                 </div>
@@ -327,7 +333,7 @@ function SettingsPage() {
                   type="button"
                   disabled={trialStarting}
                   onClick={() => void handleStartTrial()}
-                  className="shrink-0 rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  className="min-h-[44px] shrink-0 rounded-md bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {trialStarting ? "Başlatılıyor..." : "🚀 1 Hafta Dene"}
                 </button>
@@ -378,8 +384,10 @@ function SettingsPage() {
 
         {/* PREMIUM ÖZELLİKLER (Sadece free için) */}
         {tierInfo && tierInfo.tier === "free" && (
-          <section className="panel p-5">
-            <h2 className="text-lg font-bold">⭐ Premium Özellikler</h2>
+          <section className="panel p-4 sm:p-5">
+            <h2 className="text-base font-bold sm:text-lg">
+              ⭐ Premium Özellikler
+            </h2>
             <p className="mt-1 text-xs text-muted-foreground">
               Aşağıdaki özellikler şu an kilitli. Deneme başlatarak veya
               Premium'a geçerek tümünü açabilirsiniz.
@@ -428,7 +436,7 @@ function SettingsPage() {
               type="button"
               disabled={trialStarting}
               onClick={() => void handleStartTrial()}
-              className="mt-4 w-full rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="mt-4 min-h-[44px] w-full rounded-md bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {trialStarting
                 ? "Başlatılıyor..."
@@ -438,10 +446,10 @@ function SettingsPage() {
         )}
 
         {/* SESSİZ MOD */}
-        <section className="panel p-5">
-          <div className="flex items-center justify-between">
+        <section className="panel p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
-              <h2 className="text-lg font-bold">🔕 Sessiz Mod</h2>
+              <h2 className="text-base font-bold sm:text-lg">🔕 Sessiz Mod</h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 Belirttiğiniz saat aralıklarında bildirimler sessize alınır.
                 Önemli gelişmeler birikir ve sabah özet olarak gönderilir.
@@ -450,13 +458,14 @@ function SettingsPage() {
             <button
               type="button"
               onClick={() => update("dnd_enabled", !current.dnd_enabled)}
-              className={`relative ml-4 h-7 w-14 shrink-0 rounded-full transition-colors ${
+              className={`relative ml-2 h-8 w-16 shrink-0 rounded-full transition-colors ${
                 current.dnd_enabled ? "bg-primary" : "bg-secondary"
               }`}
+              aria-label="Sessiz mod"
             >
               <span
-                className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
-                  current.dnd_enabled ? "left-8" : "left-1"
+                className={`absolute top-1 h-6 w-6 rounded-full bg-white transition-transform ${
+                  current.dnd_enabled ? "left-9" : "left-1"
                 }`}
               />
             </button>
@@ -472,7 +481,7 @@ function SettingsPage() {
                   <button
                     type="button"
                     onClick={addRange}
-                    className="rounded-md border border-border px-2 py-1 text-[10px] font-bold hover:bg-secondary"
+                    className="min-h-[36px] rounded-md border border-border px-3 py-1.5 text-[10px] font-bold hover:bg-secondary"
                   >
                     + Aralık Ekle
                   </button>
@@ -486,7 +495,7 @@ function SettingsPage() {
                   current.dnd_ranges.map((range, index) => (
                     <div
                       key={index}
-                      className="flex items-center gap-2 rounded-md border border-border bg-card p-2"
+                      className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-2 sm:flex-nowrap"
                     >
                       <input
                         type="time"
@@ -494,7 +503,7 @@ function SettingsPage() {
                         onChange={(e) =>
                           updateRange(index, "start", e.target.value)
                         }
-                        className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+                        className="min-h-[40px] flex-1 rounded-md border border-input bg-background px-2 py-1.5 text-sm sm:text-xs"
                       />
                       <span className="text-xs text-muted-foreground">→</span>
                       <input
@@ -503,12 +512,13 @@ function SettingsPage() {
                         onChange={(e) =>
                           updateRange(index, "end", e.target.value)
                         }
-                        className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+                        className="min-h-[40px] flex-1 rounded-md border border-input bg-background px-2 py-1.5 text-sm sm:text-xs"
                       />
                       <button
                         type="button"
                         onClick={() => removeRange(index)}
-                        className="ml-auto rounded border border-destructive/30 px-2 py-1 text-[10px] font-bold text-destructive hover:bg-destructive/10"
+                        className="min-h-[40px] rounded border border-destructive/30 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10"
+                        aria-label="Aralığı sil"
                       >
                         🗑️
                       </button>
@@ -571,10 +581,10 @@ function SettingsPage() {
           (tierInfo.tier === "premium" ||
             tierInfo.tier === "trial" ||
             tierInfo.tier === "admin") && (
-            <section className="panel p-5">
-              <div className="flex items-center justify-between">
+            <section className="panel p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
-                  <h2 className="text-lg font-bold">
+                  <h2 className="text-base font-bold sm:text-lg">
                     📉 Kısa Vadeli Global Bildirimler
                   </h2>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -588,13 +598,14 @@ function SettingsPage() {
                   type="button"
                   disabled={globalToggling || globalShortTermEnabled === null}
                   onClick={() => void handleToggleGlobalShortTerm()}
-                  className={`relative ml-4 h-7 w-14 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+                  className={`relative ml-2 h-8 w-16 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
                     globalShortTermEnabled ? "bg-amber-500" : "bg-secondary"
                   }`}
+                  aria-label="Global kısa vadeli bildirimler"
                 >
                   <span
-                    className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
-                      globalShortTermEnabled ? "left-8" : "left-1"
+                    className={`absolute top-1 h-6 w-6 rounded-full bg-white transition-transform ${
+                      globalShortTermEnabled ? "left-9" : "left-1"
                     }`}
                   />
                 </button>
@@ -618,8 +629,8 @@ function SettingsPage() {
           (tierInfo.tier === "premium" ||
             tierInfo.tier === "trial" ||
             tierInfo.tier === "admin") && (
-            <section className="panel p-5">
-              <h2 className="text-lg font-bold">
+            <section className="panel p-4 sm:p-5">
+              <h2 className="text-base font-bold sm:text-lg">
                 📉 Kısa Vadeli Formasyon Seçimi
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -636,7 +647,7 @@ function SettingsPage() {
                       type="button"
                       disabled={patternsSaving}
                       onClick={() => void handleTogglePattern(pattern.key)}
-                      className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors disabled:opacity-50 ${
+                      className={`flex min-h-[72px] items-start gap-3 rounded-lg border p-3 text-left transition-colors disabled:opacity-50 ${
                         enabled
                           ? "border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10"
                           : "border-border bg-card hover:bg-secondary/50"
@@ -690,7 +701,7 @@ function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setLocal(null)}
-                className="rounded-md border border-border px-3 py-2 text-xs font-bold hover:bg-secondary"
+                className="min-h-[44px] rounded-md border border-border px-4 py-2 text-xs font-bold hover:bg-secondary"
               >
                 İptal
               </button>
@@ -699,7 +710,7 @@ function SettingsPage() {
               type="button"
               onClick={() => void handleSave()}
               disabled={saving || !local}
-              className="rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground disabled:opacity-50"
+              className="min-h-[44px] rounded-md bg-primary px-5 py-2 text-xs font-bold text-primary-foreground disabled:opacity-50"
             >
               {saving ? "Kaydediliyor..." : "💾 Kaydet"}
             </button>
@@ -726,12 +737,12 @@ function BypassToggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-card p-3 hover:bg-secondary/50">
+    <label className="flex min-h-[56px] cursor-pointer items-start gap-3 rounded-md border border-border bg-card p-3 hover:bg-secondary/50">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 cursor-pointer accent-primary"
+        className="mt-0.5 h-5 w-5 cursor-pointer accent-primary"
       />
       <div className="flex-1">
         <p className="text-xs font-bold">{label}</p>

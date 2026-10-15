@@ -3,13 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
 import { AlertBell } from "@/components/AlertBell";
+import { MobileNav } from "@/components/MobileNav";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/coins")({
   head: () => ({
     meta: [
-      { title: "Coin ve Hisse Listesi — Formasyon AI" },
+      { title: "Coin ve Hisse Listesi — AE Analiz" },
       {
         name: "description",
         content:
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/coins")({
       },
       {
         property: "og:title",
-        content: "Coin ve Hisse Listesi — Formasyon AI",
+        content: "Coin ve Hisse Listesi — AE Analiz",
       },
       {
         property: "og:description",
@@ -519,14 +520,20 @@ function CoinsPage() {
   );
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
+    <div className="min-h-screen pb-24 lg:pb-0">
+      {/* ========== MOBİL HEADER (MobileNav kendi header'ını getirir) ========== */}
+      <div className="lg:hidden">
+        <MobileNav onOpenSymbol={openAnalysis} />
+      </div>
+
+      {/* ========== MASAÜSTÜ HEADER ========== */}
+      <header className="sticky top-0 z-20 hidden border-b border-border bg-background/90 backdrop-blur lg:block">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
           <Link
             to="/"
             className="num text-sm font-bold uppercase tracking-[0.2em] text-primary"
           >
-            Formasyon AI
+            AE Analiz
           </Link>
 
           <nav className="flex gap-2 text-xs">
@@ -557,9 +564,9 @@ function CoinsPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-4 px-4 py-4">
+      <main className="mx-auto max-w-6xl space-y-4 px-3 py-4 sm:px-4">
         <section className="panel p-4">
-          <h1 className="text-lg font-bold">
+          <h1 className="text-base font-bold sm:text-lg">
             Coin ve hisse listesi
           </h1>
 
@@ -571,32 +578,35 @@ function CoinsPage() {
             dokunmak grafiği ve AI analizini açar.
           </p>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {(
-              [
-                "crypto",
-                "bist",
-                "us",
-                "asia",
-                "europe",
-              ] as Market[]
-            ).map((m) => (
-              <button
-                key={m}
-                onClick={() => {
-                  setMarket(m);
-                  setSearch("");
-                  setShowAll(false);
-                }}
-                className={`rounded-md px-3 py-2 text-xs font-bold ${
-                  market === m
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-secondary text-secondary-foreground"
-                }`}
-              >
-                {MARKET_LABELS[m]}
-              </button>
-            ))}
+          <div className="mt-3 space-y-2">
+            {/* Market sekmeleri — yatay kaydırılabilir */}
+            <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+              {(
+                [
+                  "crypto",
+                  "bist",
+                  "us",
+                  "asia",
+                  "europe",
+                ] as Market[]
+              ).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => {
+                    setMarket(m);
+                    setSearch("");
+                    setShowAll(false);
+                  }}
+                  className={`min-h-[40px] shrink-0 rounded-md px-3 py-2 text-xs font-bold ${
+                    market === m
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-secondary-foreground"
+                  }`}
+                >
+                  {MARKET_LABELS[m]}
+                </button>
+              ))}
+            </div>
 
             <input
               value={search}
@@ -608,14 +618,14 @@ function CoinsPage() {
                   ? "Coin ara (BTC, ETH...)"
                   : `${MARKET_LABELS[market]} hisse ara...`
               }
-              className="min-w-[180px] flex-1 rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring"
+              className="min-h-[44px] w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring"
             />
 
             <button
               onClick={() =>
                 setOnlyFavorites((v) => !v)
               }
-              className={`rounded-md border px-3 py-2 text-xs font-bold ${
+              className={`min-h-[44px] w-full rounded-md border px-3 py-2 text-xs font-bold sm:w-auto ${
                 onlyFavorites
                   ? "border-primary text-primary"
                   : "border-border text-muted-foreground"
@@ -655,7 +665,7 @@ function CoinsPage() {
 
                 setStockInput("");
               }}
-              className="flex flex-wrap gap-2"
+              className="flex flex-col gap-2 sm:flex-row"
             >
               <input
                 value={stockInput}
@@ -663,11 +673,11 @@ function CoinsPage() {
                   setStockInput(e.target.value)
                 }
                 placeholder={`Listede olmayan ${MARKET_LABELS[market]} hissesi ekle`}
-                className="num min-w-[220px] flex-1 rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring"
+                className="num min-h-[44px] flex-1 rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring"
               />
 
               <button
-                className="rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground"
+                className="min-h-[44px] rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground"
                 type="submit"
               >
                 Favorilere ekle
@@ -721,7 +731,7 @@ function CoinsPage() {
                             t.symbol,
                           )
                         }
-                        className={`w-7 text-base ${
+                        className={`min-h-[44px] w-9 text-lg ${
                           isFav(
                             "crypto",
                             t.symbol,
@@ -746,7 +756,7 @@ function CoinsPage() {
                             t.symbol,
                           )
                         }
-                        className="flex flex-1 items-center justify-between gap-2 text-left"
+                        className="flex min-h-[44px] flex-1 items-center justify-between gap-2 text-left"
                       >
                         <span className="num text-sm font-semibold">
                           {t.symbol.replace(
@@ -793,7 +803,7 @@ function CoinsPage() {
                     onClick={() =>
                       setShowAll((v) => !v)
                     }
-                    className="rounded-md border border-border px-4 py-2 text-xs font-bold hover:bg-secondary"
+                    className="min-h-[44px] rounded-md border border-border px-4 py-2 text-xs font-bold hover:bg-secondary"
                   >
                     {showAll
                       ? "İlk 50'yi göster"
@@ -828,7 +838,7 @@ function CoinsPage() {
                           item.symbol,
                         )
                       }
-                      className={`w-7 text-base ${
+                      className={`min-h-[44px] w-9 text-lg ${
                         isFav(
                           market,
                           item.symbol,
@@ -853,7 +863,7 @@ function CoinsPage() {
                           item.symbol,
                         )
                       }
-                      className="num flex flex-1 items-center justify-between gap-3 text-left"
+                      className="num flex min-h-[44px] flex-1 items-center justify-between gap-3 text-left"
                     >
                       <span className="text-sm font-semibold">
                         {item.name}
@@ -873,7 +883,7 @@ function CoinsPage() {
                     onClick={() =>
                       setShowAll((v) => !v)
                     }
-                    className="rounded-md border border-border px-4 py-2 text-xs font-bold hover:bg-secondary"
+                    className="min-h-[44px] rounded-md border border-border px-4 py-2 text-xs font-bold hover:bg-secondary"
                   >
                     {showAll
                       ? "İlk 20'yi göster"
@@ -885,7 +895,7 @@ function CoinsPage() {
           )}
         </section>
 
-        <p className="pb-8 text-center text-xs text-muted-foreground">
+        <p className="pb-4 text-center text-xs text-muted-foreground">
           Veriler Binance ve halka açık kaynaklardan
           gelir. İçerik yatırım tavsiyesi değildir.
         </p>
