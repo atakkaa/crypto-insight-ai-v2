@@ -336,14 +336,14 @@ function StatsPage() {
   const isAdmin = data.tier === "admin";
 
   return (
-    <div className="container mx-auto max-w-7xl space-y-6 p-4">
+    <div className="container mx-auto max-w-7xl space-y-4 p-3 sm:space-y-6 sm:p-4">
       {/* BAŞLIK */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">
-            📊 Formasyon Başarı İstatistikleri
+          <h1 className="text-xl font-bold sm:text-2xl">
+            📊 Başarı İstatistikleri
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground sm:text-sm">
             Sonuçlanmış sinyallerin başarı oranları ve performansı
           </p>
         </div>
@@ -354,37 +354,39 @@ function StatsPage() {
               type="button"
               onClick={() => void downloadCsv()}
               disabled={downloadingCsv || loading}
-              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50"
+              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-bold text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50 sm:px-3 sm:text-xs"
               title="Mevcut filtrelerle CSV indir"
             >
-              {downloadingCsv ? "⏳ İndiriliyor..." : "📥 CSV İndir"}
+              {downloadingCsv ? "⏳" : "📥 CSV"}
             </button>
           )}
 
-          <label className="text-xs text-muted-foreground">Zaman:</label>
+          <label className="text-[11px] text-muted-foreground sm:text-xs">
+            Zaman:
+          </label>
           <select
             value={filters.days}
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, days: Number(e.target.value) }))
             }
-            className="rounded-md border border-border bg-background px-3 py-1.5 text-xs"
+            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-[11px] sm:px-3 sm:text-xs"
           >
-            <option value={7}>Son 7 gün</option>
-            <option value={30}>Son 30 gün</option>
-            <option value={90}>Son 90 gün</option>
-            <option value={365}>Son 1 yıl</option>
+            <option value={7}>7 gün</option>
+            <option value={30}>30 gün</option>
+            <option value={90}>90 gün</option>
+            <option value={365}>1 yıl</option>
           </select>
 
           <button
             type="button"
             onClick={() => setPanelOpen((v) => !v)}
-            className={`rounded-md border px-3 py-1.5 text-xs font-bold transition-colors ${
+            className={`rounded-md border px-2.5 py-1.5 text-[11px] font-bold transition-colors sm:px-3 sm:text-xs ${
               panelOpen || activeFilterCount > 0
                 ? "border-primary/50 bg-primary/10 text-primary"
                 : "border-border hover:bg-secondary"
             }`}
           >
-            ⚙️ Filtreler
+            ⚙️ <span className="hidden sm:inline">Filtreler</span>
             {activeFilterCount > 0 && (
               <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">
                 {activeFilterCount}
@@ -393,22 +395,26 @@ function StatsPage() {
           </button>
 
           {loading && (
-            <span className="text-xs text-muted-foreground">Güncelleniyor...</span>
+            <span className="text-[11px] text-muted-foreground">
+              Güncelleniyor...
+            </span>
           )}
         </div>
       </div>
 
       {/* GELİŞMİŞ FİLTRE PANELİ */}
       {panelOpen && (
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-bold">🔍 GELİŞMİŞ FİLTRELER</h2>
+            <h2 className="text-xs font-bold sm:text-sm">
+              🔍 GELİŞMİŞ FİLTRELER
+            </h2>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={clearAllFilters}
                 disabled={activeFilterCount === 0}
-                className="rounded-md border border-border px-2.5 py-1 text-[11px] font-bold hover:bg-secondary disabled:opacity-40"
+                className="rounded-md border border-border px-2 py-1 text-[10px] font-bold hover:bg-secondary disabled:opacity-40 sm:px-2.5 sm:text-[11px]"
               >
                 🧹 Temizle
               </button>
@@ -423,7 +429,8 @@ function StatsPage() {
             </div>
           </div>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="mt-4 grid gap-3 lg:grid-cols-2 lg:gap-4">
+            {/* FORMASYON */}
             <div>
               <p className="text-xs font-bold text-muted-foreground">
                 Formasyon ({options.formations.length})
@@ -431,7 +438,7 @@ function StatsPage() {
               {options.formations.length === 0 ? (
                 <p className="mt-2 text-xs text-muted-foreground">Veri yok.</p>
               ) : (
-                <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-border bg-background p-2">
+                <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-border bg-background p-2 lg:max-h-48">
                   <div className="flex flex-wrap gap-1.5">
                     {options.formations.map((f) => {
                       const active = filters.formations.includes(f);
@@ -455,6 +462,7 @@ function StatsPage() {
               )}
             </div>
 
+            {/* MARKET */}
             <div>
               <p className="text-xs font-bold text-muted-foreground">
                 Market ({options.markets.length})
@@ -484,6 +492,7 @@ function StatsPage() {
               )}
             </div>
 
+            {/* SEMBOL */}
             <div>
               <p className="text-xs font-bold text-muted-foreground">
                 Sembol (tek seçim)
@@ -495,7 +504,7 @@ function StatsPage() {
                 placeholder="Ara: BTC, THYAO, AAPL..."
                 className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
               />
-              <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-border bg-background">
+              <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-border bg-background lg:max-h-48">
                 <button
                   type="button"
                   onClick={() => setFilters((prev) => ({ ...prev, symbol: "" }))}
@@ -527,6 +536,7 @@ function StatsPage() {
               </div>
             </div>
 
+            {/* BIAS */}
             <div>
               <p className="text-xs font-bold text-muted-foreground">
                 Yön (Bias)
@@ -582,7 +592,9 @@ function StatsPage() {
               className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
             >
               <span>{f}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">×</span>
+              <span className="text-muted-foreground group-hover:text-destructive">
+                ×
+              </span>
             </button>
           ))}
 
@@ -594,7 +606,9 @@ function StatsPage() {
               className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
             >
               <span>{marketLabel(m)}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">×</span>
+              <span className="text-muted-foreground group-hover:text-destructive">
+                ×
+              </span>
             </button>
           ))}
 
@@ -605,7 +619,9 @@ function StatsPage() {
               className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
             >
               <span>📈 {filters.symbol}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">×</span>
+              <span className="text-muted-foreground group-hover:text-destructive">
+                ×
+              </span>
             </button>
           )}
 
@@ -616,7 +632,9 @@ function StatsPage() {
               className="group flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] hover:border-destructive/40 hover:bg-destructive/10"
             >
               <span>{biasLabel(filters.bias)}</span>
-              <span className="text-muted-foreground group-hover:text-destructive">×</span>
+              <span className="text-muted-foreground group-hover:text-destructive">
+                ×
+              </span>
             </button>
           )}
 
@@ -635,11 +653,11 @@ function StatsPage() {
 
       {/* FORMASYON BAZLI GRAFİK */}
       {data.byFormation.length > 0 && (
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h2 className="mb-4 text-sm font-bold">
+        <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
+          <h2 className="mb-3 text-xs font-bold sm:mb-4 sm:text-sm">
             📋 Formasyon Başarı Oranları (İlk 10)
           </h2>
-          <div className="h-80">
+          <div className="h-72 sm:h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={data.byFormation.slice(0, 10).map((f) => ({
@@ -648,7 +666,7 @@ function StatsPage() {
                   "Başarı %": f.winRate,
                   Toplam: f.total,
                 }))}
-                margin={{ top: 5, right: 20, left: 0, bottom: 40 }}
+                margin={{ top: 5, right: 10, left: -10, bottom: 40 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
@@ -656,10 +674,10 @@ function StatsPage() {
                   angle={-30}
                   textAnchor="end"
                   height={80}
-                  tick={{ fill: "#9ca3af", fontSize: 11 }}
+                  tick={{ fill: "#9ca3af", fontSize: 10 }}
                 />
                 <YAxis
-                  tick={{ fill: "#9ca3af", fontSize: 11 }}
+                  tick={{ fill: "#9ca3af", fontSize: 10 }}
                   domain={[0, 100]}
                 />
                 <Tooltip
@@ -691,11 +709,11 @@ function StatsPage() {
 
       {/* COIN/HS BAZLI GRAFİK */}
       {data.bySymbol.length > 0 && (
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h2 className="mb-4 text-sm font-bold">
+        <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
+          <h2 className="mb-3 text-xs font-bold sm:mb-4 sm:text-sm">
             🪙 Coin/Hisse Başarı Oranları (İlk 10)
           </h2>
-          <div className="h-80">
+          <div className="h-72 sm:h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={data.bySymbol.slice(0, 10).map((s) => ({
@@ -704,15 +722,15 @@ function StatsPage() {
                   "Başarı %": s.winRate,
                   Toplam: s.total,
                 }))}
-                margin={{ top: 5, right: 20, left: 0, bottom: 20 }}
+                margin={{ top: 5, right: 10, left: -10, bottom: 20 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="name"
-                  tick={{ fill: "#9ca3af", fontSize: 11 }}
+                  tick={{ fill: "#9ca3af", fontSize: 10 }}
                 />
                 <YAxis
-                  tick={{ fill: "#9ca3af", fontSize: 11 }}
+                  tick={{ fill: "#9ca3af", fontSize: 10 }}
                   domain={[0, 100]}
                 />
                 <Tooltip
@@ -759,33 +777,36 @@ function StatsTabs({
   const [activeTab, setActiveTab] = useState<TabKey>("all");
 
   const tabs: Array<{ key: TabKey; label: string; emoji: string }> = [
-    { key: "long", label: "Uzun Vadeli", emoji: "📈" },
-    { key: "short", label: "Kısa Vadeli", emoji: "⚡" },
+    { key: "long", label: "Uzun", emoji: "📈" },
+    { key: "short", label: "Kısa", emoji: "⚡" },
     { key: "multi", label: "Çoklu ZD", emoji: "🎯" },
     { key: "all", label: "Toplam", emoji: "📊" },
-    { key: "compare", label: "Karşılaştırma", emoji: "⚖️" },
+    { key: "compare", label: "Karşılaştır", emoji: "⚖️" },
   ];
 
   return (
     <div className="rounded-lg border border-border bg-card">
-      <div className="flex flex-wrap gap-1 border-b border-border p-2">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            className={`rounded-md px-3 py-2 text-xs font-bold transition-colors ${
-              activeTab === tab.key
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-secondary"
-            }`}
-          >
-            {tab.emoji} {tab.label}
-          </button>
-        ))}
+      {/* SEKME BAŞLIKLARI — MOBİLDE YATAY SCROLL */}
+      <div className="flex overflow-x-auto border-b border-border p-2 lg:flex-wrap">
+        <div className="flex gap-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`whitespace-nowrap rounded-md px-3 py-2 text-xs font-bold transition-colors ${
+                activeTab === tab.key
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              {tab.emoji} {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         {activeTab === "compare" ? (
           <CompareView data={data} />
         ) : (
@@ -833,12 +854,12 @@ function SingleStatsView({
   ].filter((d) => d.value > 0);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-bold">{label}</h2>
+        <h2 className="text-sm font-bold sm:text-base">{label}</h2>
         {activeFilterCount > 0 && (
-          <span className="text-[11px] text-muted-foreground">
-            ⚠️ Filtreler bu sekmeyi etkilemez, sadece aşağıdaki grafikleri etkiler
+          <span className="text-[10px] text-muted-foreground sm:text-[11px]">
+            ⚠️ Filtreler bu sekmeyi etkilemez
           </span>
         )}
       </div>
@@ -854,7 +875,8 @@ function SingleStatsView({
         </div>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {/* 6 KART — MOBİLDE 2 SÜTUN */}
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3">
             <StatCard
               title="Toplam Sinyal"
               value={stats.total.toString()}
@@ -879,13 +901,13 @@ function SingleStatsView({
               color={stats.totalReturn >= 0 ? "text-bull" : "text-bear"}
             />
             <StatCard
-              title="Ortalama Kazanç"
+              title="Ort. Kazanç"
               value={`+${stats.avgWin}%`}
               icon="🟢"
               color="text-bull"
             />
             <StatCard
-              title="Ortalama Kayıp"
+              title="Ort. Kayıp"
               value={`${stats.avgLoss}%`}
               icon="🔴"
               color="text-bear"
@@ -899,9 +921,11 @@ function SingleStatsView({
           </div>
 
           {winLossData.length > 0 && (
-            <div className="rounded-lg border border-border bg-background p-4">
-              <h3 className="mb-3 text-sm font-bold">🥧 Başarı Dağılımı</h3>
-              <div className="h-64">
+            <div className="rounded-lg border border-border bg-background p-3 sm:p-4">
+              <h3 className="mb-3 text-xs font-bold sm:text-sm">
+                🥧 Başarı Dağılımı
+              </h3>
+              <div className="h-56 sm:h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -912,7 +936,7 @@ function SingleStatsView({
                       label={({ name, value, percent }) =>
                         `${name}: ${value} (${((percent ?? 0) * 100).toFixed(0)}%)`
                       }
-                      outerRadius={80}
+                      outerRadius={70}
                       fill="#8884d8"
                       dataKey="value"
                     >
@@ -968,9 +992,9 @@ function TrendChart({
 }) {
   if (data.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-background p-4">
-        <h3 className="mb-3 text-sm font-bold">{title}</h3>
-        <div className="flex h-72 items-center justify-center text-xs text-muted-foreground">
+      <div className="rounded-lg border border-border bg-background p-3 sm:p-4">
+        <h3 className="mb-3 text-xs font-bold sm:text-sm">{title}</h3>
+        <div className="flex h-56 items-center justify-center text-xs text-muted-foreground sm:h-72">
           ⏳ Henüz trend verisi yok
         </div>
       </div>
@@ -979,9 +1003,9 @@ function TrendChart({
 
   if (data.length === 1) {
     return (
-      <div className="rounded-lg border border-border bg-background p-4">
-        <h3 className="mb-3 text-sm font-bold">{title}</h3>
-        <div className="flex h-72 items-center justify-center text-xs text-muted-foreground">
+      <div className="rounded-lg border border-border bg-background p-3 sm:p-4">
+        <h3 className="mb-3 text-xs font-bold sm:text-sm">{title}</h3>
+        <div className="flex h-56 items-center justify-center text-xs text-muted-foreground sm:h-72">
           📊 Trend için en az 2 gün veri gerekli
         </div>
       </div>
@@ -989,13 +1013,13 @@ function TrendChart({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-background p-4">
-      <h3 className="mb-3 text-sm font-bold">{title}</h3>
-      <div className="h-72">
+    <div className="rounded-lg border border-border bg-background p-3 sm:p-4">
+      <h3 className="mb-3 text-xs font-bold sm:text-sm">{title}</h3>
+      <div className="h-56 sm:h-72">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}
-            margin={{ top: 5, right: 20, left: 0, bottom: 20 }}
+            margin={{ top: 5, right: 10, left: -10, bottom: 20 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
             <XAxis
@@ -1006,7 +1030,7 @@ function TrendChart({
               height={50}
             />
             <YAxis
-              tick={{ fill: "#9ca3af", fontSize: 11 }}
+              tick={{ fill: "#9ca3af", fontSize: 10 }}
               domain={[0, 100]}
             />
             <Tooltip
@@ -1049,22 +1073,23 @@ function CompareView({ data }: { data: StatsData }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-bold">
+      <h2 className="text-sm font-bold sm:text-base">
         ⚖️ Uzun / Kısa / Çoklu ZD Karşılaştırması
       </h2>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-xs">
+      {/* TABLO — MOBİLDE SCROLL */}
+      <div className="-mx-3 overflow-x-auto px-3 sm:-mx-4 sm:px-4">
+        <table className="w-full min-w-[600px] text-xs">
           <thead>
             <tr className="border-b border-border">
               <th className="px-3 py-2 text-left font-bold text-muted-foreground">
                 Metrik
               </th>
               <th className="px-3 py-2 text-center font-bold text-blue-400">
-                📈 Uzun Vadeli
+                📈 Uzun
               </th>
               <th className="px-3 py-2 text-center font-bold text-amber-400">
-                ⚡ Kısa Vadeli
+                ⚡ Kısa
               </th>
               <th className="px-3 py-2 text-center font-bold text-purple-400">
                 🎯 Çoklu ZD
@@ -1072,7 +1097,10 @@ function CompareView({ data }: { data: StatsData }) {
             </tr>
           </thead>
           <tbody>
-            <CompareRow label="Toplam Sinyal" values={[long.total, short.total, multi.total]} />
+            <CompareRow
+              label="Toplam Sinyal"
+              values={[long.total, short.total, multi.total]}
+            />
             <CompareRow
               label="Başarılı"
               values={[long.wins, short.wins, multi.wins]}
@@ -1088,16 +1116,20 @@ function CompareView({ data }: { data: StatsData }) {
               values={[`${long.winRate}%`, `${short.winRate}%`, `${multi.winRate}%`]}
               colorFn={(v) => {
                 const n = parseFloat(String(v));
-                return n >= 60 ? "text-bull" : n >= 40 ? "text-amber-500" : "text-bear";
+                return n >= 60
+                  ? "text-bull"
+                  : n >= 40
+                    ? "text-amber-500"
+                    : "text-bear";
               }}
             />
             <CompareRow
-              label="Ortalama Kazanç"
+              label="Ort. Kazanç"
               values={[`+${long.avgWin}%`, `+${short.avgWin}%`, `+${multi.avgWin}%`]}
               color="text-bull"
             />
             <CompareRow
-              label="Ortalama Kayıp"
+              label="Ort. Kayıp"
               values={[`${long.avgLoss}%`, `${short.avgLoss}%`, `${multi.avgLoss}%`]}
               color="text-bear"
             />
@@ -1108,7 +1140,9 @@ function CompareView({ data }: { data: StatsData }) {
                 `${short.totalReturn >= 0 ? "+" : ""}${short.totalReturn}%`,
                 `${multi.totalReturn >= 0 ? "+" : ""}${multi.totalReturn}%`,
               ]}
-              colorFn={(v) => (String(v).startsWith("+") ? "text-bull" : "text-bear")}
+              colorFn={(v) =>
+                String(v).startsWith("+") ? "text-bull" : "text-bear"
+              }
             />
             <CompareRow
               label="Beklenen Değer"
@@ -1117,20 +1151,23 @@ function CompareView({ data }: { data: StatsData }) {
                 `${short.expectancy >= 0 ? "+" : ""}${short.expectancy}%`,
                 `${multi.expectancy >= 0 ? "+" : ""}${multi.expectancy}%`,
               ]}
-              colorFn={(v) => (String(v).startsWith("+") ? "text-bull" : "text-bear")}
+              colorFn={(v) =>
+                String(v).startsWith("+") ? "text-bull" : "text-bear"
+              }
             />
           </tbody>
         </table>
       </div>
 
       <div className="rounded-lg border border-border bg-background p-3">
-        <p className="text-[11px] text-muted-foreground">
-          💡 İpucu: Bu tablo tüm zamanların verisini gösterir, filtrelerden etkilenmez.
+        <p className="text-[10px] text-muted-foreground sm:text-[11px]">
+          💡 İpucu: Bu tablo tüm zamanların verisini gösterir, filtrelerden
+          etkilenmez.
         </p>
       </div>
 
       {/* 3 TREND GRAFİĞİ YAN YANA */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-3 lg:gap-4">
         <TrendChart
           data={data.timeSeries.long}
           title="📈 Uzun Vadeli Trend"
@@ -1195,14 +1232,16 @@ function StatCard({
   color?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-background p-3">
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+    <div className="rounded-lg border border-border bg-background p-2.5 sm:p-3">
+      <div className="flex items-center justify-between gap-1">
+        <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground sm:text-[10px]">
           {title}
         </p>
-        <span className="text-base">{icon}</span>
+        <span className="text-sm sm:text-base">{icon}</span>
       </div>
-      <p className={`mt-2 text-xl font-bold ${color ?? "text-foreground"}`}>
+      <p
+        className={`mt-1.5 text-lg font-bold sm:mt-2 sm:text-xl ${color ?? "text-foreground"}`}
+      >
         {value}
       </p>
     </div>

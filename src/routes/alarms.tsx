@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/alarms")({
   head: () => ({
-    meta: [{ title: "Alarmlar — Formasyon AI" }],
+    meta: [{ title: "Alarmlar — AE Analiz" }],
   }),
   component: AlarmsPage,
 });
@@ -36,7 +36,6 @@ type Alarm = {
   created_at: string;
 };
 
-// YENİ: Body için düzgün tip
 type CreateAlarmBody = {
   type: AlarmType;
   market: string;
@@ -88,18 +87,15 @@ function AlarmsPage() {
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  // Form state
   const [newType, setNewType] = useState<AlarmType>("price");
   const [newMarket, setNewMarket] = useState("crypto");
   const [newSymbol, setNewSymbol] = useState("");
   const [newTargetPrice, setNewTargetPrice] = useState("");
   const [newCondition, setNewCondition] = useState<"above" | "below">("above");
-  const [newFormationName, setNewFormationName] = useState<string>(FORMATION_OPTIONS[0] ?? "Yükselen Üçgen");
+  const [newFormationName, setNewFormationName] = useState<string>(
+    FORMATION_OPTIONS[0] ?? "Yükselen Üçgen",
+  );
   const [newMinQuality, setNewMinQuality] = useState(80);
-
-  // ==========================================================
-  // FETCH
-  // ==========================================================
 
   async function loadAlarms() {
     if (!user) return;
@@ -128,10 +124,6 @@ function AlarmsPage() {
     if (user) void loadAlarms();
   }, [user]);
 
-  // ==========================================================
-  // OLUŞTUR
-  // ==========================================================
-
   async function createAlarm() {
     if (!user) return;
 
@@ -147,7 +139,6 @@ function AlarmsPage() {
 
     setCreating(true);
 
-    // DÜZELTİLDİ: Artık CreateAlarmBody tipi kullanılıyor
     const body: CreateAlarmBody = {
       type: newType,
       market: newMarket,
@@ -193,10 +184,6 @@ function AlarmsPage() {
     }
   }
 
-  // ==========================================================
-  // SİL
-  // ==========================================================
-
   async function deleteAlarm(id: string) {
     if (!user) return;
     if (!window.confirm("Bu alarmı silmek istediğinize emin misiniz?")) return;
@@ -217,10 +204,6 @@ function AlarmsPage() {
       toast.error("Bağlantı hatası");
     }
   }
-
-  // ==========================================================
-  // AKTİF/PASİF
-  // ==========================================================
 
   async function toggleActive(id: string, current: boolean) {
     if (!user) return;
@@ -254,10 +237,6 @@ function AlarmsPage() {
     }
   }
 
-  // ==========================================================
-  // GİRİŞ YOK
-  // ==========================================================
-
   if (!user) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -275,24 +254,24 @@ function AlarmsPage() {
   const canCreate = used < limit;
 
   return (
-    <div className="container mx-auto max-w-5xl space-y-6 p-4">
+    <div className="container mx-auto max-w-5xl space-y-4 p-3 sm:space-y-6 sm:p-4">
       {/* BAŞLIK */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">🔔 Alarmlar</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-xl font-bold sm:text-2xl">🔔 Alarmlar</h1>
+          <p className="text-xs text-muted-foreground sm:text-sm">
             Fiyat, formasyon ve kalite alarmları kurun
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-md border border-border bg-secondary px-3 py-1.5 text-xs font-bold">
+          <span className="rounded-md border border-border bg-secondary px-2.5 py-1 text-[11px] font-bold sm:px-3 sm:py-1.5 sm:text-xs">
             {used} / {limit === 999 ? "∞" : limit}
           </span>
           <Link
             to="/"
-            className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-secondary"
+            className="rounded-md border border-border px-2.5 py-1 text-[11px] hover:bg-secondary sm:px-3 sm:py-1.5 sm:text-xs"
           >
-            ← Ana Sayfa
+            ← Geri
           </Link>
         </div>
       </div>
@@ -303,7 +282,7 @@ function AlarmsPage() {
           type="button"
           onClick={() => setShowForm(true)}
           disabled={!canCreate}
-          className="w-full rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 p-4 text-sm font-bold text-primary hover:bg-primary/10 disabled:opacity-50"
+          className="w-full rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 p-3 text-xs font-bold text-primary hover:bg-primary/10 disabled:opacity-50 sm:p-4 sm:text-sm"
         >
           {canCreate ? "＋ YENİ ALARM OLUŞTUR" : `⚠️ Limite ulaştınız (${limit})`}
         </button>
@@ -311,9 +290,9 @@ function AlarmsPage() {
 
       {/* YENİ ALARM FORMU */}
       {showForm && (
-        <div className="rounded-lg border border-primary/40 bg-card p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold">🔔 Yeni Alarm</h2>
+        <div className="rounded-lg border border-primary/40 bg-card p-3 sm:p-4">
+          <div className="mb-3 flex items-center justify-between sm:mb-4">
+            <h2 className="text-sm font-bold sm:text-base">🔔 Yeni Alarm</h2>
             <button
               type="button"
               onClick={() => setShowForm(false)}
@@ -324,46 +303,48 @@ function AlarmsPage() {
           </div>
 
           {/* TİP SEÇİMİ */}
-          <div className="mb-4 flex flex-wrap gap-2">
+          <div className="mb-3 flex flex-wrap gap-1.5 sm:mb-4 sm:gap-2">
             <button
               type="button"
               onClick={() => setNewType("price")}
-              className={`rounded-md border px-3 py-1.5 text-xs font-bold ${
+              className={`rounded-md border px-2.5 py-1.5 text-[11px] font-bold sm:px-3 sm:text-xs ${
                 newType === "price"
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border hover:bg-secondary"
               }`}
             >
-              💰 Fiyat Alarmı
+              💰 Fiyat
             </button>
             <button
               type="button"
               onClick={() => setNewType("formation")}
-              className={`rounded-md border px-3 py-1.5 text-xs font-bold ${
+              className={`rounded-md border px-2.5 py-1.5 text-[11px] font-bold sm:px-3 sm:text-xs ${
                 newType === "formation"
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border hover:bg-secondary"
               }`}
             >
-              📊 Formasyon Alarmı
+              📊 Formasyon
             </button>
             <button
               type="button"
               onClick={() => setNewType("quality")}
-              className={`rounded-md border px-3 py-1.5 text-xs font-bold ${
+              className={`rounded-md border px-2.5 py-1.5 text-[11px] font-bold sm:px-3 sm:text-xs ${
                 newType === "quality"
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border hover:bg-secondary"
               }`}
             >
-              ⭐ Kalite Alarmı
+              ⭐ Kalite
             </button>
           </div>
 
           {/* MARKET + SEMBOL */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="text-xs font-bold text-muted-foreground">Market</label>
+              <label className="text-xs font-bold text-muted-foreground">
+                Market
+              </label>
               <select
                 value={newMarket}
                 onChange={(e) => setNewMarket(e.target.value)}
@@ -377,7 +358,9 @@ function AlarmsPage() {
               </select>
             </div>
             <div>
-              <label className="text-xs font-bold text-muted-foreground">Sembol</label>
+              <label className="text-xs font-bold text-muted-foreground">
+                Sembol
+              </label>
               <input
                 type="text"
                 value={newSymbol}
@@ -392,7 +375,9 @@ function AlarmsPage() {
           {newType === "price" && (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="text-xs font-bold text-muted-foreground">Hedef Fiyat</label>
+                <label className="text-xs font-bold text-muted-foreground">
+                  Hedef Fiyat
+                </label>
                 <input
                   type="number"
                   value={newTargetPrice}
@@ -402,10 +387,14 @@ function AlarmsPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-muted-foreground">Koşul</label>
+                <label className="text-xs font-bold text-muted-foreground">
+                  Koşul
+                </label>
                 <select
                   value={newCondition}
-                  onChange={(e) => setNewCondition(e.target.value as "above" | "below")}
+                  onChange={(e) =>
+                    setNewCondition(e.target.value as "above" | "below")
+                  }
                   className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 >
                   <option value="above">Üzerine çıkarsa (↑)</option>
@@ -418,20 +407,25 @@ function AlarmsPage() {
           {newType === "formation" && (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="text-xs font-bold text-muted-foreground">Formasyon</label>
+                <label className="text-xs font-bold text-muted-foreground">
+                  Formasyon
+                </label>
                 <select
                   value={newFormationName}
                   onChange={(e) => setNewFormationName(e.target.value)}
                   className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 >
                   {FORMATION_OPTIONS.map((f) => (
-                    <option key={f} value={f}>{f}</option>
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
                   ))}
                 </select>
               </div>
               <div>
                 <label className="text-xs font-bold text-muted-foreground">
-                  Min Kalite: <span className="text-foreground">{newMinQuality}</span>
+                  Min Kalite:{" "}
+                  <span className="text-foreground">{newMinQuality}</span>
                 </label>
                 <input
                   type="range"
@@ -449,7 +443,8 @@ function AlarmsPage() {
           {newType === "quality" && (
             <div className="mt-3">
               <label className="text-xs font-bold text-muted-foreground">
-                Min Kalite: <span className="text-foreground">{newMinQuality}</span>
+                Min Kalite:{" "}
+                <span className="text-foreground">{newMinQuality}</span>
               </label>
               <input
                 type="range"
@@ -461,25 +456,26 @@ function AlarmsPage() {
                 className="mt-2 w-full"
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Kalite puanı {newMinQuality} ve üzeri olan sinyaller için alarm kurar
+                Kalite puanı {newMinQuality} ve üzeri olan sinyaller için alarm
+                kurar
               </p>
             </div>
           )}
 
           {/* BUTONLAR */}
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
               onClick={() => void createAlarm()}
               disabled={creating}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              className="rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:text-sm"
             >
               {creating ? "⏳ Oluşturuluyor..." : "🔔 Alarm Oluştur"}
             </button>
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="rounded-md border border-border px-4 py-2 text-sm font-bold hover:bg-secondary"
+              className="rounded-md border border-border px-4 py-2 text-xs font-bold hover:bg-secondary sm:text-sm"
             >
               İptal
             </button>
@@ -493,15 +489,15 @@ function AlarmsPage() {
           <p className="text-sm text-muted-foreground">Yükleniyor...</p>
         </div>
       ) : alarms.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card p-12 text-center">
-          <p className="text-4xl">🔔</p>
-          <p className="mt-4 text-sm font-bold">Henüz alarm kurmadınız</p>
+        <div className="rounded-lg border border-border bg-card p-8 text-center sm:p-12">
+          <p className="text-3xl sm:text-4xl">🔔</p>
+          <p className="mt-3 text-sm font-bold sm:mt-4">Henüz alarm kurmadınız</p>
           <p className="mt-2 text-xs text-muted-foreground">
             Yukarıdaki butonla ilk alarmınızı oluşturun
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           {alarms.map((alarm) => (
             <AlarmCard
               key={alarm.id}
@@ -541,7 +537,9 @@ function AlarmCard({
       return `≤ ${alarm.target_price}`;
     }
     if (alarm.type === "formation") {
-      return `${alarm.formation_name}${alarm.min_quality ? ` (kalite ≥${alarm.min_quality})` : ""}`;
+      return `${alarm.formation_name}${
+        alarm.min_quality ? ` (kalite ≥${alarm.min_quality})` : ""
+      }`;
     }
     return `Kalite ≥ ${alarm.min_quality}`;
   }, [alarm]);
@@ -553,53 +551,59 @@ function AlarmCard({
       : { label: "PASİF", cls: "bg-secondary text-muted-foreground" };
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-2xl">
-            {alarm.type === "price" ? "💰" : alarm.type === "formation" ? "📊" : "⭐"}
+          <span className="text-xl sm:text-2xl">
+            {alarm.type === "price"
+              ? "💰"
+              : alarm.type === "formation"
+                ? "📊"
+                : "⭐"}
           </span>
-          <div>
-            <p className="text-sm font-bold">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold sm:text-sm">
               {typeLabel} — {alarm.symbol}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground sm:text-xs">
               {MARKET_LABELS[alarm.market] ?? alarm.market} · {conditionLabel}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${statusBadge.cls}`}>
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <span
+            className={`rounded-md px-2 py-1 text-[10px] font-bold sm:px-2.5 sm:py-1 ${statusBadge.cls}`}
+          >
             {statusBadge.label}
           </span>
 
           {alarm.trigger_count > 0 && (
             <span className="text-[10px] text-muted-foreground">
-              {alarm.trigger_count}× tetiklendi
+              {alarm.trigger_count}×
             </span>
           )}
 
           <button
             type="button"
             onClick={onToggle}
-            className="rounded-md border border-border px-2.5 py-1 text-[10px] font-bold hover:bg-secondary"
+            className="rounded-md border border-border px-2 py-1 text-[10px] font-bold hover:bg-secondary sm:px-2.5"
           >
-            {alarm.is_active ? "⏸ Pasif" : "▶ Aktif"}
+            {alarm.is_active ? "⏸" : "▶"}
           </button>
 
           <button
             type="button"
             onClick={onDelete}
-            className="rounded-md border border-destructive/30 px-2.5 py-1 text-[10px] font-bold text-destructive hover:bg-destructive/10"
+            className="rounded-md border border-destructive/30 px-2 py-1 text-[10px] font-bold text-destructive hover:bg-destructive/10 sm:px-2.5"
           >
-            🗑️ Sil
+            🗑️
           </button>
         </div>
       </div>
 
       {alarm.triggered_at && (
-        <p className="mt-2 text-[11px] text-muted-foreground">
+        <p className="mt-2 text-[10px] text-muted-foreground sm:text-[11px]">
           Son tetiklenme: {new Date(alarm.triggered_at).toLocaleString("tr-TR")}
         </p>
       )}
