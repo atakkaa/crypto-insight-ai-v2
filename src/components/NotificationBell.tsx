@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/hooks/useAuth";
+import { useConfirm } from "@/hooks/useConfirm";
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -54,6 +55,8 @@ function isSellSignal(n: Notification): boolean {
 
 export function NotificationBell({ onOpenSymbol }: Props) {
   const { user } = useAuth();
+  const confirm = useConfirm();
+
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const [detailNotification, setDetailNotification] = useState<Notification | null>(null);
@@ -170,7 +173,18 @@ export function NotificationBell({ onOpenSymbol }: Props) {
   // --- 7. Tümünü temizle ---
   async function handleClearAll() {
     if (!user) return;
-    if (!window.confirm("Tüm bildirimleri silmek istediğinize emin misiniz?")) return;
+
+    // ✅ YENİ: Custom confirm modal
+    const ok = await confirm({
+      title: "Tüm Bildirimleri Temizle",
+      message:
+        "Tüm bildirimleri silmek istediğinize emin misiniz? Bu işlem geri alınamaz.",
+      confirmText: "Hepsini Sil",
+      cancelText: "Vazgeç",
+      variant: "destructive",
+    });
+    if (!ok) return;
+
     await clearAllNotifications(user.id);
     setNotifications([]);
     toast.success("Tüm bildirimler temizlendi.");
@@ -199,7 +213,7 @@ export function NotificationBell({ onOpenSymbol }: Props) {
         </button>
 
         {open && (
-         <div className="fixed inset-x-2 top-16 z-[90] max-h-[80vh] overflow-y-auto rounded-xl border border-border bg-background shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-[420px]">
+          <div className="fixed inset-x-2 top-16 z-[90] max-h-[80vh] overflow-y-auto rounded-xl border border-border bg-background shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-[420px]">
             <div className="flex items-center justify-between border-b border-border p-3">
               <div>
                 <h3 className="text-sm font-bold">🔔 BİLDİRİMLER</h3>
