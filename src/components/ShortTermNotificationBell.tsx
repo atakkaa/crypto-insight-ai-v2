@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/hooks/useAuth";
+import { useConfirm } from "@/hooks/useConfirm";
 import {
   fetchShortTermNotifications,
   markAllShortTermNotificationsRead,
@@ -19,6 +20,8 @@ type Props = {
 
 export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
   const { user } = useAuth();
+  const confirm = useConfirm();
+
   const [notifications, setNotifications] = useState<ShortTermNotification[]>([]);
   const [open, setOpen] = useState(false);
   const [detailNotification, setDetailNotification] = useState<ShortTermNotification | null>(null);
@@ -122,7 +125,18 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
 
   async function handleClearAll() {
     if (!user) return;
-    if (!window.confirm("Tüm kısa vadeli bildirimleri silmek istediğinize emin misiniz?")) return;
+
+    // ✅ YENİ: Custom confirm modal
+    const ok = await confirm({
+      title: "Tüm Bildirimleri Temizle",
+      message:
+        "Tüm kısa vadeli bildirimleri silmek istediğinize emin misiniz? Bu işlem geri alınamaz.",
+      confirmText: "Hepsini Sil",
+      cancelText: "Vazgeç",
+      variant: "destructive",
+    });
+    if (!ok) return;
+
     await clearAllShortTermNotifications(user.id);
     setNotifications([]);
     toast.success("Tüm kısa vadeli bildirimler temizlendi.");
