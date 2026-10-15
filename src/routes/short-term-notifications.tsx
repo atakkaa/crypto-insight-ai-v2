@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ShortTermNotificationDetailModal } from "@/components/ShortTermNotificationDetailModal";
 import { MobileNav } from "@/components/MobileNav";
 import { useAuth } from "@/hooks/useAuth";
+import { useConfirm } from "@/hooks/useConfirm";
 import {
   fetchShortTermNotifications,
   markAllShortTermNotificationsRead,
@@ -24,6 +25,8 @@ export const Route = createFileRoute("/short-term-notifications")({
 function ShortTermNotificationsPage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const confirm = useConfirm();
+
   const [notifications, setNotifications] = useState<ShortTermNotification[]>(
     [],
   );
@@ -145,12 +148,18 @@ function ShortTermNotificationsPage() {
   // 7. Tümünü temizle
   async function handleClearAll() {
     if (!user) return;
-    if (
-      !window.confirm(
-        "Tüm kısa vadeli bildirimleri silmek istediğinize emin misiniz?",
-      )
-    )
-      return;
+
+    // ✅ YENİ: Custom confirm modal
+    const ok = await confirm({
+      title: "Tüm Bildirimleri Temizle",
+      message:
+        "Tüm kısa vadeli bildirimleri silmek istediğinize emin misiniz? Bu işlem geri alınamaz.",
+      confirmText: "Hepsini Sil",
+      cancelText: "Vazgeç",
+      variant: "destructive",
+    });
+    if (!ok) return;
+
     await clearAllShortTermNotifications(user.id);
     setNotifications([]);
     toast.success("Tüm kısa vadeli bildirimler temizlendi.");
