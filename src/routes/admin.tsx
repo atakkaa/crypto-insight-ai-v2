@@ -1,15 +1,15 @@
-// src/routes/admin.tsx — Admin Paneli v3 (Backtest linkli)
-
+// src/routes/admin.tsx — Admin Paneli v3 (Backtest linkli, mobil uyumlu)
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { MobileNav } from "@/components/MobileNav";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
-    meta: [{ title: "Admin Paneli — Formasyon AI" }],
+    meta: [{ title: "Admin Paneli — AE Analiz" }],
   }),
   component: AdminPage,
 });
@@ -184,7 +184,9 @@ function AdminPage() {
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, membership: newVal } : u)),
       );
-      toast.success(newVal === "premium" ? "⭐ Premium yapıldı" : "Free yapıldı");
+      toast.success(
+        newVal === "premium" ? "⭐ Premium yapıldı" : "Free yapıldı",
+      );
     }
     setBusyUserId(null);
   }
@@ -196,12 +198,12 @@ function AdminPage() {
     setBusyUserId(userId);
     try {
       const res = await fetch(
-  `/api/alarms?action=start-trial&userId=${encodeURIComponent(userId)}`,
-  {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-  },
-);
+        `/api/alarms?action=start-trial&userId=${encodeURIComponent(userId)}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
       const data = (await res.json()) as { success: boolean; error?: string };
       if (!res.ok || !data.success) {
         toast.error(data.error ?? "Deneme başlatılamadı");
@@ -285,7 +287,9 @@ function AdminPage() {
       toast.error("Kendi rolünüzü değiştiremezsiniz");
       return;
     }
-    if (!window.confirm("Bu kullanıcının rolünü değiştirmek istiyor musunuz?")) {
+    if (
+      !window.confirm("Bu kullanıcının rolünü değiştirmek istiyor musunuz?")
+    ) {
       return;
     }
     setBusyUserId(userId);
@@ -348,8 +352,13 @@ function AdminPage() {
   // =========================================================
   if (authLoading || loading || isAdmin === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted-foreground">Yükleniyor...</p>
+      <div className="min-h-screen pb-24 lg:pb-0">
+        <div className="lg:hidden">
+          <MobileNav onOpenSymbol={() => {}} />
+        </div>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <p className="text-sm text-muted-foreground">Yükleniyor...</p>
+        </div>
       </div>
     );
   }
@@ -359,25 +368,30 @@ function AdminPage() {
   // =========================================================
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="panel max-w-md p-6 text-center">
-          <p className="text-3xl">🔒</p>
-          <h1 className="mt-3 text-lg font-bold">Giriş Yapmanız Gerekiyor</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Bu sayfaya erişmek için lütfen giriş yapın.
-          </p>
-          <Link
-            to="/auth"
-            className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
-          >
-            Giriş Yap / Kayıt Ol
-          </Link>
-          <Link
-            to="/"
-            className="mt-2 block text-xs text-muted-foreground hover:text-foreground"
-          >
-            Ana Sayfaya Dön
-          </Link>
+      <div className="min-h-screen pb-24 lg:pb-0">
+        <div className="lg:hidden">
+          <MobileNav onOpenSymbol={() => {}} />
+        </div>
+        <div className="flex min-h-[60vh] items-center justify-center px-4">
+          <div className="panel max-w-md p-6 text-center">
+            <p className="text-3xl">🔒</p>
+            <h1 className="mt-3 text-lg font-bold">Giriş Yapmanız Gerekiyor</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Bu sayfaya erişmek için lütfen giriş yapın.
+            </p>
+            <Link
+              to="/auth"
+              className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+            >
+              Giriş Yap / Kayıt Ol
+            </Link>
+            <Link
+              to="/"
+              className="mt-2 block text-xs text-muted-foreground hover:text-foreground"
+            >
+              Ana Sayfaya Dön
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -388,22 +402,27 @@ function AdminPage() {
   // =========================================================
   if (!isAdmin) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="panel max-w-md p-6 text-center">
-          <p className="text-3xl">🚫</p>
-          <h1 className="mt-3 text-lg font-bold">Yetkiniz Yok</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Bu sayfaya sadece admin kullanıcılar erişebilir.
-          </p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Giriş yaptığınız hesap: {user.email ?? user.id.slice(0, 8)}
-          </p>
-          <Link
-            to="/"
-            className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
-          >
-            Ana Sayfaya Dön
-          </Link>
+      <div className="min-h-screen pb-24 lg:pb-0">
+        <div className="lg:hidden">
+          <MobileNav onOpenSymbol={() => {}} />
+        </div>
+        <div className="flex min-h-[60vh] items-center justify-center px-4">
+          <div className="panel max-w-md p-6 text-center">
+            <p className="text-3xl">🚫</p>
+            <h1 className="mt-3 text-lg font-bold">Yetkiniz Yok</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Bu sayfaya sadece admin kullanıcılar erişebilir.
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Giriş yaptığınız hesap: {user.email ?? user.id.slice(0, 8)}
+            </p>
+            <Link
+              to="/"
+              className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+            >
+              Ana Sayfaya Dön
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -435,14 +454,20 @@ function AdminPage() {
   const bannedUsers = users.filter((u) => u.is_banned).length;
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
+    <div className="min-h-screen pb-24 lg:pb-0">
+      {/* ========== MOBİL HEADER ========== */}
+      <div className="lg:hidden">
+        <MobileNav onOpenSymbol={() => {}} />
+      </div>
+
+      {/* ========== MASAÜSTÜ HEADER ========== */}
+      <header className="sticky top-0 z-20 hidden border-b border-border bg-background/90 backdrop-blur lg:block">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
           <Link
             to="/"
             className="num text-sm font-bold uppercase tracking-[0.2em] text-primary"
           >
-            Formasyon AI
+            AE Analiz
           </Link>
           <nav className="flex flex-wrap gap-2 text-xs">
             <Link
@@ -479,60 +504,70 @@ function AdminPage() {
               👑 Admin
             </span>
           </nav>
-          <div className="ml-auto text-xs text-muted-foreground">
+          <div className="ml-auto truncate text-xs text-muted-foreground">
             {user?.email}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-4 px-4 py-6">
+      <main className="mx-auto max-w-7xl space-y-4 px-3 py-4 sm:px-4 sm:py-6">
         {/* BAŞLIK */}
-        <section className="panel p-5">
-          <h1 className="text-xl font-bold">👑 Admin Paneli</h1>
+        <section className="panel p-4 sm:p-5">
+          <h1 className="text-xl font-bold sm:text-2xl">👑 Admin Paneli</h1>
           <p className="mt-1 text-xs text-muted-foreground">
             Kullanıcıları yönetin, üyelik ve erişim durumlarını kontrol edin.
           </p>
 
           {/* İSTATİSTİKLER */}
-          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
             <div className="rounded-lg border border-border bg-card p-3">
-              <p className="text-xs text-muted-foreground">Toplam Kullanıcı</p>
-              <p className="num mt-1 text-2xl font-bold">{totalUsers}</p>
+              <p className="text-[10px] text-muted-foreground sm:text-xs">
+                Toplam Kullanıcı
+              </p>
+              <p className="num mt-1 text-xl font-bold sm:text-2xl">
+                {totalUsers}
+              </p>
             </div>
             <div className="rounded-lg border border-border bg-card p-3">
-              <p className="text-xs text-muted-foreground">Premium Üye</p>
-              <p className="num mt-1 text-2xl font-bold text-primary">
+              <p className="text-[10px] text-muted-foreground sm:text-xs">
+                Premium Üye
+              </p>
+              <p className="num mt-1 text-xl font-bold text-primary sm:text-2xl">
                 {premiumUsers}
               </p>
             </div>
             <div className="rounded-lg border border-border bg-card p-3">
-              <p className="text-xs text-muted-foreground">Deneme Süresinde</p>
-              <p className="num mt-1 text-2xl font-bold text-blue-400">
+              <p className="text-[10px] text-muted-foreground sm:text-xs">
+                Deneme Süresinde
+              </p>
+              <p className="num mt-1 text-xl font-bold text-blue-400 sm:text-2xl">
                 {trialUsers}
               </p>
             </div>
             <div className="rounded-lg border border-border bg-card p-3">
-              <p className="text-xs text-muted-foreground">Banlı</p>
-              <p className="num mt-1 text-2xl font-bold text-bear">
+              <p className="text-[10px] text-muted-foreground sm:text-xs">
+                Banlı
+              </p>
+              <p className="num mt-1 text-xl font-bold text-bear sm:text-2xl">
                 {bannedUsers}
               </p>
             </div>
           </div>
 
           {/* ARAMA + FİLTRE */}
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="E-posta veya ID ara..."
-              className="min-w-[240px] flex-1 rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring"
+              className="min-h-[44px] w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring sm:min-w-[240px] sm:flex-1"
             />
             <select
               value={tierFilter}
               onChange={(e) =>
                 setTierFilter(e.target.value as typeof tierFilter)
               }
-              className="rounded-md border border-input bg-card px-3 py-2 text-xs font-bold outline-none"
+              className="min-h-[44px] w-full rounded-md border border-input bg-card px-3 py-2 text-xs font-bold outline-none sm:w-auto"
             >
               <option value="all">Tüm Tier'lar</option>
               <option value="admin">👑 Admin</option>
@@ -543,7 +578,7 @@ function AdminPage() {
             <button
               type="button"
               onClick={() => void refreshUsers()}
-              className="rounded-md border border-border px-3 py-2 text-xs font-bold hover:bg-secondary"
+              className="min-h-[44px] rounded-md border border-border px-3 py-2 text-xs font-bold hover:bg-secondary"
             >
               🔄 Yenile
             </button>
@@ -563,177 +598,354 @@ function AdminPage() {
               Kullanıcı bulunamadı.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b border-border bg-secondary/30">
-                  <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="px-3 py-2">#</th>
-                    <th className="px-3 py-2">E-posta</th>
-                    <th className="px-3 py-2">Tier</th>
-                    <th className="px-3 py-2">Rol</th>
-                    <th className="px-3 py-2">Durum</th>
-                    <th className="px-3 py-2">Kayıt</th>
-                    <th className="px-3 py-2">Son Giriş</th>
-                    <th className="px-3 py-2 text-right">Aksiyonlar</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((u, idx) => {
-                    const isMe = u.id === user?.id;
-                    const busy = busyUserId === u.id;
-                    const tier = getUserTier(u);
-                    const badge = tierBadge(tier);
-                    const daysLeft =
-                      tier === "trial" ? getTrialDaysLeft(u) : null;
-                    const lastSignIn = formatLastSignIn(u.last_sign_in_at);
+            <>
+              {/* ========== MASAÜSTÜ: TABLO ========== */}
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-border bg-secondary/30">
+                    <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+                      <th className="px-3 py-2">#</th>
+                      <th className="px-3 py-2">E-posta</th>
+                      <th className="px-3 py-2">Tier</th>
+                      <th className="px-3 py-2">Rol</th>
+                      <th className="px-3 py-2">Durum</th>
+                      <th className="px-3 py-2">Kayıt</th>
+                      <th className="px-3 py-2">Son Giriş</th>
+                      <th className="px-3 py-2 text-right">Aksiyonlar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((u, idx) => {
+                      const isMe = u.id === user?.id;
+                      const busy = busyUserId === u.id;
+                      const tier = getUserTier(u);
+                      const badge = tierBadge(tier);
+                      const daysLeft =
+                        tier === "trial" ? getTrialDaysLeft(u) : null;
+                      const lastSignIn = formatLastSignIn(u.last_sign_in_at);
 
-                    return (
-                      <tr
-                        key={u.id}
-                        className={`border-b border-border hover:bg-secondary/20 ${
-                          isMe ? "bg-primary/5" : ""
-                        }`}
-                      >
-                        <td className="num px-3 py-2 text-xs text-muted-foreground">
-                          {idx + 1}
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs">{u.email ?? "—"}</span>
+                      return (
+                        <tr
+                          key={u.id}
+                          className={`border-b border-border hover:bg-secondary/20 ${
+                            isMe ? "bg-primary/5" : ""
+                          }`}
+                        >
+                          <td className="num px-3 py-2 text-xs text-muted-foreground">
+                            {idx + 1}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs">{u.email ?? "—"}</span>
+                              {isMe && (
+                                <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold text-primary">
+                                  SEN
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-col gap-0.5">
+                              <span
+                                className={`inline-flex w-fit items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold ${badge.cls}`}
+                              >
+                                {badge.emoji} {badge.label}
+                              </span>
+                              {daysLeft !== null && (
+                                <span className="text-[9px] text-blue-400">
+                                  {daysLeft} gün kaldı
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            {u.role === "admin" ? (
+                              <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-500">
+                                👑 ADMIN
+                              </span>
+                            ) : (
+                              <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-bold">
+                                USER
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {u.is_banned ? (
+                              <span className="rounded bg-bear/15 px-2 py-0.5 text-[10px] font-bold text-bear">
+                                🚫 BANLI
+                              </span>
+                            ) : (
+                              <span className="rounded bg-bull/15 px-2 py-0.5 text-[10px] font-bold text-bull">
+                                ✅ AKTİF
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-[10px] text-muted-foreground">
+                            {new Date(u.created_at).toLocaleDateString("tr-TR")}
+                          </td>
+                          <td className="px-3 py-2 text-[10px] text-muted-foreground">
+                            <span
+                              className={
+                                u.last_sign_in_at
+                                  ? "text-foreground"
+                                  : "text-muted-foreground/60"
+                              }
+                            >
+                              {lastSignIn}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <DesktopActions
+                              u={u}
+                              isMe={isMe}
+                              busy={busy}
+                              tier={tier}
+                              onStartTrial={startTrialForUser}
+                              onCancelTrial={cancelTrialForUser}
+                              onTogglePremium={togglePremium}
+                              onToggleAdminRole={toggleAdminRole}
+                              onToggleBan={toggleBan}
+                              onDelete={deleteUser}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ========== MOBİL: KART LİSTESİ ========== */}
+              <div className="divide-y divide-border lg:hidden">
+                {filtered.map((u) => {
+                  const isMe = u.id === user?.id;
+                  const busy = busyUserId === u.id;
+                  const tier = getUserTier(u);
+                  const badge = tierBadge(tier);
+                  const daysLeft =
+                    tier === "trial" ? getTrialDaysLeft(u) : null;
+                  const lastSignIn = formatLastSignIn(u.last_sign_in_at);
+
+                  return (
+                    <div
+                      key={u.id}
+                      className={`p-3 ${isMe ? "bg-primary/5" : ""}`}
+                    >
+                      {/* ÜST: EMAIL + TIER BADGE */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="truncate text-xs font-bold">
+                              {u.email ?? "—"}
+                            </span>
                             {isMe && (
                               <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold text-primary">
                                 SEN
                               </span>
                             )}
                           </div>
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex flex-col gap-0.5">
-                            <span
-                              className={`inline-flex w-fit items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold ${badge.cls}`}
-                            >
-                              {badge.emoji} {badge.label}
-                            </span>
-                            {daysLeft !== null && (
-                              <span className="text-[9px] text-blue-400">
-                                {daysLeft} gün kaldı
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2">
-                          {u.role === "admin" ? (
-                            <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-500">
-                              👑 ADMIN
-                            </span>
-                          ) : (
-                            <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-bold">
-                              USER
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">
-                          {u.is_banned ? (
-                            <span className="rounded bg-bear/15 px-2 py-0.5 text-[10px] font-bold text-bear">
-                              🚫 BANLI
-                            </span>
-                          ) : (
-                            <span className="rounded bg-bull/15 px-2 py-0.5 text-[10px] font-bold text-bull">
-                              ✅ AKTİF
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-[10px] text-muted-foreground">
-                          {new Date(u.created_at).toLocaleDateString("tr-TR")}
-                        </td>
-                        <td className="px-3 py-2 text-[10px] text-muted-foreground">
-                          <span className={u.last_sign_in_at ? "text-foreground" : "text-muted-foreground/60"}>
-                            {lastSignIn}
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            Kayıt:{" "}
+                            {new Date(u.created_at).toLocaleDateString("tr-TR")}{" "}
+                            · Son giriş: {lastSignIn}
+                          </p>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-bold ${badge.cls}`}
+                        >
+                          {badge.emoji} {badge.label}
+                        </span>
+                      </div>
+
+                      {/* DURUM ROZETLERİ */}
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {u.role === "admin" ? (
+                          <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-500">
+                            👑 ADMIN
                           </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex flex-wrap items-center justify-end gap-1">
-                            {/* TRIAL BUTONU */}
-                            {tier === "trial" ? (
-                              <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() => void cancelTrialForUser(u.id)}
-                                className="rounded border border-blue-500/30 px-2 py-1 text-[10px] font-bold text-blue-400 hover:bg-blue-500/10 disabled:opacity-50"
-                              >
-                                ⏱️ İptal
-                              </button>
-                            ) : tier === "free" && !u.trial_used ? (
-                              <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() => void startTrialForUser(u.id)}
-                                className="rounded border border-blue-500/30 px-2 py-1 text-[10px] font-bold text-blue-400 hover:bg-blue-500/10 disabled:opacity-50"
-                              >
-                                🚀 Trial Ver
-                              </button>
-                            ) : null}
+                        ) : (
+                          <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-bold">
+                            USER
+                          </span>
+                        )}
+                        {u.is_banned ? (
+                          <span className="rounded bg-bear/15 px-2 py-0.5 text-[10px] font-bold text-bear">
+                            🚫 BANLI
+                          </span>
+                        ) : (
+                          <span className="rounded bg-bull/15 px-2 py-0.5 text-[10px] font-bold text-bull">
+                            ✅ AKTİF
+                          </span>
+                        )}
+                        {daysLeft !== null && (
+                          <span className="rounded bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-400">
+                            ⏱️ {daysLeft} gün kaldı
+                          </span>
+                        )}
+                      </div>
 
-                            {/* PREMIUM TOGGLE */}
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() =>
-                                void togglePremium(u.id, u.membership)
-                              }
-                              className="rounded border border-border px-2 py-1 text-[10px] font-bold hover:bg-primary/10 disabled:opacity-50"
-                            >
-                              {u.membership === "premium"
-                                ? "↩️ Free"
-                                : "⭐ Premium"}
-                            </button>
+                      {/* AKSİYONLAR */}
+                      <div className="mt-3 grid grid-cols-2 gap-1.5">
+                        {tier === "trial" ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void cancelTrialForUser(u.id)}
+                            className="min-h-[40px] rounded border border-blue-500/30 px-2 py-1.5 text-[11px] font-bold text-blue-400 hover:bg-blue-500/10 disabled:opacity-50"
+                          >
+                            ⏱️ Denemeyi İptal
+                          </button>
+                        ) : tier === "free" && !u.trial_used ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void startTrialForUser(u.id)}
+                            className="min-h-[40px] rounded border border-blue-500/30 px-2 py-1.5 text-[11px] font-bold text-blue-400 hover:bg-blue-500/10 disabled:opacity-50"
+                          >
+                            🚀 Trial Ver
+                          </button>
+                        ) : (
+                          <div />
+                        )}
 
-                            {/* ADMIN TOGGLE */}
-                            <button
-                              type="button"
-                              disabled={busy || isMe}
-                              onClick={() =>
-                                void toggleAdminRole(u.id, u.role)
-                              }
-                              className="rounded border border-border px-2 py-1 text-[10px] font-bold hover:bg-amber-500/10 disabled:opacity-50"
-                            >
-                              {u.role === "admin" ? "↓ User" : "👑 Admin"}
-                            </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void togglePremium(u.id, u.membership)}
+                          className="min-h-[40px] rounded border border-border px-2 py-1.5 text-[11px] font-bold hover:bg-primary/10 disabled:opacity-50"
+                        >
+                          {u.membership === "premium"
+                            ? "↩️ Free Yap"
+                            : "⭐ Premium"}
+                        </button>
 
-                            {/* BAN TOGGLE */}
-                            <button
-                              type="button"
-                              disabled={busy || isMe}
-                              onClick={() => void toggleBan(u.id, u.is_banned)}
-                              className="rounded border border-border px-2 py-1 text-[10px] font-bold hover:bg-warn/10 disabled:opacity-50"
-                            >
-                              {u.is_banned ? "✅ Aç" : "🚫 Ban"}
-                            </button>
+                        <button
+                          type="button"
+                          disabled={busy || isMe}
+                          onClick={() => void toggleAdminRole(u.id, u.role)}
+                          className="min-h-[40px] rounded border border-border px-2 py-1.5 text-[11px] font-bold hover:bg-amber-500/10 disabled:opacity-50"
+                        >
+                          {u.role === "admin" ? "↓ User Yap" : "👑 Admin"}
+                        </button>
 
-                            {/* SİL */}
-                            <button
-                              type="button"
-                              disabled={busy || isMe}
-                              onClick={() => void deleteUser(u.id, u.email)}
-                              className="rounded border border-destructive/30 px-2 py-1 text-[10px] font-bold text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        <button
+                          type="button"
+                          disabled={busy || isMe}
+                          onClick={() => void toggleBan(u.id, u.is_banned)}
+                          className="min-h-[40px] rounded border border-border px-2 py-1.5 text-[11px] font-bold hover:bg-warn/10 disabled:opacity-50"
+                        >
+                          {u.is_banned ? "✅ Ban Aç" : "🚫 Banla"}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={busy || isMe}
+                          onClick={() => void deleteUser(u.id, u.email)}
+                          className="col-span-2 min-h-[40px] rounded border border-destructive/30 px-2 py-1.5 text-[11px] font-bold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                        >
+                          🗑️ Kullanıcıyı Sil
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </section>
 
-        <p className="pb-8 text-center text-[11px] text-muted-foreground">
+        <p className="pb-4 text-center text-[11px] text-muted-foreground">
           Bu sayfa sadece admin kullanıcılar tarafından erişilebilir.
         </p>
       </main>
+    </div>
+  );
+}
+
+// ==========================================================
+// MASAÜSTÜ AKSİYON BUTONLARI (tablo satırı içinde)
+// ==========================================================
+
+function DesktopActions({
+  u,
+  isMe,
+  busy,
+  tier,
+  onStartTrial,
+  onCancelTrial,
+  onTogglePremium,
+  onToggleAdminRole,
+  onToggleBan,
+  onDelete,
+}: {
+  u: Profile;
+  isMe: boolean;
+  busy: boolean;
+  tier: UserTier;
+  onStartTrial: (id: string) => Promise<void>;
+  onCancelTrial: (id: string) => Promise<void>;
+  onTogglePremium: (id: string, current: string) => Promise<void>;
+  onToggleAdminRole: (id: string, current: string) => Promise<void>;
+  onToggleBan: (id: string, current: boolean) => Promise<void>;
+  onDelete: (id: string, email: string | null) => Promise<void>;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-1">
+      {tier === "trial" ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void onCancelTrial(u.id)}
+          className="rounded border border-blue-500/30 px-2 py-1 text-[10px] font-bold text-blue-400 hover:bg-blue-500/10 disabled:opacity-50"
+        >
+          ⏱️ İptal
+        </button>
+      ) : tier === "free" && !u.trial_used ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void onStartTrial(u.id)}
+          className="rounded border border-blue-500/30 px-2 py-1 text-[10px] font-bold text-blue-400 hover:bg-blue-500/10 disabled:opacity-50"
+        >
+          🚀 Trial Ver
+        </button>
+      ) : null}
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void onTogglePremium(u.id, u.membership)}
+        className="rounded border border-border px-2 py-1 text-[10px] font-bold hover:bg-primary/10 disabled:opacity-50"
+      >
+        {u.membership === "premium" ? "↩️ Free" : "⭐ Premium"}
+      </button>
+
+      <button
+        type="button"
+        disabled={busy || isMe}
+        onClick={() => void onToggleAdminRole(u.id, u.role)}
+        className="rounded border border-border px-2 py-1 text-[10px] font-bold hover:bg-amber-500/10 disabled:opacity-50"
+      >
+        {u.role === "admin" ? "↓ User" : "👑 Admin"}
+      </button>
+
+      <button
+        type="button"
+        disabled={busy || isMe}
+        onClick={() => void onToggleBan(u.id, u.is_banned)}
+        className="rounded border border-border px-2 py-1 text-[10px] font-bold hover:bg-warn/10 disabled:opacity-50"
+      >
+        {u.is_banned ? "✅ Aç" : "🚫 Ban"}
+      </button>
+
+      <button
+        type="button"
+        disabled={busy || isMe}
+        onClick={() => void onDelete(u.id, u.email)}
+        className="rounded border border-destructive/30 px-2 py-1 text-[10px] font-bold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+      >
+        🗑️
+      </button>
     </div>
   );
 }
