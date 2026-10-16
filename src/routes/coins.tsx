@@ -1,11 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { AlertBell } from "@/components/AlertBell";
 import { MobileNav } from "@/components/MobileNav";
+import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
 import { SkeletonList } from "@/components/Skeleton";
 import { useAuth } from "@/hooks/useAuth";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/coins")({
@@ -378,6 +381,15 @@ function CoinsPage() {
       });
   }, [user]);
 
+  // ✅ YENİ: Pull-to-refresh
+  const pullToRefresh = usePullToRefresh({
+    threshold: 80,
+    onRefresh: async () => {
+      await tickers.refetch();
+      toast.success("Yenilendi");
+    },
+  });
+
   const isFav = (m: Market, s: string) =>
     favorites.some(
       (f) => f.market === m && f.symbol === s,
@@ -522,6 +534,15 @@ function CoinsPage() {
 
   return (
     <div className="min-h-screen pb-24 lg:pb-0">
+      {/* ✅ YENİ: Pull-to-refresh göstergesi (sadece mobilde) */}
+      <div className="lg:hidden">
+        <PullToRefreshIndicator
+          pullDistance={pullToRefresh.pullDistance}
+          isPulling={pullToRefresh.isPulling}
+          isRefreshing={pullToRefresh.isRefreshing}
+        />
+      </div>
+
       {/* ========== MOBİL HEADER (MobileNav kendi header'ını getirir) ========== */}
       <div className="lg:hidden">
         <MobileNav onOpenSymbol={openAnalysis} />
