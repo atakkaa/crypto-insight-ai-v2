@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { MobileNav } from "@/components/MobileNav";
+import { SkeletonList, SkeletonStatGrid } from "@/components/Skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useConfirm } from "@/hooks/useConfirm";
 import { supabase } from "@/integrations/supabase/client";
@@ -237,7 +238,6 @@ function AdminPage() {
   // TRIAL İPTAL
   // =========================================================
   async function cancelTrialForUser(userId: string) {
-    // ✅ YENİ: Custom confirm modal
     const ok = await confirm({
       title: "Denemeyi İptal Et",
       message: "Bu kullanıcının deneme süresini iptal etmek istediğinize emin misiniz?",
@@ -299,7 +299,6 @@ function AdminPage() {
       return;
     }
 
-    // ✅ YENİ: Custom confirm modal
     const willBeAdmin = current !== "admin";
     const ok = await confirm({
       title: willBeAdmin ? "Admin Yetkisi Ver" : "Admin Yetkisini Kaldır",
@@ -339,7 +338,6 @@ function AdminPage() {
       return;
     }
 
-    // ✅ YENİ: Custom confirm modal
     const ok = await confirm({
       title: "Kullanıcıyı Sil",
       message: `${email ?? userId} adlı kullanıcıyı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`,
@@ -378,7 +376,7 @@ function AdminPage() {
   }
 
   // =========================================================
-  // YÜKLENİYOR
+  // YÜKLENİYOR — SKELETON
   // =========================================================
   if (authLoading || loading || isAdmin === null) {
     return (
@@ -386,9 +384,30 @@ function AdminPage() {
         <div className="lg:hidden">
           <MobileNav onOpenSymbol={() => {}} />
         </div>
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <p className="text-sm text-muted-foreground">Yükleniyor...</p>
-        </div>
+
+        <main className="mx-auto max-w-7xl space-y-4 px-3 py-4 sm:px-4 sm:py-6">
+          {/* Başlık iskeleti */}
+          <section className="panel p-4 sm:p-5">
+            <div className="animate-pulse rounded-md bg-secondary/60 h-6 w-40" />
+            <div className="animate-pulse mt-2 rounded-md bg-secondary/60 h-3 w-64" />
+            <div className="mt-4">
+              <SkeletonStatGrid count={4} />
+            </div>
+            <div className="mt-4 flex gap-2">
+              <div className="animate-pulse h-11 flex-1 rounded-md bg-secondary/60" />
+              <div className="animate-pulse h-11 w-32 rounded-md bg-secondary/60" />
+              <div className="animate-pulse h-11 w-24 rounded-md bg-secondary/60" />
+            </div>
+          </section>
+
+          {/* Kullanıcı listesi iskeleti */}
+          <section className="panel overflow-hidden">
+            <div className="border-b border-border px-4 py-3">
+              <div className="animate-pulse h-3 w-32 rounded-md bg-secondary/60" />
+            </div>
+            <SkeletonList count={6} variant="row" />
+          </section>
+        </main>
       </div>
     );
   }
