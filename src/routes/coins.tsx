@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { AlertBell } from "@/components/AlertBell";
 import { MobileNav } from "@/components/MobileNav";
+import { SkeletonList } from "@/components/Skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -701,9 +702,7 @@ function CoinsPage() {
               </div>
 
               {tickers.isLoading && (
-                <p className="p-4 text-xs text-muted-foreground">
-                  Piyasa yükleniyor...
-                </p>
+                <SkeletonList count={6} variant="row" />
               )}
 
               {tickers.isError && (
