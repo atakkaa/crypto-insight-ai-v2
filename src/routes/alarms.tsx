@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { MobileNav } from "@/components/MobileNav";
+import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
 import { SkeletonList } from "@/components/Skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useConfirm } from "@/hooks/useConfirm";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 
 export const Route = createFileRoute("/alarms")({
   head: () => ({
@@ -130,6 +132,30 @@ function AlarmsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // ✅ YENİ: Pull-to-refresh (loading göstermeden sessizce yeniler)
+  const pullToRefresh = usePullToRefresh({
+    threshold: 80,
+    enabled: Boolean(user),
+    onRefresh: async () => {
+      if (!user) return;
+      try {
+        const res = await fetch("/api/alarms", {
+          headers: { "x-user-id": user.id },
+        });
+        const json = await res.json();
+        if (json.success) {
+          setAlarms(json.alarms as Alarm[]);
+          setTier(json.tier);
+          setLimit(json.limit);
+          toast.success("Yenilendi");
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Bağlantı hatası");
+      }
+    },
+  });
+
   async function createAlarm() {
     if (!user) return;
 
@@ -193,7 +219,6 @@ function AlarmsPage() {
   async function deleteAlarm(id: string) {
     if (!user) return;
 
-    // ✅ Custom confirm modal
     const ok = await confirm({
       title: "Alarmı Sil",
       message: "Bu alarmı silmek istediğinize emin misiniz?",
@@ -281,6 +306,15 @@ function AlarmsPage() {
 
   return (
     <div className="min-h-screen pb-24 lg:pb-0">
+      {/* ✅ YENİ: Pull-to-refresh göstergesi (mobilde) */}
+      <div className="lg:hidden">
+        <PullToRefreshIndicator
+          pullDistance={pullToRefresh.pullDistance}
+          isPulling={pullToRefresh.isPulling}
+          isRefreshing={pullToRefresh.isRefreshing}
+        />
+      </div>
+
       {/* ========== MOBİL HEADER ========== */}
       <div className="lg:hidden">
         <MobileNav onOpenSymbol={() => {}} />
