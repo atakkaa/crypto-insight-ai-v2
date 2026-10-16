@@ -1,8 +1,11 @@
 // src/lib/yolo-vision.ts — YOLOv8 ONNX Runtime Web entegrasyonu
 import * as ort from "onnxruntime-web";
 
-// ONNX Runtime WASM dosyalarının konumu
-ort.env.wasm.wasmPaths = "/ort/";
+// ONNX Runtime WASM dosyalarının konumu — CDN'den yükle (Vercel uyumlu)
+ort.env.wasm.wasmPaths =
+  "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
+ort.env.wasm.numThreads = 1; // Tek thread (uyumluluk)
+ort.env.wasm.simd = true;    // SIMD aktif (hız için)
 
 // Model sınıfları (Python çıktısından)
 export const YOLO_CLASSES: Record<number, string> = {
