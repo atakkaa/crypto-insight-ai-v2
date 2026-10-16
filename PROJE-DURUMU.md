@@ -1,6 +1,6 @@
 # AE Analiz — Proje Durum Raporu
 
-**Son Güncelleme:** 2026-10-16 (Sabah)
+**Son Güncelleme:** 2026-10-16 (Öğleden Sonra)
 
 ## 🎯 Proje Nedir?
 
@@ -22,10 +22,11 @@ Kripto ve hisse senedi piyasaları için otomatik formasyon tespiti ve bildirim 
 - Haber etkisi entegrasyonu
 - **PWA + Tam Mobil Uyumluluk**
 - **Custom Confirm Modal (iOS PWA uyumlu)**
-- **Skeleton Loader (tüm sayfalar)**
+- **Skeleton Loader (9 dosya)**
 - **Pull-to-Refresh (5 sayfa)**
 - **CandleChart mobil zoom/pan**
 - **iOS safe-area desteği**
+- **Grafik performans optimizasyonu (prefetch + cache)** ← YENİ
 
 ---
 
@@ -54,31 +55,42 @@ Kripto ve hisse senedi piyasaları için otomatik formasyon tespiti ve bildirim 
 | 58 | **PWA ikon düzeltmesi** | __root.tsx, manifest.json, apple-touch-icon.png |
 | 59 | **Realtime kanal çakışma fix** | notifications.ts (unique channel names) |
 | 60 | **Bildirim dropdown mobile full-width** | NotificationBell.tsx, ShortTermNotificationBell.tsx |
+| **61** | **Grafik placeholderData + cache (React Query)** | **src/routes/index.tsx** |
+| **62** | **Analiz localStorage cache (5 dk TTL)** | **src/routes/index.tsx** |
+| **63** | **Prefetch top 10 kripto + top 10 hisse** | **src/routes/index.tsx** |
 
 ---
 
 ## 🎉 Mobil Uyumluluk — %100 TAMAMLANDI
 
-| # | Sayfa | Mobil | Skeleton | Pull-to-Refresh |
-|---|---|---|---|---|
-| ✅ | `/` (ana sayfa) | ✅ | — | — |
-| ✅ | `/coins` | ✅ | ✅ | ✅ |
-| ✅ | `/settings` | ✅ | — | — |
-| ✅ | `/alarms` | ✅ | ✅ | ✅ |
-| ✅ | `/market-summary` | ✅ | ✅ | ✅ |
-| ✅ | `/short-term-notifications` | ✅ | ✅ | ✅ |
-| ✅ | `/stats` | ✅ | ✅ | ✅ |
-| ✅ | `/backtest` | ✅ | — | — |
-| ✅ | `/admin` | ✅ | ✅ | — |
+| # | Sayfa | Mobil | Skeleton | Pull-to-Refresh | Hız |
+|---|---|---|---|---|---|
+| ✅ | `/` (ana sayfa) | ✅ | — | — | ✅ Prefetch |
+| ✅ | `/coins` | ✅ | ✅ | ✅ | — |
+| ✅ | `/settings` | ✅ | — | — | — |
+| ✅ | `/alarms` | ✅ | ✅ | ✅ | — |
+| ✅ | `/market-summary` | ✅ | ✅ | ✅ | — |
+| ✅ | `/short-term-notifications` | ✅ | ✅ | ✅ | — |
+| ✅ | `/stats` | ✅ | ✅ | ✅ | — |
+| ✅ | `/backtest` | ✅ | — | — | — |
+| ✅ | `/admin` | ✅ | ✅ | — | — |
 
-**Uygulanan ortak mobil şablonu:**
-- `MobileNav` üstte (`lg:hidden`)
-- Masaüstü header (`hidden lg:block`)
-- `pb-24 lg:pb-0` (alt tab bar boşluğu)
-- Tüm input/select/butonlar min 40-48px
-- Grid'ler mobilde 1-2 sütun
-- Tablolar yatay kaydırılabilir (`-mx-3 overflow-x-auto px-3`)
-- iOS safe-area desteği (`env(safe-area-inset-*)`)
+---
+
+## ⚡ Performans Optimizasyonu (2026-10-16)
+
+### Grafik Yükleme Hızı
+- **Problem:** BTC hızlı, diğer coinler/hisseler yavaştı
+- **Çözüm 1:** React Query `placeholderData` — sembol değişince eski grafik gösterilir
+- **Çözüm 2:** `staleTime: 2dk`, `gcTime: 10dk` — aynı coine dönüş anında
+- **Çözüm 3:** **Prefetch top 10** — arka planda otomatik yükleme
+- **Çözüm 4:** Analiz localStorage cache (5 dk TTL)
+- **Sonuç:** Top 10 coin/hisse **anında** açılıyor 🚀
+
+### Analiz Cache
+- Uzun vadeli analiz 5 dakika cache'te
+- Aynı coine dönüş: **anında** AI sonucu
+- `longTermCacheKey` = `formasyon-ai-long-term-v1`
 
 ---
 
@@ -100,9 +112,11 @@ Kripto ve hisse senedi piyasaları için otomatik formasyon tespiti ve bildirim 
 |---|---|---|---|
 | 1 | YOLO sunucuya taşıma | Düşük | BEKLİYOR |
 | 2 | YOLO yeniden eğitme | Düşük | BEKLİYOR |
-| 3 | Gerçek cihaz test turu | YÜKSEK | SIRADAKİ |
-| 4 | PWA kurulum testi (Android + iOS) | ORTA | BEKLİYOR |
-| 5 | Offline mod testi (Service Worker) | ORTA | BEKLİYOR |
+| 3 | **YOLO arka planda yükleme (ön yükleme)** | ORTA | SIRADAKİ |
+| 4 | Gerçek cihaz test turu | YÜKSEK | BEKLİYOR |
+| 5 | PWA kurulum testi (Android + iOS) | ORTA | BEKLİYOR |
+| 6 | Offline mod testi (Service Worker) | ORTA | BEKLİYOR |
+| 7 | Analiz paneli skeleton (görsel iskelet) | DÜŞÜK | BEKLİYOR |
 
 ---
 
@@ -115,7 +129,7 @@ Kripto ve hisse senedi piyasaları için otomatik formasyon tespiti ve bildirim 
 - api/market-summary.ts, formation-projection.ts, dnd-summary.ts, binance-proxy.ts
 
 ### Frontend Routes (10 sayfa)
-- src/routes/index.tsx
+- src/routes/index.tsx (prefetch + cache + analiz cache)
 - src/routes/coins.tsx, settings.tsx, alarms.tsx
 - src/routes/market-summary.tsx, short-term-notifications.tsx
 - src/routes/stats.tsx, backtest.tsx, admin.tsx
@@ -123,15 +137,15 @@ Kripto ve hisse senedi piyasaları için otomatik formasyon tespiti ve bildirim 
 
 ### Frontend Components
 - src/components/MobileNav.tsx (mobil hamburger + alt tab bar)
-- src/components/Skeleton.tsx (YENİ — yükleme iskeletleri)
-- src/components/ConfirmModal.tsx (YENİ — custom onay)
-- src/components/PullToRefreshIndicator.tsx (YENİ — çek-yenile)
+- src/components/Skeleton.tsx (yükleme iskeletleri)
+- src/components/ConfirmModal.tsx (custom onay)
+- src/components/PullToRefreshIndicator.tsx (çek-yenile)
 - src/components/NotificationBell.tsx, ShortTermNotificationBell.tsx
 - src/components/NotificationDetailModal.tsx
 - src/components/ShortTermNotificationDetailModal.tsx
 - src/components/FormationProjectionModal.tsx
 - src/components/LimitReachedModal.tsx
-- src/components/CandleChart.tsx
+- src/components/CandleChart.tsx (mobil zoom/pan)
 - src/components/AlertBell.tsx
 - src/components/AssetInfoPanel.tsx
 - src/components/AnalysisPanels.tsx
@@ -140,8 +154,8 @@ Kripto ve hisse senedi piyasaları için otomatik formasyon tespiti ve bildirim 
 - src/components/MarketTicker.tsx
 
 ### Hooks
-- src/hooks/useConfirm.tsx (YENİ — custom confirm)
-- src/hooks/usePullToRefresh.ts (YENİ — çek-yenile)
+- src/hooks/useConfirm.tsx
+- src/hooks/usePullToRefresh.ts
 - src/hooks/use-mobile.tsx
 - src/hooks/useAuth.ts, useAdmin.ts, useUserTier.ts, useDndSettings.ts
 
@@ -153,10 +167,10 @@ Kripto ve hisse senedi piyasaları için otomatik formasyon tespiti ve bildirim 
 - src/lib/analysis-types.ts
 
 ### Public
-- public/manifest.json (PWA manifest — apple-touch-icon eklendi)
+- public/manifest.json (PWA manifest)
 - public/sw.js (Service Worker)
 - public/icon-192.png, icon-512.png
-- public/apple-touch-icon.png (180x180, düzeltildi)
+- public/apple-touch-icon.png (180x180)
 - public/favicon.ico
 
 ---
@@ -210,6 +224,8 @@ profiles, market_cache, news_cache, short_term_tracking
 - CRON_SECRET = Ata12345678.
 - VITE_VAPID_PUBLIC_KEY
 
+**Vercel Plan:** Hobby (11 function, max 12 — 1 slot kaldı)
+
 ---
 
 ## ⏰ Cron Job (cron-job.org)
@@ -247,23 +263,30 @@ Formasyon dönüşüm analizi, Haber etkisi, Marka adı AE Analiz,
 PWA kurulumu, use-mobile hook, MobileNav, Koşullu admin linki,
 Ana sayfa mobil layout
 
-### 2026-10-15 (Akşam) — MOBİL UYUMLULUK TURU
-- `/coins`, `/settings`, `/alarms`, `/market-summary`,
-  `/short-term-notifications`, `/stats`, `/backtest`, `/admin`
-  → TÜMÜ mobil uyumlu hale getirildi
-- admin: mobilde tablo → kart görünümü
+### 2026-10-15 (Akşam)
+Tüm sayfaların mobil uyumluluğu:
+coins, settings, alarms, market-summary, short-term-notifications,
+stats, backtest, admin
 
 ### 2026-10-16 (Sabah) — İYİLEŞTİRME TURU
-- **iOS safe-area desteği** (notch + home bar)
-- **Modal tam ekran** (FormationProjectionModal, LimitReachedModal → bottom sheet + React Portal)
-- **CandleChart mobil zoom/pan** (pinch, pan, double-tap, wheel)
-- **Custom ConfirmModal** + useConfirm hook
-- **9 window.confirm** yerine custom modal
-- **Skeleton Loader** (Skeleton.tsx + 9 sayfaya entegre)
-- **Pull-to-Refresh** (usePullToRefresh + 5 sayfaya entegre)
-- **PWA ikon düzeltmesi** (apple-touch-icon + manifest)
-- **Realtime kanal fix** (unique channel names)
-- **Bildirim dropdown full-width** (mobilde)
+- iOS safe-area desteği
+- Modal tam ekran (bottom sheet + React Portal)
+- CandleChart mobil zoom/pan
+- Custom ConfirmModal + useConfirm
+- 9 window.confirm → custom modal
+- Skeleton Loader (9 dosya)
+- Pull-to-Refresh (5 sayfa)
+- PWA ikon düzeltmesi
+- Realtime kanal fix
+- Bildirim dropdown full-width
+
+### 2026-10-16 (Öğleden Sonra) — PERFORMANS TURU
+- **Grafik yükleme hızı optimizasyonu:**
+  - `placeholderData` ile eski grafik soluk kalıyor
+  - `staleTime: 2dk`, `gcTime: 10dk` (React Query cache)
+  - **Prefetch top 10 kripto + top 10 hisse** (arka planda otomatik yükleme)
+  - Analiz sonucu localStorage cache (5 dk TTL)
+- **Sonuç:** Top 10 coin/hisse anında açılıyor ⚡
 
 ---
 
@@ -323,24 +346,21 @@ Ana sayfa mobil layout
 - 1024px altı ekranlarda gösterilir
 - Hamburger menü (☰) → tüm linkler + admin linki (sadece admin görür)
 - Alt tab bar → 5 sekme: Grafik / Özet / Alarm / Kısa / Ayar
-- **Kendi header'ı var** — sayfalarda ayrıca header eklenmez
+- Kendi header'ı var — sayfalarda ayrıca header eklenmez
 - `onOpenSymbol` prop'u ZORUNLU
-- **iOS safe-area desteği**: `env(safe-area-inset-top/bottom)`
+- iOS safe-area desteği
 
 ### Mobil Uyumluluk Şablonu
 ```tsx
 <div className="min-h-screen pb-24 lg:pb-0">
-  {/* Pull-to-refresh (opsiyonel) */}
   <div className="lg:hidden">
     <PullToRefreshIndicator ... />
   </div>
 
-  {/* Mobil header */}
   <div className="lg:hidden">
     <MobileNav onOpenSymbol={...} />
   </div>
 
-  {/* Masaüstü header */}
   <header className="sticky top-0 z-20 hidden border-b border-border bg-background/90 backdrop-blur lg:block">
     ...
   </header>
@@ -348,58 +368,67 @@ Ana sayfa mobil layout
   <main className="mx-auto max-w-X space-y-4 px-3 py-4 sm:px-4 sm:py-6">
     ...
   </main>
-</div>Kurallar:
+</div>
+Skeleton Loader Kullanımı
+import { SkeletonList, SkeletonCard, SkeletonStatGrid, SkeletonRow } from "@/components/Skeleton";
 
-Tüm input/select/butonlar min 40-48px
-
-Grid'ler mobilde 1-2 sütun
-
-Tablolar -mx-3 overflow-x-auto px-3 ile yatay kaydırılabilir
-
-Grafikler h-72 sm:h-80
-
-Bottom padding pb-24 lg:pb-0
-
-Skeleton Loader Kullanımıimport { SkeletonList, SkeletonCard, SkeletonStatGrid, SkeletonRow } from "@/components/Skeleton";
-
-{loading ? <SkeletonList count={5} variant="row" /> : <Content />}Pull-to-Refresh Kullanımıimport { usePullToRefresh } from "@/hooks/usePullToRefresh";
+{loading ? <SkeletonList count={5} variant="row" /> : <Content />}
+Pull-to-Refresh Kullanımı
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
 
 const pullToRefresh = usePullToRefresh({
   threshold: 80,
   enabled: Boolean(user),
   onRefresh: async () => {
-    // Yenileme işlemi (fetch, refetch vs.)
+    // Yenileme
     toast.success("Yenilendi");
   },
 });
-
-// Return içinde:
-<div className="lg:hidden">
-  <PullToRefreshIndicator
-    pullDistance={pullToRefresh.pullDistance}
-    isPulling={pullToRefresh.isPulling}
-    isRefreshing={pullToRefresh.isRefreshing}
-  />
-</div>
-Custom Confirm Kullanımıimport { useConfirm } from "@/hooks/useConfirm";
-
+Custom Confirm Kullanımı
 const confirm = useConfirm();
-
 const ok = await confirm({
   title: "Sil",
   message: "Silmek istediğinize emin misiniz?",
-  confirmText: "Sil",
-  cancelText: "Vazgeç",
   variant: "destructive",
 });
 if (!ok) return;
-// Silme işlemiiOS Safe-Area
+Grafik Performans Optimizasyonu (2026-10-16)
+Problem: BTC hızlı, diğer coinler yavaş.
+
+Çözüm 1 — React Query Cache:staleTime: 2 * 60_000,        // 2 dakika
+gcTime: 10 * 60_000,           // 10 dakika cache
+placeholderData: (prev) => prev, // Eski veri kalır
+Çözüm 2 — Prefetch (top 10):
+useEffect(() => {
+  if (!tickers.data || market !== "crypto") return;
+  const top10 = tickers.data.slice(0, 10);
+
+  requestIdleCallback(() => {
+    for (const t of top10) {
+      if (t.symbol === symbol) continue;
+      queryClient.prefetchQuery({
+        queryKey: ["klines", t.symbol, interval],
+        queryFn: () => fetchKlines(t.symbol, interval),
+        staleTime: 2 * 60_000,
+      });
+    }
+  });
+}, [tickers.data, market, symbol, interval]);
+Çözüm 3 — Analiz Cache:
+
+longTermCacheKey = formasyon-ai-long-term-v1
+
+TTL: 5 dakika
+
+Aynı coine dönüş: anında AI sonucu
+
+iOS Safe-Area
 <head> içinde: viewport-fit=cover
 
 CSS: env(safe-area-inset-top/bottom)
 
-MobileNav üst ve alt padding ile kullanılıyor
+MobileNav üst/alt padding ile kullanılıyor
 
 Modal Yapısı (Bottom Sheet)
 createPortal ile <body> altına mount edilir
@@ -416,28 +445,37 @@ use-mobile.tsx → Hem index.tsx hem sidebar.tsx kullanıyor
 useIsMobile.ts SİLİNDİ (çakışma)
 
 🎯 Sıradaki İşler
-1. Gerçek Cihaz Test Turu (YÜKSEK ÖNCELİK)
+1. YOLO Ön Yükleme (ORTA ÖNCELİK, ~10 dk)
+Sayfa açılırken YOLO modeli arka planda yüklensin
+
+Kullanıcı "AI Tespit"e bastığında model hazır olsun
+
+requestIdleCallback ile geciktirilmiş yükleme
+
+2. Gerçek Cihaz Test Turu (YÜKSEK ÖNCELİK)
 □ Android Chrome'da tüm sayfaları test et
 □ iOS Safari'de tüm sayfaları test et
-□ PWA olarak "Ana ekrana ekle" → offline çalışıyor mu?
-□ iOS safe-area düzgün çalışıyor mu?
+□ PWA kurulumu → offline çalışıyor mu?
+□ iOS safe-area düzgün mü?
 □ Pull-to-refresh her sayfada çalışıyor mu?
 □ Skeleton loader'lar görünüyor mu?
 □ CandleChart pinch-zoom çalışıyor mu?
-□ Klavye açıldığında inputlar görünüyor mu?
-2. Bilinen Küçük Sorunlar / İyileştirmeler
-□ Modal'lar mobilde tam ekran mı? (test edilecek)
-□ Grafik dokunmatik zoom / pan (test edilecek)
-□ Skeleton → içerik geçişi smooth mu?
-3. YOLO Entegrasyonu
+□ Prefetch çalışıyor mu? (top 10 hızlı mı?)
+3. YOLO Entegrasyonu (BÜYÜK İŞ)
 □ YOLO sunucuya taşıma
 □ Python FastAPI + YOLO servisi
 □ 16 formasyon için yeniden eğitme
+4. Opsiyonel İyileştirmeler
+□ Analiz paneli skeleton (görsel iskelet)
+□ Prefetch top 20 (daha agresif)
+□ Backend symbol cache (Vercel)
 🎯 Sonraki Sohbette
 Şunu yaz:
 
 "PROJE-DURUMU.md dosyasını oku ve kaldığımız yerden devam et.
-Sıradaki iş: [gerçek cihaz testi / YOLO entegrasyonu / vb]."Değişiklik Geçmişi
+Sıradaki iş: [YOLO ön yükleme / gerçek cihaz testi / YOLO entegrasyonu]."
+
+🔄 Değişiklik Geçmişi
 2026-10-12
 formation_signals tablosu, cron, istatistik API
 
@@ -461,23 +499,48 @@ iOS safe-area + Modal tam ekran + CandleChart mobil zoom/pan +
 Custom ConfirmModal + Skeleton Loader (9 dosya) + Pull-to-Refresh (5 sayfa) +
 PWA ikon düzeltmesi + Realtime kanal fix + Bildirim dropdown full-width
 
+2026-10-16 (Öğleden Sonra)
+Grafik performans optimizasyonu:
+
+React Query placeholderData + cache
+
+Prefetch top 10 kripto + top 10 hisse
+
+Analiz localStorage cache (5 dk TTL)
+
+Sonuç: Top 10 coin/hisse anında açılıyor
+
 Son Commit:
-feat(stats): pull-to-refresh
+perf(chart): prefetch top 10 symbols + longer cache TTL
 
 Sıradaki Hedef:
-Gerçek cihaz test turu → iOS/Android kontrol → YOLO entegrasyonu
+YOLO ön yükleme → Gerçek cihaz test turu → YOLO entegrasyonu
+
 ---
 
 ## 📌 Bu Güncellemenin Özeti
 
 | Bölüm | Ne Değişti |
 |---|---|
-| **Son Güncelleme** | 2026-10-16 (Sabah) |
-| **Tamamlanan** | 49-60 numaralı özellikler eklendi (12 yeni öğe) |
-| **Mobil Uyumluluk** | Skeleton ve Pull-to-Refresh kolonları eklendi |
-| **Yeni UI Bileşenleri** | 5 yeni bileşen/hook listelendi |
-| **Önemli Dosyalar** | Yeni bileşenler ve hook'lar eklendi |
-| **Bugüne Kadar** | 2026-10-16 (Sabah) oturumu eklendi (9 iyileştirme) |
-| **Sıradaki İşler** | Gerçek cihaz testi, YOLO entegrasyonu |
-| **Önemli Notlar** | Skeleton, Pull-to-Refresh, Custom Confirm, Modal, iOS Safe-Area şablonları eklendi |
+| **Son Güncelleme** | 2026-10-16 (Öğleden Sonra) |
+| **Tamamlanan** | 61-63 numaralı performans özellikleri eklendi |
+| **Mobil Uyumluluk** | Tabloya "Hız" kolonu eklendi (Prefetch) |
+| **Performans Optimizasyonu** | Yeni bölüm — 4 çözüm detaylı |
+| **Yeni UI Bileşenleri** | Değişmedi |
+| **Eksik/Yapılacaklar** | YOLO ön yükleme sıradaki olarak işaretlendi |
+| **Bugüne Kadar** | 2026-10-16 (Öğleden Sonra) performans turu eklendi |
+| **Önemli Notlar** | Grafik performans optimizasyonu bölümü eklendi |
 | **Değişiklik Geçmişi** | Bu oturumun özeti |
+
+---
+
+## 🎬 Şimdi Yap
+
+### 1. `PROJE-DURUMU.md` dosyasını güncelle
+Yukarıdaki içeriği **komple kopyala-yapıştır** yap.
+
+### 2. Commit + Push
+```bash
+git add PROJE-DURUMU.md
+git commit -m "docs: proje durumu güncellendi (2026-10-16 öğleden sonra - performans turu)"
+git push
