@@ -988,6 +988,9 @@ function Dashboard() {
 
   const isMobile = useIsMobile();
   const shortTermCacheKey = `formasyon-ai-short-term-v1`;
+// ✅ YENİ: Uzun vadeli analiz cache'i
+const longTermCacheKey = `formasyon-ai-long-term-v1`;
+const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
   const runAnalysis = useServerFn(analyzeChart);
   const loadStock = useServerFn(getStockCandles);
   const loadAssetInfo = useServerFn(getAssetInfo);
@@ -1007,28 +1010,36 @@ function Dashboard() {
   });
 
   const cryptoCandles = useQuery({
-    queryKey: ["klines", symbol, interval],
-    queryFn: () => fetchKlines(symbol, interval),
-    enabled: market === "crypto",
-    refetchInterval: 15_000,
-  });
+  queryKey: ["klines", symbol, interval],
+  queryFn: () => fetchKlines(symbol, interval),
+  enabled: market === "crypto",
+  refetchInterval: 15_000,
+  staleTime: 60_000, // 1 dakika taze
+  gcTime: 5 * 60_000, // 5 dakika cache'te tut
+  placeholderData: (previousData) => previousData, // ← KRİTİK: Eski veriyi koru
+});
 
   const stockCandles = useQuery({
-    queryKey: ["stock", stockSymbol, interval],
-    queryFn: () => loadStock({ data: { symbol: stockSymbol, interval } }),
-    enabled: isStockMarket(market),
-    refetchInterval: 60_000,
-    retry: 0,
-  });
+  queryKey: ["stock", stockSymbol, interval],
+  queryFn: () => loadStock({ data: { symbol: stockSymbol, interval } }),
+  enabled: isStockMarket(market),
+  refetchInterval: 60_000,
+  staleTime: 60_000,
+  gcTime: 5 * 60_000,
+  retry: 0,
+  placeholderData: (previousData) => previousData, // ← KRİTİK
+});
 
   const assetInfo = useQuery<AssetInfo | null>({
-    queryKey: ["asset-info", market, activeSymbol],
-    queryFn: () => loadAssetInfo({ data: { market, symbol: activeSymbol } }),
-    enabled: Boolean(activeSymbol),
-    refetchInterval: market === "crypto" ? 60_000 : 300_000,
-    staleTime: 30_000,
-    retry: 0,
-  });
+  queryKey: ["asset-info", market, activeSymbol],
+  queryFn: () => loadAssetInfo({ data: { market, symbol: activeSymbol } }),
+  enabled: Boolean(activeSymbol),
+  refetchInterval: market === "crypto" ? 60_000 : 300_000,
+  staleTime: 60_000, // 30sn → 60sn
+  gcTime: 5 * 60_000,
+  retry: 0,
+  placeholderData: (previousData) => previousData,
+});
 
   const news = useQuery({
     queryKey: ["news"],
@@ -1797,44 +1808,91 @@ function Dashboard() {
   const newsSignature = relevantNews.map((n) => n.title).join("|");
 
   useEffect(() => {
-    if (candles.length < 30) return;
-    let cancelled = false;
-    setAnalyzing(true);
-    setAnalysisError(null);
-    void runAnalysis({
-      data: {
-        symbol: activeSymbol,
-        market: market === "crypto" ? "kripto" : `hisse/${MARKET_LABELS[market]}`,
-        interval,
-        candles: candles.map(({ time, open, high, low, close, volume }) => ({
-          time,
-          open,
-          high,
-          low,
-          close,
-          volume,
-        })),
-        news: relevantNews,
-      },
-    })
-      .then((result) => {
-        if (cancelled) return;
-        const nextAnalysis = result.analysis as DashboardAnalysis | null;
-        setAnalysis(nextAnalysis);
-        setAnalysisError(result.error);
-      })
-      .catch(() => {
-        if (!cancelled) setAnalysisError("Analiz servisi şu an yanıt vermiyor.");
-      })
-      .finally(() => {
-        if (!cancelled) setAnalyzing(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSymbol, interval, market, candles.length > 0, newsSignature]);
+  if (candles.length < 30) return;
+  let cancelled = false;
 
+  // ✅ YENİ: Cache kontrolü
+  const cacheId = `${market}:${activeSymbol}:${interval}`;
+  try {
+    const raw = window.localStorage.getItem(longTermCacheKey);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<
+        string,
+        { data: DashboardAnalysis; timestamp: number }
+      >;
+      const cached = parsed[cacheId];
+      if (cached && Date.now() - cached.timestamp < LONG_TERM_CACHE_TTL) {
+        // Cache taze — direkt göster, fetch etme
+        setAnalysis(cached.data);
+        setAnalyzing(false);
+        setAnalysisError(null);
+        return;
+      }
+    }
+  } catch {
+    // cache okuma hatası sessizce yut
+  }
+
+  setAnalyzing(true);
+  setAnalysisError(null);
+
+  void runAnalysis({
+    data: {
+      symbol: activeSymbol,
+      market: market === "crypto" ? "kripto" : `hisse/${MARKET_LABELS[market]}`,
+      interval,
+      candles: candles.map(({ time, open, high, low, close, volume }) => ({
+        time,
+        open,
+        high,
+        low,
+        close,
+        volume,
+      })),
+      news: relevantNews,
+    },
+  })
+    .then((result) => {
+      if (cancelled) return;
+      const nextAnalysis = result.analysis as DashboardAnalysis | null;
+      setAnalysis(nextAnalysis);
+      setAnalysisError(result.error);
+
+      // ✅ YENİ: Sonucu cache'e kaydet
+      if (nextAnalysis) {
+        try {
+          const raw = window.localStorage.getItem(longTermCacheKey);
+          const parsed = raw
+            ? (JSON.parse(raw) as Record<
+                string,
+                { data: DashboardAnalysis; timestamp: number }
+              >)
+            : {};
+          parsed[cacheId] = {
+            data: nextAnalysis,
+            timestamp: Date.now(),
+          };
+          window.localStorage.setItem(
+            longTermCacheKey,
+            JSON.stringify(parsed),
+          );
+        } catch {
+          // localStorage hatası sessizce yut
+        }
+      }
+    })
+    .catch(() => {
+      if (!cancelled) setAnalysisError("Analiz servisi şu an yanıt vermiyor.");
+    })
+    .finally(() => {
+      if (!cancelled) setAnalyzing(false);
+    });
+
+  return () => {
+    cancelled = true;
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeSymbol, interval, market, candles.length > 0, newsSignature]);
   // ==========================================================
   // KISA VADELİ ANALİZ - LOCALSTORAGE'DAN YÜKLE
   // ==========================================================
@@ -2742,26 +2800,61 @@ function Dashboard() {
               </div>
 
               <div className="mt-3 overflow-hidden rounded-md bg-card p-2">
-                <CandleChart
-                  candles={candles}
-                  lines={
-                    analysis?.formationEngine?.primary?.lines?.length
-                      ? analysis.formationEngine.primary.lines
-                      : analysis?.pattern.lines ?? []
-                  }
-                  patternName={
-                    analysis?.formationEngine?.primary?.name ??
-                    analysis?.pattern.name
-                  }
-                  userLines={userDrawingLines}
-                  onUserDrawingChange={setCurrentUserDrawingLines}
-                  onDrawingModeChange={(active) => {
-                    if (!active) setFormationEvaluationOpen((prev) => ({ ...prev, [formationKey]: false }));
-                  }}
-                  onEvaluateFormation={() => setFormationEvaluationOpen((prev) => ({ ...prev, [formationKey]: true }))}
-                  onRequestClearDrawings={requestFormationClose}
-                />
-              </div>
+  {/* İlk yükleme — hiç veri yoksa spinner */}
+  {candles.length === 0 &&
+    (cryptoCandles.isLoading || stockCandles.isLoading) && (
+      <div className="flex h-80 items-center justify-center rounded-md border border-border bg-black">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="num text-xs font-bold text-primary">
+            {activeSymbol} yükleniyor...
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            İlk seferde 1-3 saniye sürebilir
+          </p>
+        </div>
+      </div>
+    )}
+
+  {/* Veri varsa grafiği göster — fetching sırasında soluk */}
+  {candles.length > 0 && (
+    <div
+      className={`relative transition-opacity duration-200 ${
+        cryptoCandles.isFetching || stockCandles.isFetching
+          ? "opacity-50"
+          : "opacity-100"
+      }`}
+    >
+      <CandleChart
+        candles={candles}
+        lines={
+          analysis?.formationEngine?.primary?.lines?.length
+            ? analysis.formationEngine.primary.lines
+            : analysis?.pattern.lines ?? []
+        }
+        patternName={
+          analysis?.formationEngine?.primary?.name ??
+          analysis?.pattern.name
+        }
+        userLines={userDrawingLines}
+        onUserDrawingChange={setCurrentUserDrawingLines}
+        onDrawingModeChange={(active) => {
+          if (!active) setFormationEvaluationOpen((prev) => ({ ...prev, [formationKey]: false }));
+        }}
+        onEvaluateFormation={() => setFormationEvaluationOpen((prev) => ({ ...prev, [formationKey]: true }))}
+        onRequestClearDrawings={requestFormationClose}
+      />
+
+      {/* Fetching sırasında köşede küçük spinner */}
+      {(cryptoCandles.isFetching || stockCandles.isFetching) && (
+        <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-2 rounded-md border border-border bg-background/95 px-2.5 py-1.5 text-[10px] font-bold text-primary shadow-lg backdrop-blur">
+          <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          Güncelleniyor
+        </div>
+      )}
+    </div>
+  )}
+</div>
               {analyzing && (
                 <p className="mt-2 text-xs text-muted-foreground">AI formasyonu grafiğe çiziyor...</p>
               )}
