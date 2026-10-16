@@ -1,13 +1,16 @@
 // src/routes/market-summary.tsx — Piyasa Özet Sayfası
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { MobileNav } from "@/components/MobileNav";
+import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
 import {
   SkeletonCard,
   SkeletonList,
   SkeletonStatGrid,
 } from "@/components/Skeleton";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 
 export const Route = createFileRoute("/market-summary")({
   head: () => ({
@@ -99,6 +102,7 @@ function MarketSummaryPage() {
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<"daily" | "weekly">("daily");
 
+  // İlk yükleme + period değişince
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -121,8 +125,38 @@ function MarketSummaryPage() {
       });
   }, [period]);
 
+  // ✅ YENİ: Pull-to-refresh
+  const pullToRefresh = usePullToRefresh({
+    threshold: 80,
+    onRefresh: async () => {
+      try {
+        const res = await fetch(`/api/market-summary?period=${period}`);
+        const json = await res.json();
+        if (json.success) {
+          setData(json);
+          setError(null);
+          toast.success("Yenilendi");
+        } else {
+          toast.error(json.error ?? "Yüklenemedi");
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Bağlantı hatası");
+      }
+    },
+  });
+
   return (
     <div className="min-h-screen pb-24 lg:pb-0">
+      {/* ✅ YENİ: Pull-to-refresh göstergesi */}
+      <div className="lg:hidden">
+        <PullToRefreshIndicator
+          pullDistance={pullToRefresh.pullDistance}
+          isPulling={pullToRefresh.isPulling}
+          isRefreshing={pullToRefresh.isRefreshing}
+        />
+      </div>
+
       {/* ========== MOBİL HEADER ========== */}
       <div className="lg:hidden">
         <MobileNav onOpenSymbol={() => {}} />
