@@ -17,6 +17,7 @@ import {
 } from "recharts";
 
 import { MobileNav } from "@/components/MobileNav";
+import { SkeletonList, SkeletonStatGrid } from "@/components/Skeleton";
 import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/stats")({
@@ -317,18 +318,45 @@ function StatsPage() {
     );
   }
 
-  // Yükleniyor
+  // Yükleniyor — SKELETON
   if (loading && !data) {
     return (
       <div className="min-h-screen pb-24 lg:pb-0">
         <div className="lg:hidden">
           <MobileNav onOpenSymbol={() => {}} />
         </div>
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <p className="text-sm text-muted-foreground">
-            İstatistikler yükleniyor...
-          </p>
-        </div>
+
+        <main className="mx-auto max-w-7xl space-y-4 px-3 py-4 sm:px-4 sm:py-6">
+          {/* Başlık iskeleti */}
+          <section className="panel p-4 sm:p-5">
+            <div className="animate-pulse h-6 w-48 rounded-md bg-secondary/60" />
+            <div className="animate-pulse mt-2 h-3 w-72 rounded-md bg-secondary/60" />
+            <div className="mt-4 flex gap-2">
+              <div className="animate-pulse h-10 w-24 rounded-md bg-secondary/60" />
+              <div className="animate-pulse h-10 w-24 rounded-md bg-secondary/60" />
+              <div className="animate-pulse h-10 w-24 rounded-md bg-secondary/60" />
+            </div>
+          </section>
+
+          {/* Sekmeli panel iskeleti */}
+          <section className="panel">
+            <div className="border-b border-border px-3 py-2 sm:px-4">
+              <div className="flex gap-1">
+                <div className="animate-pulse h-10 w-24 rounded-md bg-secondary/60" />
+                <div className="animate-pulse h-10 w-24 rounded-md bg-secondary/60" />
+                <div className="animate-pulse h-10 w-24 rounded-md bg-secondary/60" />
+                <div className="animate-pulse h-10 w-24 rounded-md bg-secondary/60" />
+                <div className="animate-pulse h-10 w-24 rounded-md bg-secondary/60" />
+              </div>
+            </div>
+            <div className="p-3 sm:p-4">
+              <SkeletonStatGrid count={4} />
+              <div className="mt-4">
+                <SkeletonList count={2} variant="card" />
+              </div>
+            </div>
+          </section>
+        </main>
       </div>
     );
   }
