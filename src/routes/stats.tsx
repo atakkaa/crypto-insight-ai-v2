@@ -1,6 +1,7 @@
 // src/routes/stats.tsx
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   BarChart,
   Bar,
@@ -17,8 +18,10 @@ import {
 } from "recharts";
 
 import { MobileNav } from "@/components/MobileNav";
+import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
 import { SkeletonList, SkeletonStatGrid } from "@/components/Skeleton";
 import { useAuth } from "@/hooks/useAuth";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 
 export const Route = createFileRoute("/stats")({
   component: StatsPage,
@@ -200,6 +203,39 @@ function StatsPage() {
         setLoading(false);
       });
   }, [user, filters]);
+
+  // ✅ YENİ: Pull-to-refresh
+  const pullToRefresh = usePullToRefresh({
+    threshold: 80,
+    enabled: Boolean(user),
+    onRefresh: async () => {
+      if (!user) return;
+      try {
+        const params = new URLSearchParams();
+        params.set("days", String(filters.days));
+        for (const f of filters.formations) params.append("formation", f);
+        for (const m of filters.markets) params.append("market", m);
+        if (filters.symbol) params.set("symbol", filters.symbol);
+        if (filters.bias) params.set("bias", filters.bias);
+
+        const res = await fetch(
+          `/api/formation-stats?${params.toString()}`,
+          { headers: { "x-user-id": user.id } },
+        );
+        const json = await res.json();
+        if (json.success) {
+          setData(json);
+          setError(null);
+          toast.success("Yenilendi");
+        } else {
+          toast.error(json.message ?? json.error ?? "Yüklenemedi");
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Bağlantı hatası");
+      }
+    },
+  });
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -390,6 +426,15 @@ function StatsPage() {
 
   return (
     <div className="min-h-screen pb-24 lg:pb-0">
+      {/* ✅ YENİ: Pull-to-refresh göstergesi (mobilde) */}
+      <div className="lg:hidden">
+        <PullToRefreshIndicator
+          pullDistance={pullToRefresh.pullDistance}
+          isPulling={pullToRefresh.isPulling}
+          isRefreshing={pullToRefresh.isRefreshing}
+        />
+      </div>
+
       {/* ========== MOBİL HEADER ========== */}
       <div className="lg:hidden">
         <MobileNav onOpenSymbol={() => {}} />
