@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { MobileNav } from "@/components/MobileNav";
+import { SkeletonList } from "@/components/Skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useConfirm } from "@/hooks/useConfirm";
 
@@ -192,7 +193,7 @@ function AlarmsPage() {
   async function deleteAlarm(id: string) {
     if (!user) return;
 
-    // ✅ YENİ: Custom confirm modal
+    // ✅ Custom confirm modal
     const ok = await confirm({
       title: "Alarmı Sil",
       message: "Bu alarmı silmek istediğinize emin misiniz?",
@@ -541,9 +542,7 @@ function AlarmsPage() {
 
         {/* ALARM LİSTESİ */}
         {loading ? (
-          <div className="flex h-40 items-center justify-center">
-            <p className="text-sm text-muted-foreground">Yükleniyor...</p>
-          </div>
+          <SkeletonList count={4} variant="card" />
         ) : alarms.length === 0 ? (
           <section className="panel p-8 text-center sm:p-12">
             <p className="text-4xl">🔔</p>
