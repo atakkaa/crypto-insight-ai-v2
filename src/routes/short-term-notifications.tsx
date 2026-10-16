@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { ShortTermNotificationDetailModal } from "@/components/ShortTermNotificationDetailModal";
 import { MobileNav } from "@/components/MobileNav";
+import { SkeletonList } from "@/components/Skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useConfirm } from "@/hooks/useConfirm";
 import {
@@ -149,7 +150,6 @@ function ShortTermNotificationsPage() {
   async function handleClearAll() {
     if (!user) return;
 
-    // ✅ YENİ: Custom confirm modal
     const ok = await confirm({
       title: "Tüm Bildirimleri Temizle",
       message:
@@ -406,9 +406,7 @@ function ShortTermNotificationsPage() {
         {/* BİLDİRİM LİSTESİ */}
         <section className="panel">
           {loading ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              Bildirimler yükleniyor...
-            </div>
+            <SkeletonList count={5} variant="row" />
           ) : filtered.length === 0 ? (
             <div className="p-6 text-center sm:p-8">
               <p className="text-3xl sm:text-4xl">📭</p>
@@ -472,7 +470,6 @@ function ShortTermNotificationsPage() {
                       Güven: %{n.confidence} · Skor: {n.signal_score}/100
                     </p>
 
-                    {/* Giriş / Hedef / Stop */}
                     {(n.entry != null ||
                       n.target != null ||
                       n.stop != null) && (
