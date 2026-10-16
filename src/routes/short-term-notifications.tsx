@@ -4,9 +4,11 @@ import { toast } from "sonner";
 
 import { ShortTermNotificationDetailModal } from "@/components/ShortTermNotificationDetailModal";
 import { MobileNav } from "@/components/MobileNav";
+import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
 import { SkeletonList } from "@/components/Skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useConfirm } from "@/hooks/useConfirm";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import {
   fetchShortTermNotifications,
   markAllShortTermNotificationsRead,
@@ -72,6 +74,18 @@ function ShortTermNotificationsPage() {
 
     return unsubscribe;
   }, [user]);
+
+  // ✅ YENİ: Pull-to-refresh
+  const pullToRefresh = usePullToRefresh({
+    threshold: 80,
+    enabled: Boolean(user),
+    onRefresh: async () => {
+      if (!user) return;
+      const data = await fetchShortTermNotifications(user.id, 500);
+      setNotifications(data);
+      toast.success("Yenilendi");
+    },
+  });
 
   // 3. Filtreleme
   const filtered = useMemo(() => {
@@ -208,6 +222,15 @@ function ShortTermNotificationsPage() {
 
   return (
     <div className="min-h-screen pb-24 lg:pb-0">
+      {/* ✅ YENİ: Pull-to-refresh göstergesi (mobilde) */}
+      <div className="lg:hidden">
+        <PullToRefreshIndicator
+          pullDistance={pullToRefresh.pullDistance}
+          isPulling={pullToRefresh.isPulling}
+          isRefreshing={pullToRefresh.isRefreshing}
+        />
+      </div>
+
       {/* ========== MOBİL HEADER ========== */}
       <div className="lg:hidden">
         <MobileNav
