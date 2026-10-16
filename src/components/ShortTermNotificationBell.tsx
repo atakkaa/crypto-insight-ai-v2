@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { SkeletonList } from "@/components/Skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useConfirm } from "@/hooks/useConfirm";
 import {
@@ -126,7 +127,6 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
   async function handleClearAll() {
     if (!user) return;
 
-    // ✅ YENİ: Custom confirm modal
     const ok = await confirm({
       title: "Tüm Bildirimleri Temizle",
       message:
@@ -203,9 +203,7 @@ export function ShortTermNotificationBell({ onOpenSymbol }: Props) {
 
             <div className="max-h-[60vh] overflow-y-auto">
               {loading ? (
-                <div className="p-6 text-center text-xs text-muted-foreground">
-                  Kısa vadeli bildirimler yükleniyor...
-                </div>
+                <SkeletonList count={4} variant="row" />
               ) : notifications.length === 0 ? (
                 <div className="p-6 text-center text-xs text-muted-foreground">
                   Henüz kısa vadeli bildiriminiz yok.
