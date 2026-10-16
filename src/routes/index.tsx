@@ -1106,6 +1106,37 @@ function Dashboard() {
   }, []);
 
   // ==========================================================
+// ✅ YENİ: YOLO modelini arka planda ön yükle
+// ==========================================================
+useEffect(() => {
+  if (typeof window === "undefined") return;
+  if (!user) return; // Sadece giriş yapmış kullanıcılar için
+
+  // Modeli yükleyici fonksiyon
+  const preloadYolo = () => {
+    void import("@/lib/yolo-vision")
+      .then(({ loadYoloModel }) => {
+        return loadYoloModel();
+      })
+      .then(() => {
+        console.log("✅ YOLO modeli ön yüklendi (arka planda hazır)");
+      })
+      .catch((err) => {
+        console.warn("⚠️ YOLO ön yükleme başarısız:", err);
+      });
+  };
+
+  // Idle callback varsa kullan (daha iyi — kullanıcı deneyimini bozmaz)
+  if ("requestIdleCallback" in window) {
+    const id = requestIdleCallback(preloadYolo, { timeout: 5000 });
+    return () => cancelIdleCallback(id);
+  }
+
+  // Fallback — 3 saniye sonra yükle
+  const timer = setTimeout(preloadYolo, 3000);
+  return () => clearTimeout(timer);
+}, [user]);
+  // ==========================================================
   // ✅ YENİ: POPÜLER SEMBOLLERİ ÖN YÜKLE (PREFETCH)
   // ==========================================================
   useEffect(() => {
