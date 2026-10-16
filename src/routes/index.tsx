@@ -1,7 +1,7 @@
 import { Joyride, STATUS, type EventData } from "react-joyride";
 import { toast } from "sonner";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -927,6 +927,7 @@ const EMPTY_FORMATION_MESSAGES: FormationChatMessage[] = [];
 
 function Dashboard() {
   const confirm = useConfirm();
+  const queryClient = useQueryClient();
 
   // ==========================================================
   // ONBOARDING TURU STATE
@@ -988,9 +989,8 @@ function Dashboard() {
 
   const isMobile = useIsMobile();
   const shortTermCacheKey = `formasyon-ai-short-term-v1`;
-// ✅ YENİ: Uzun vadeli analiz cache'i
-const longTermCacheKey = `formasyon-ai-long-term-v1`;
-const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
+  const longTermCacheKey = `formasyon-ai-long-term-v1`;
+  const LONG_TERM_CACHE_TTL = 5 * 60_000;
   const runAnalysis = useServerFn(analyzeChart);
   const loadStock = useServerFn(getStockCandles);
   const loadAssetInfo = useServerFn(getAssetInfo);
@@ -1010,36 +1010,36 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
   });
 
   const cryptoCandles = useQuery({
-  queryKey: ["klines", symbol, interval],
-  queryFn: () => fetchKlines(symbol, interval),
-  enabled: market === "crypto",
-  refetchInterval: 15_000,
-  staleTime: 60_000, // 1 dakika taze
-  gcTime: 5 * 60_000, // 5 dakika cache'te tut
-  placeholderData: (previousData) => previousData, // ← KRİTİK: Eski veriyi koru
-});
+    queryKey: ["klines", symbol, interval],
+    queryFn: () => fetchKlines(symbol, interval),
+    enabled: market === "crypto",
+    refetchInterval: 15_000,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
+    placeholderData: (previousData) => previousData,
+  });
 
   const stockCandles = useQuery({
-  queryKey: ["stock", stockSymbol, interval],
-  queryFn: () => loadStock({ data: { symbol: stockSymbol, interval } }),
-  enabled: isStockMarket(market),
-  refetchInterval: 60_000,
-  staleTime: 60_000,
-  gcTime: 5 * 60_000,
-  retry: 0,
-  placeholderData: (previousData) => previousData, // ← KRİTİK
-});
+    queryKey: ["stock", stockSymbol, interval],
+    queryFn: () => loadStock({ data: { symbol: stockSymbol, interval } }),
+    enabled: isStockMarket(market),
+    refetchInterval: 60_000,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
+    retry: 0,
+    placeholderData: (previousData) => previousData,
+  });
 
   const assetInfo = useQuery<AssetInfo | null>({
-  queryKey: ["asset-info", market, activeSymbol],
-  queryFn: () => loadAssetInfo({ data: { market, symbol: activeSymbol } }),
-  enabled: Boolean(activeSymbol),
-  refetchInterval: market === "crypto" ? 60_000 : 300_000,
-  staleTime: 60_000, // 30sn → 60sn
-  gcTime: 5 * 60_000,
-  retry: 0,
-  placeholderData: (previousData) => previousData,
-});
+    queryKey: ["asset-info", market, activeSymbol],
+    queryFn: () => loadAssetInfo({ data: { market, symbol: activeSymbol } }),
+    enabled: Boolean(activeSymbol),
+    refetchInterval: market === "crypto" ? 60_000 : 300_000,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
+    retry: 0,
+    placeholderData: (previousData) => previousData,
+  });
 
   const news = useQuery({
     queryKey: ["news"],
@@ -1085,7 +1085,9 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
       : list;
   }, [market, search]);
 
+  // ==========================================================
   // Service Worker kaydı (PWA + Push için)
+  // ==========================================================
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) {
@@ -1102,6 +1104,80 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
         console.error("❌ Service Worker kaydedilemedi:", error);
       });
   }, []);
+
+  // ==========================================================
+  // ✅ YENİ: POPÜLER SEMBOLLERİ ÖN YÜKLE (PREFETCH)
+  // ==========================================================
+  useEffect(() => {
+    if (!tickers.data || market !== "crypto") return;
+
+    const top10 = tickers.data.slice(0, 10);
+    const activeSym = symbol;
+
+    const prefetchNext = async () => {
+      for (const t of top10) {
+        if (t.symbol === activeSym) continue;
+
+        try {
+          await queryClient.prefetchQuery({
+            queryKey: ["klines", t.symbol, interval],
+            queryFn: () => fetchKlines(t.symbol, interval),
+            staleTime: 2 * 60_000,
+          });
+        } catch {
+          // sessizce yut
+        }
+      }
+    };
+
+    if ("requestIdleCallback" in window) {
+      const id = requestIdleCallback(() => void prefetchNext());
+      return () => cancelIdleCallback(id);
+    }
+
+    const timer = setTimeout(() => void prefetchNext(), 2000);
+    return () => clearTimeout(timer);
+  }, [tickers.data, market, symbol, interval, queryClient]);
+
+  // ==========================================================
+  // ✅ YENİ: HİSSE LİSTESİ İÇİN ÖN YÜKLEME
+  // ==========================================================
+  useEffect(() => {
+    if (market === "crypto") return;
+    if (!isStockMarket(market)) return;
+
+    const list = stockListForMarket(market);
+    if (!list || list.length === 0) return;
+
+    const top10 = list.slice(0, 10);
+    const activeStock = stockSymbol;
+
+    const prefetchStocks = async () => {
+      for (const item of top10) {
+        if (item.symbol === activeStock) continue;
+
+        try {
+          await queryClient.prefetchQuery({
+            queryKey: ["stock", item.symbol, interval],
+            queryFn: () =>
+              loadStock({ data: { symbol: item.symbol, interval } }),
+            staleTime: 2 * 60_000,
+          });
+        } catch {
+          // sessizce yut
+        }
+      }
+    };
+
+    if ("requestIdleCallback" in window) {
+      const id = requestIdleCallback(() => void prefetchStocks());
+      return () => cancelIdleCallback(id);
+    }
+
+    const timer = setTimeout(() => void prefetchStocks(), 2000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [market, stockSymbol, interval, queryClient]);
 
   // Kullanıcı giriş yapınca push aboneliği oluştur
   useEffect(() => {
@@ -1388,7 +1464,6 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
       { market: Market; symbol: string; isPriority: boolean }
     >();
 
-    // Önce favorileri ekle
     for (const f of favorites) {
       const key = `${f.market}:${f.symbol}`;
       map.set(key, {
@@ -1398,7 +1473,6 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
       });
     }
 
-    // Sonra önceliklileri ekle (favoride olmayanları)
     for (const p of priorityAssets) {
       const key = `${p.market}:${p.symbol}`;
       if (!map.has(key)) {
@@ -1442,7 +1516,6 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
   async function toggleFavoriteAsset(assetMarket: Market, assetSymbol: string) {
     const currentlyFavorite = isFavoriteAsset(assetMarket, assetSymbol);
 
-    // LİMİT KONTROLÜ — favori eklerken
     if (!currentlyFavorite && tierInfo) {
       const limit = tierInfo.limits.favorites;
       if (limit < 999 && favorites.length >= limit) {
@@ -1524,7 +1597,6 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
     assetMarket: Market,
     assetSymbol: string,
   ) {
-    // LİMİT KONTROLÜ — priority eklerken
     if (!isPriorityAsset(assetMarket, assetSymbol) && tierInfo) {
       const limit = tierInfo.limits.priority;
       if (limit === 0) {
@@ -1604,7 +1676,6 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
   async function removeAllFavorites() {
     if (favorites.length === 0) return;
 
-    // ✅ YENİ: Custom confirm modal
     const ok = await confirm({
       title: "Tüm Favorileri Kaldır",
       message:
@@ -1615,14 +1686,11 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
     });
     if (!ok) return;
 
-    // Local state sıfırla (hızlı UX)
     setFavorites([]);
     setPriorityAssets([]);
 
-    // Supabase'e silme isteği gönder
     if (user) {
       try {
-        // Tüm favorileri sil
         const favRes = await (supabase as any)
           .from("favorites")
           .delete()
@@ -1634,7 +1702,6 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
           return;
         }
 
-        // Tüm priority_assets'leri sil
         const priRes = await (supabase as any)
           .from("priority_assets")
           .delete()
@@ -1808,91 +1875,89 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
   const newsSignature = relevantNews.map((n) => n.title).join("|");
 
   useEffect(() => {
-  if (candles.length < 30) return;
-  let cancelled = false;
+    if (candles.length < 30) return;
+    let cancelled = false;
 
-  // ✅ YENİ: Cache kontrolü
-  const cacheId = `${market}:${activeSymbol}:${interval}`;
-  try {
-    const raw = window.localStorage.getItem(longTermCacheKey);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Record<
-        string,
-        { data: DashboardAnalysis; timestamp: number }
-      >;
-      const cached = parsed[cacheId];
-      if (cached && Date.now() - cached.timestamp < LONG_TERM_CACHE_TTL) {
-        // Cache taze — direkt göster, fetch etme
-        setAnalysis(cached.data);
-        setAnalyzing(false);
-        setAnalysisError(null);
-        return;
-      }
-    }
-  } catch {
-    // cache okuma hatası sessizce yut
-  }
-
-  setAnalyzing(true);
-  setAnalysisError(null);
-
-  void runAnalysis({
-    data: {
-      symbol: activeSymbol,
-      market: market === "crypto" ? "kripto" : `hisse/${MARKET_LABELS[market]}`,
-      interval,
-      candles: candles.map(({ time, open, high, low, close, volume }) => ({
-        time,
-        open,
-        high,
-        low,
-        close,
-        volume,
-      })),
-      news: relevantNews,
-    },
-  })
-    .then((result) => {
-      if (cancelled) return;
-      const nextAnalysis = result.analysis as DashboardAnalysis | null;
-      setAnalysis(nextAnalysis);
-      setAnalysisError(result.error);
-
-      // ✅ YENİ: Sonucu cache'e kaydet
-      if (nextAnalysis) {
-        try {
-          const raw = window.localStorage.getItem(longTermCacheKey);
-          const parsed = raw
-            ? (JSON.parse(raw) as Record<
-                string,
-                { data: DashboardAnalysis; timestamp: number }
-              >)
-            : {};
-          parsed[cacheId] = {
-            data: nextAnalysis,
-            timestamp: Date.now(),
-          };
-          window.localStorage.setItem(
-            longTermCacheKey,
-            JSON.stringify(parsed),
-          );
-        } catch {
-          // localStorage hatası sessizce yut
+    const cacheId = `${market}:${activeSymbol}:${interval}`;
+    try {
+      const raw = window.localStorage.getItem(longTermCacheKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<
+          string,
+          { data: DashboardAnalysis; timestamp: number }
+        >;
+        const cached = parsed[cacheId];
+        if (cached && Date.now() - cached.timestamp < LONG_TERM_CACHE_TTL) {
+          setAnalysis(cached.data);
+          setAnalyzing(false);
+          setAnalysisError(null);
+          return;
         }
       }
-    })
-    .catch(() => {
-      if (!cancelled) setAnalysisError("Analiz servisi şu an yanıt vermiyor.");
-    })
-    .finally(() => {
-      if (!cancelled) setAnalyzing(false);
-    });
+    } catch {
+      // cache okuma hatası sessizce yut
+    }
 
-  return () => {
-    cancelled = true;
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [activeSymbol, interval, market, candles.length > 0, newsSignature]);
+    setAnalyzing(true);
+    setAnalysisError(null);
+
+    void runAnalysis({
+      data: {
+        symbol: activeSymbol,
+        market: market === "crypto" ? "kripto" : `hisse/${MARKET_LABELS[market]}`,
+        interval,
+        candles: candles.map(({ time, open, high, low, close, volume }) => ({
+          time,
+          open,
+          high,
+          low,
+          close,
+          volume,
+        })),
+        news: relevantNews,
+      },
+    })
+      .then((result) => {
+        if (cancelled) return;
+        const nextAnalysis = result.analysis as DashboardAnalysis | null;
+        setAnalysis(nextAnalysis);
+        setAnalysisError(result.error);
+
+        if (nextAnalysis) {
+          try {
+            const raw = window.localStorage.getItem(longTermCacheKey);
+            const parsed = raw
+              ? (JSON.parse(raw) as Record<
+                  string,
+                  { data: DashboardAnalysis; timestamp: number }
+                >)
+              : {};
+            parsed[cacheId] = {
+              data: nextAnalysis,
+              timestamp: Date.now(),
+            };
+            window.localStorage.setItem(
+              longTermCacheKey,
+              JSON.stringify(parsed),
+            );
+          } catch {
+            // localStorage hatası sessizce yut
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setAnalysisError("Analiz servisi şu an yanıt vermiyor.");
+      })
+      .finally(() => {
+        if (!cancelled) setAnalyzing(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSymbol, interval, market, candles.length > 0, newsSignature]);
+
   // ==========================================================
   // KISA VADELİ ANALİZ - LOCALSTORAGE'DAN YÜKLE
   // ==========================================================
@@ -1924,9 +1989,6 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
       return;
     }
 
-    // ==========================================================
-    // FREE ÜYE LİMİT KONTROLÜ
-    // ==========================================================
     const tier = tierInfo?.tier ?? "free";
     const isPaidUser = tier === "admin" || tier === "premium" || tier === "trial";
     const shortTermLimit = tierInfo?.limits.shortTermTracking ?? 2;
@@ -1937,13 +1999,11 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
       );
 
       if (!isAlreadyTracked) {
-        // 2 varlık sınırına ulaşıldı mı?
         if (shortTermTracked.length >= shortTermLimit) {
           setShortTermModal(true);
           return;
         }
 
-        // Yeni varlığı kaydet
         if (user) {
           const { error: insertError } = await (supabase as any)
             .from("short_term_tracking")
@@ -1968,9 +2028,6 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
       }
     }
 
-    // ==========================================================
-    // ANALİZİ ÇALIŞTIR
-    // ==========================================================
     setShortTermAnalyzing(true);
     setShowShortTerm(true);
 
@@ -2013,9 +2070,6 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
     }
   }
 
-  // ==========================================================
-  // KISA VADELİ ANALİZ - SADECE BU SEMBOLÜ TEMİZLE
-  // ==========================================================
   function clearShortTermForCurrentSymbol() {
     try {
       const raw = window.localStorage.getItem(shortTermCacheKey);
@@ -2032,11 +2086,7 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
     }
   }
 
-  // ==========================================================
-  // KISA VADELİ ANALİZ - TÜMÜNÜ TEMİZLE
-  // ==========================================================
   async function clearAllShortTermAnalyses() {
-    // ✅ YENİ: Custom confirm modal
     const ok = await confirm({
       title: "Tüm Kısa Vadeli Analizleri Sil",
       message:
@@ -2053,19 +2103,14 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
     toast.success("Tüm kısa vadeli analizler temizlendi.");
   }
 
-  // ==========================================================
-  // ONBOARDING TURU BAŞLATMA
-  // ==========================================================
   useEffect(() => {
     const shouldStart = window.localStorage.getItem("formasyon-ai-start-tour");
     if (shouldStart === "1") {
       window.localStorage.removeItem("formasyon-ai-start-tour");
-      // Kısa bir gecikmeyle turu başlat (sayfanın yüklenmesini bekle)
       setTimeout(() => setRunTour(true), 1500);
     }
   }, []);
 
-  // === GİRİŞ YAPMAMIŞ KULLANICIYA WELCOME EKRANI ===
   if (!user) {
     return <WelcomeGate />;
   }
@@ -2800,61 +2845,61 @@ const LONG_TERM_CACHE_TTL = 5 * 60_000; // 5 dakika
               </div>
 
               <div className="mt-3 overflow-hidden rounded-md bg-card p-2">
-  {/* İlk yükleme — hiç veri yoksa spinner */}
-  {candles.length === 0 &&
-    (cryptoCandles.isLoading || stockCandles.isLoading) && (
-      <div className="flex h-80 items-center justify-center rounded-md border border-border bg-black">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="num text-xs font-bold text-primary">
-            {activeSymbol} yükleniyor...
-          </p>
-          <p className="text-[10px] text-muted-foreground">
-            İlk seferde 1-3 saniye sürebilir
-          </p>
-        </div>
-      </div>
-    )}
+                {/* İlk yükleme — hiç veri yoksa spinner */}
+                {candles.length === 0 &&
+                  (cryptoCandles.isLoading || stockCandles.isLoading) && (
+                    <div className="flex h-80 items-center justify-center rounded-md border border-border bg-black">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                        <p className="num text-xs font-bold text-primary">
+                          {activeSymbol} yükleniyor...
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          İlk seferde 1-3 saniye sürebilir
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
-  {/* Veri varsa grafiği göster — fetching sırasında soluk */}
-  {candles.length > 0 && (
-    <div
-      className={`relative transition-opacity duration-200 ${
-        cryptoCandles.isFetching || stockCandles.isFetching
-          ? "opacity-50"
-          : "opacity-100"
-      }`}
-    >
-      <CandleChart
-        candles={candles}
-        lines={
-          analysis?.formationEngine?.primary?.lines?.length
-            ? analysis.formationEngine.primary.lines
-            : analysis?.pattern.lines ?? []
-        }
-        patternName={
-          analysis?.formationEngine?.primary?.name ??
-          analysis?.pattern.name
-        }
-        userLines={userDrawingLines}
-        onUserDrawingChange={setCurrentUserDrawingLines}
-        onDrawingModeChange={(active) => {
-          if (!active) setFormationEvaluationOpen((prev) => ({ ...prev, [formationKey]: false }));
-        }}
-        onEvaluateFormation={() => setFormationEvaluationOpen((prev) => ({ ...prev, [formationKey]: true }))}
-        onRequestClearDrawings={requestFormationClose}
-      />
+                {/* Veri varsa grafiği göster — fetching sırasında soluk */}
+                {candles.length > 0 && (
+                  <div
+                    className={`relative transition-opacity duration-200 ${
+                      cryptoCandles.isFetching || stockCandles.isFetching
+                        ? "opacity-50"
+                        : "opacity-100"
+                    }`}
+                  >
+                    <CandleChart
+                      candles={candles}
+                      lines={
+                        analysis?.formationEngine?.primary?.lines?.length
+                          ? analysis.formationEngine.primary.lines
+                          : analysis?.pattern.lines ?? []
+                      }
+                      patternName={
+                        analysis?.formationEngine?.primary?.name ??
+                        analysis?.pattern.name
+                      }
+                      userLines={userDrawingLines}
+                      onUserDrawingChange={setCurrentUserDrawingLines}
+                      onDrawingModeChange={(active) => {
+                        if (!active) setFormationEvaluationOpen((prev) => ({ ...prev, [formationKey]: false }));
+                      }}
+                      onEvaluateFormation={() => setFormationEvaluationOpen((prev) => ({ ...prev, [formationKey]: true }))}
+                      onRequestClearDrawings={requestFormationClose}
+                    />
 
-      {/* Fetching sırasında köşede küçük spinner */}
-      {(cryptoCandles.isFetching || stockCandles.isFetching) && (
-        <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-2 rounded-md border border-border bg-background/95 px-2.5 py-1.5 text-[10px] font-bold text-primary shadow-lg backdrop-blur">
-          <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          Güncelleniyor
-        </div>
-      )}
-    </div>
-  )}
-</div>
+                    {/* Fetching sırasında köşede küçük spinner */}
+                    {(cryptoCandles.isFetching || stockCandles.isFetching) && (
+                      <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-2 rounded-md border border-border bg-background/95 px-2.5 py-1.5 text-[10px] font-bold text-primary shadow-lg backdrop-blur">
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                        Güncelleniyor
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               {analyzing && (
                 <p className="mt-2 text-xs text-muted-foreground">AI formasyonu grafiğe çiziyor...</p>
               )}
