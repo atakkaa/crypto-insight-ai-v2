@@ -3,6 +3,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { MobileNav } from "@/components/MobileNav";
+import {
+  SkeletonCard,
+  SkeletonList,
+  SkeletonStatGrid,
+} from "@/components/Skeleton";
 
 export const Route = createFileRoute("/market-summary")({
   head: () => ({
@@ -191,11 +196,45 @@ function MarketSummaryPage() {
           </div>
         )}
 
-        {/* YÜKLENİYOR */}
+        {/* YÜKLENİYOR — SKELETON */}
         {loading && !data && (
-          <div className="flex h-40 items-center justify-center">
-            <p className="text-sm text-muted-foreground">Yükleniyor...</p>
-          </div>
+          <>
+            {/* 1. ÖZET iskeleti */}
+            <section className="panel p-3 sm:p-4">
+              <div className="animate-pulse mb-3 h-4 w-40 rounded-md bg-secondary/60" />
+              <SkeletonStatGrid count={4} />
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </div>
+            </section>
+
+            {/* 2. PİYASA DURUMU iskeleti */}
+            <section className="panel p-3 sm:p-4">
+              <div className="animate-pulse mb-3 h-4 w-32 rounded-md bg-secondary/60" />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </div>
+            </section>
+
+            {/* 3. EN İYİ / KÖTÜ iskeleti */}
+            <section className="panel p-3 sm:p-4">
+              <div className="animate-pulse mb-3 h-4 w-48 rounded-md bg-secondary/60" />
+              <div className="grid gap-3 lg:grid-cols-2 lg:gap-4">
+                <div>
+                  <div className="animate-pulse mb-2 h-3 w-32 rounded-md bg-secondary/60" />
+                  <SkeletonList count={3} variant="row" />
+                </div>
+                <div>
+                  <div className="animate-pulse mb-2 h-3 w-32 rounded-md bg-secondary/60" />
+                  <SkeletonList count={3} variant="row" />
+                </div>
+              </div>
+            </section>
+          </>
         )}
 
         {/* İÇERİK */}
