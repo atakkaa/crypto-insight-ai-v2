@@ -1,5 +1,0 @@
-{
-  "name": "formation-engine-local",
-  "version": "1.0.0",
-  "main": "formation-engine.server.ts"
-}
