@@ -1,18 +1,14 @@
-// @lovable.dev/vite-tanstack-config already includes the following — do NOT add them manually
-// or the app will break with duplicate plugins:
-//   - TanStack devtools (dev-only, first), tanstackStart, viteReact, tailwindcss, tsConfigPaths,
-//     nitro (build-only using cloudflare as a default target), VITE_* env injection, @ path alias,
-//     React/TanStack dedupe, error logger plugins, and sandbox detection (port/host/strictPort).
-// You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
   tanstackStart: {
-    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
+    // TanStack Start'ın sunucu girişini src/server.ts dosyasına yönlendir
     server: { entry: "server" },
   },
-  // Vite port ayarını sabitle — Lovable'ın sandbox tespitini geçersiz kılar
+  // Nitro'nun Vercel için doğru çıktıyı (.vercel/output) üretmesini sağla
+  nitro: {
+    preset: "vercel",
+  },
   vite: {
     server: {
       port: 5173,
@@ -28,11 +24,11 @@ export default defineConfig({
     // Vercel build sürecinin takılmasını önlemek için süreci zorla kapat
     plugins: [
       {
-        name: 'force-close',
+        name: "force-close",
         closeBundle() {
           setTimeout(() => process.exit(0), 0);
-        }
-      }
-    ]
+        },
+      },
+    ],
   },
 });
