@@ -1,0 +1,48 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/binance-proxy",
+      "destination": "/api/router?path=binance-proxy"
+    },
+    {
+      "source": "/api/scan-firsat",
+      "destination": "/api/router?path=scan-firsat"
+    },
+    {
+      "source": "/api/check-signals",
+      "destination": "/api/router?path=check-signals"
+    },
+    {
+      "source": "/api/alarms",
+      "destination": "/api/router?path=alarms"
+    },
+    {
+      "source": "/api/backtest",
+      "destination": "/api/router?path=backtest"
+    },
+    {
+      "source": "/api/dnd-summary",
+      "destination": "/api/router?path=dnd-summary"
+    },
+    {
+      "source": "/api/formation-projection",
+      "destination": "/api/router?path=formation-projection"
+    },
+    {
+      "source": "/api/formation-stats",
+      "destination": "/api/router?path=formation-stats"
+    },
+    {
+      "source": "/api/market-summary",
+      "destination": "/api/router?path=market-summary"
+    },
+    {
+      "source": "/api/scan-multi-timeframe",
+      "destination": "/api/router?path=scan-multi-timeframe"
+    },
+    {
+      "source": "/api/scan-short-term",
+      "destination": "/api/router?path=scan-short-term"
+    }
+  ]
+}
