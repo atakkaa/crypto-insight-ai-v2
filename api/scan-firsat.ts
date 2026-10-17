@@ -14,11 +14,12 @@ async function validateWithRenderYolo(chartBase64: string, motorCandidate: any) 
     const buffer = Buffer.from(base64Data, 'base64');
     
     // TypeScript hatasını çözmek için Buffer'ı Uint8Array'e çeviriyoruz
-    const uint8Array = new Uint8Array(buffer);
-    const blob = new Blob([uint8Array], { type: 'image/png' });
+       const uint8Array = new Uint8Array(buffer);
+    const blob = new Blob([uint8Array as any], { type: 'image/png' });
     
     const formData = new FormData();
-    formData.append('file', blob, 'chart.png');
+    // TypeScript'in Blob tipini kabul etmesi için 'as any' kullanıyoruz
+    formData.append('file', blob as any, 'chart.png');
 
     const response = await fetch(`${RENDER_URL}/predict`, {
       method: 'POST',
