@@ -25,5 +25,14 @@ export default defineConfig({
     },
     // WASM dosyalarının doğru yüklenmesi için
     assetsInclude: ["**/*.wasm"],
+    // Vercel build sürecinin takılmasını önlemek için süreci zorla kapat
+    plugins: [
+      {
+        name: 'force-close',
+        closeBundle() {
+          setTimeout(() => process.exit(0), 0);
+        }
+      }
+    ]
   },
 });
