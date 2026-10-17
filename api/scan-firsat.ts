@@ -1,7 +1,7 @@
 // api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v11 (YOLO Entegre)
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
 import { createCanvas } from "@napi-rs/canvas";
-import { validateFormationWithYolo } from "../src/lib/formation-engine.server";
+import { validateFormationWithYolo } from "./formation-engine.server";
 import type { FormationCandidate } from "../src/lib/formation-engine.server";
 
 // ==========================================================
