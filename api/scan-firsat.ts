@@ -9,17 +9,14 @@ async function validateWithRenderYolo(chartBase64: string, motorCandidate: any) 
   const RENDER_URL = "https://ae-analiz-yolo.onrender.com"; // <-- BURAYI RENDER'DAN ALDIĞIN URL İLE DEĞİŞTİR
   const API_KEY = process.env["YOLO_API_KEY"] || "ae_analiz_gizli_anahtar";
 
-  try {
+   try {
     const base64Data = chartBase64.split(',')[1];
     const buffer = Buffer.from(base64Data, 'base64');
     
-    // TypeScript hatasını çözmek için Buffer'ı Uint8Array'e çeviriyoruz
-       const uint8Array = new Uint8Array(buffer);
-    const blob = new Blob([uint8Array as any], { type: 'image/png' });
-    
+    // TypeScript'in Blob tipiyle uğraşmamak için doğrudan FormData'ya ekliyoruz.
+    // Node.js ortamında FormData, Buffer'ı otomatik olarak dosya olarak algılar.
     const formData = new FormData();
-    // TypeScript'in Blob tipini kabul etmesi için 'as any' kullanıyoruz
-    formData.append('file', blob as any, 'chart.png');
+    formData.append('file', new Blob([buffer as any]), 'chart.png');
 
     const response = await fetch(`${RENDER_URL}/predict`, {
       method: 'POST',
