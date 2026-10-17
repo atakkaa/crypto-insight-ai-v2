@@ -7,33 +7,35 @@ import { createCanvas } from "@napi-rs/canvas";
 // ==========================================================
 async function validateWithRenderYolo(chartBase64: string, motorCandidate: any) {
   const RENDER_URL = "https://ae-analiz-yolo.onrender.com"; // <-- BURAYI RENDER'DAN ALDIĞIN URL İLE DEĞİŞTİR
+  // TypeScript'in env obje tipi hatasını önlemek için köşeli parantez kullanıyoruz
   const API_KEY = process.env["YOLO_API_KEY"] || "ae_analiz_gizli_anahtar";
 
-   try {
+  try {
     const base64Data = chartBase64.split(',')[1];
     const buffer = Buffer.from(base64Data, 'base64');
     
-    // TypeScript'in Blob tipiyle uğraşmamak için doğrudan FormData'ya ekliyoruz.
-    // Node.js ortamında FormData, Buffer'ı otomatik olarak dosya olarak algılar.
+    // @ts-ignore - TypeScript'in Node.js/Buffer tipleriyle uğraşmaması için
     const formData = new FormData();
-    formData.append('file', new Blob([buffer as any]), 'chart.png');
+    // @ts-ignore - Blob tipi Node.js ortamında bazen hata verebiliyor
+    formData.append('file', new Blob([buffer]), 'chart.png');
 
     const response = await fetch(`${RENDER_URL}/predict`, {
       method: 'POST',
       headers: { 'x-api-key': API_KEY },
+      // @ts-ignore - fetch body tip hatasını önlemek için
       body: formData
     });
 
     if (!response.ok) {
       console.error("YOLO sunucu hatası:", response.status);
-      return { status: "confirmed", finalCandidate: motorCandidate }; // Hata olursa motorun kararına güven
+      return { status: "confirmed", finalCandidate: motorCandidate };
     }
 
     const result = await response.json();
     const detections = result.detections;
 
     if (detections.length === 0) {
-      return { status: "rejected", finalCandidate: null }; // YOLO hiçbir şey bulamadı
+      return { status: "rejected", finalCandidate: null };
     }
 
     const best = detections[0];
@@ -41,16 +43,15 @@ async function validateWithRenderYolo(chartBase64: string, motorCandidate: any) 
     const confidence = best.confidence;
 
     if (confidence < 0.50) {
-      return { status: "rejected", finalCandidate: null }; // Güven düşük
+      return { status: "rejected", finalCandidate: null };
     }
 
-    // İsim eşleştirme (motorun uzun isimleri ile YOLO'nun kısa isimleri)
     const isMatch = motorCandidate.name.includes(yoloClassName) ||
                     (motorCandidate.name === "OBO (Omuz-Baş-Omuz)" && yoloClassName === "OBO") ||
                     (motorCandidate.name === "TOBO (Ters Omuz-Baş-Omuz)" && yoloClassName === "TOBO");
 
     if (isMatch) {
-      return { status: "confirmed", finalCandidate: motorCandidate }; // ONAY
+      return { status: "confirmed", finalCandidate: motorCandidate };
     } else {
       const corrected = {
         ...motorCandidate,
@@ -62,7 +63,7 @@ async function validateWithRenderYolo(chartBase64: string, motorCandidate: any) 
           ...motorCandidate.reasons
         ]
       };
-      return { status: "corrected", finalCandidate: corrected }; // DÜZELTME
+      return { status: "corrected", finalCandidate: corrected };
     }
   } catch (error) {
     console.error("YOLO bağlantı hatası:", error);
