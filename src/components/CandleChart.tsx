@@ -256,7 +256,6 @@ export function CandleChart({
      TOUCH HANDLERS
      ============================================================ */
 
-  // React.Touch tipini kullan — React'in kendi tipi
   function getTouchDistance(t1: React.Touch, t2: React.Touch): number {
     const dx = t1.clientX - t2.clientX;
     const dy = t1.clientY - t2.clientY;
@@ -402,7 +401,8 @@ export function CandleChart({
 
     try {
       await loadYoloModel();
-      const results = await detectPatternsOnSvg(svgRef.current, 0.4);
+      // HATA ÇÖZÜMÜ: İkinci parametre (0.4) silindi, fonksiyon sadece 1 parametre alıyor.
+      const results = await detectPatternsOnSvg(svgRef.current);
       setYoloDetections(results);
 
       if (results.length === 0) {
@@ -617,7 +617,6 @@ export function CandleChart({
           })}
 
           {currentLines.map((line, li) => {
-            // Tip tanımlı ara dizi
             const rawPts: Array<{ px: number; py: number }> = [];
 
             for (const p of line.points ?? []) {
@@ -725,6 +724,8 @@ export function CandleChart({
 
           {showYoloResults &&
             yoloDetections.map((det, idx) => {
+              // HATA ÇÖZÜMÜ: YoloDetection tipine x1,y1,x2,y2 eklendiği için 
+              // artık burada hata vermeyecek. Eğer değerler 0-1 arasındaysa W ve H ile çarpıyoruz.
               const boxX = det.x1 * W;
               const boxY = det.y1 * H;
               const boxW = (det.x2 - det.x1) * W;
