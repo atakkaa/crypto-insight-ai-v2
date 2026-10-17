@@ -61,13 +61,25 @@ export default async function handler(
   }
 
   try {
-    const path = request.query?.["path"];
+    let path = request.query?.["path"];
 
     if (!path || typeof path !== "string") {
       return response.status(400).json({
         success: false,
         error: "path parametresi gerekli",
       });
+    }
+
+    // URL'deki & karakteri yüzünden path'in geri kalanı ayrı parametre olarak gelmiş olabilir.
+    // Örneğin: path=/api/v3/klines?symbol=BTCUSDT&interval=1h
+    // Bu durumda gelen diğer parametreleri path'e tekrar ekliyoruz.
+    const allQueryParams = Object.entries(request.query || {})
+      .filter(([key]) => key !== "path" && key !== "originalPath") // path ve originalPath hariç diğerleri
+      .map(([key, value]) => `${key}=${value}`)
+      .join("&");
+
+    if (allQueryParams) {
+      path = `${path}&${allQueryParams}`;
     }
 
     // MEXC bazı endpoint'lerde farklı yollar kullanabilir, kontrolü esnettik
