@@ -1,0 +1,201 @@
+[33m989f21a[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m)[m fix: MEXC API'ye gecildi, formation-engine importlari kaldirildi
+[33m274b8b0[m fix: router eklendi, api _lib yapisina tasindi
+[33m74adc53[m fix: nitro vercel preset eklendi, vercel.json silindi
+[33mb4a4b7c[m fix: nitro eklentisi vite config'e eklendi, vercel.json silindi
+[33mbfca381[m fix: formation-engine api klasorune tasindi, import yollari duzeltildi
+[33m5940c1b[m fix: nitro vercel output yapilandirmasi tamamlandi
+[33m30cb356[m fix: vite config temizlendi, nitro vercel preset eklendi
+[33m62539f1[m fix: build sonrası süreç zorla kapatıldı
+[33m68f1b9d[m fix: formation-engine icin api icinde kopru dosyasi olusturuldu
+[33maed915b[m fix: vercel includeFiles ile src/lib paketlemesi garanti altına alındı
+[33mdd70024[m fix: formation-engine-local paketi eklendi, Vercel modül çözümleme hatası giderildi
+[33m3d8e5b7[m fix: vercel includeFiles src/lib ve public/models olarak güncellendi
+[33mc14aa65[m feat: YOLO vision entegrasyonu ve sunucu taraflı grafik çizimi eklendi
+[33maa5e543[m fix(yolo): ORT wasm dosyalarını CDN'den yükle (v1.30.0)
+[33md48a4bb[m perf(yolo): arka planda ön yükleme (AI Tespit anında hazır)
+[33m686028d[m docs: proje durumu güncellendi (2026-10-16 öğleden sonra - performans turu)
+[33m9a5c8b4[m perf(chart): prefetch top 10 symbols + longer cache TTL
+[33mcb9fa5d[m perf(chart): placeholderData + cache + analysis localStorage (hız artışı)
+[33m27459b3[m docs: proje durumu güncellendi (2026-10-16 sabah)
+[33mbebd56e[m feat(stats): pull-to-refresh
+[33mdafbfa9[m feat(market-summary): pull-to-refresh
+[33m6c8bece[m feat(alarms): pull-to-refresh
+[33m96a0cf0[m feat(short-term-notifications): pull-to-refresh
+[33m8f1a1c2[m feat: pull-to-refresh hook ve indicator dosyaları
+[33m7e64766[m feat(coins): pull-to-refresh (mobil çek-yenile)
+[33m4436d8a[m feat(coins): skeleton loader (kripto listesi)
+[33mbf0ce69[m feat(short-term-bell): skeleton loader
+[33m8938a93[m feat(notification-bell): skeleton loader
+[33m9fc6532[m feat(market-summary): skeleton loader
+[33m396375d[m feat(stats): skeleton loader
+[33mbf5dcd1[m feat(admin): skeleton loader (stat + kullanıcı listesi)
+[33mbe2557a[m feat(short-term-notifications): skeleton loader
+[33m311918c[m feat(alarms): skeleton loader yükleme ekranı
+[33mab2237b[m feat(ui): skeleton loader bileşenleri
+[33m31137b1[m refactor(index): custom confirm modal (favoriler + kısa vadeli analizler)
+[33meb97ce0[m refactor(short-term-bell): custom confirm modal
+[33m0eb5285[m refactor(notification-bell): custom confirm modal
+[33mc225bc8[m refactor(short-term-notifications): custom confirm modal
+[33m0e8ad14[m refactor(admin): custom confirm modal (deneme iptal, rol, kullanıcı sil)
+[33me935f69[m refactor(alarms): custom confirm modal kullanıldı (iOS PWA uyumlu)
+[33m26dbd26[m feat(confirm): custom confirm modal + useConfirm hook (iOS PWA uyumlu)
+[33m4f39951[m feat(chart): mobile pinch-zoom, pan, double-tap + wheel zoom
+[33mc48225e[m fix(modal): formation-projection + limit-reached bottom sheet
+[33m038cbec[m fix(mobile): iOS safe-area-inset desteği (notch + home bar)
+[33m86b1cd0[m chore(pwa): ikon dosya isimleri düzeltildi (çift .png)
+[33m46c14eb[m fix(pwa): apple-touch-icon boyutu + manifest maskable icons + iOS meta
+[33meebc1a8[m fix(pwa): apple-touch-icon boyutu + manifest maskable icons + iOS meta
+[33ma5bd54a[m fix(modal): react portal + body scroll lock - modal artık görünür
+[33mbf4da67[m fix(modal): body scroll lock + mobil bottom sheet
+[33maafc196[m fix(modal): mobil bottom sheet düzeni - içerik görünür
+[33m9dd1a71[m fix(modal): mobil scroll - içerik üstten kesilmiyor
+[33m99b0023[m fix(realtime): unique channel names for subscriptions + mobile dropdown full-width
+[33mc62de6f[m feat(mobile): backtest + admin mobil uyumlu (mobilde kart görünümü)
+[33m53d138c[m feat(mobile): notifications + coins + settings mobil uyumlu
+[33md58f608[m feat(mobile): stats + alarms + market-summary mobil uyumlu
+[33m9e9f2b6[m feat(mobile): stats + alarms + market-summary mobil uyumlu
+[33m4a8ff46[m feat(mobile): stats + alarms sayfaları mobil uyumlu
+[33m690aace[m docs: proje durum raporu güncellendi (PWA + mobil)
+[33mcb9fa56[m fix(hooks): use-mobile.tsx geri getirildi (sidebar.tsx bağımlılığı)
+[33md60a29d[m fix(mobile): MobileNav onOpenSymbol tip düzeltmesi
+[33mf621845[m feat: marka adı AE Analiz olarak güncellendi + PWA meta etiketleri
+[33m2be839b[m feat(projection): formasyon dönüşüm analizi + haber etkisi
+[33mdb468a8[m refactor(api): start-trial, alarms'a birleştirildi (12 function limiti)
+[33mf8b72b9[m fix(formation-stats): exactOptionalPropertyTypes hatası düzeltildi
+[33m9807a7d[m fix(alarms): Record<string,unknown> tip hatası düzeltildi
+[33mdd23c27[m feat(projection): formasyon gelecek projeksiyonu (3 senaryo + benzer geçmiş)
+[33m41ead67[m docs: durum raporu güncellendi (alarm + piyasa özeti)
+[33mc0fe0cd[m feat(market-summary): günlük/haftalık piyasa özeti
+[33m905c824[m docs: durum raporu güncellendi (alarm sistemi)
+[33md7df672[m chore(api): api/lib klasörü silindi (Vercel 12 function limiti)
+[33ma34b109[m refactor(alarms): tek dosyada birleştir (Hobby 12 function limiti)
+[33m5a75aa6[m feat(alarms): kullanıcı alarm sistemi (fiyat/formasyon/kalite)
+[33m5799deb[m docs: proje durum raporu güncellendi (ATR + backtest + 5 sekme)
+[33m24ddf5a[m feat(backtest): admin backtest aracı + menü linkleri
+[33m28f1415[m feat(signals): ATR bazlı hedef/stop + min 1:2 R/R zorunlu
+[33m1f3a669[m feat(stats): zaman serisi trend grafiği (her sekmede + karşılaştırma)
+[33m8b90c6c[m feat(stats): 5 sekmeli panel (uzun/kısa/çoklu ZD/toplam/karşılaştırma) + signal_type ayrımı
+[33me9b0935[m perf(check-signals): toplu fiyat çekme + paralel işleme (30sn → 3sn)
+[33m3848508[m fix(scan): tüm formasyonları kaydet + user_id null
+[33ma429d67[m fix(scan): tüm formasyonları DB'ye kaydet + hisse interval 1h + user_id null
+[33mac7b9ab[m feat(stats): admin için CSV export
+[33mf7befdf[m chore: add .gitattributes for consistent line endings
+[33mb06c574[m feat(stats): detaylı filtreler (formasyon, market, sembol, bias)
+[33m142a274[m feat: istatistik sayfasına grafikler eklendi (recharts)
+[33mf56ac94[m feat: menu istatistikler linki eklendi
+[33m8bbd7d7[m feat: istatistik sayfası eklendi
+[33m46a9119[m feat: istatistik API tier kontrolü + filtreler eklendi
+[33mfd27447[m fix: minimum hedef mesafesi eklendi (%1.5)
+[33m8672def[m feat: istatistik API endpoint'i eklendi
+[33m22b5468[m fix: check-signals api köküne taşındı
+[33mc1c5790[m feat: sonuç takip sistemi (cron job) eklendi
+[33m4671d6e[m fix: kar/zarar projeksiyonu AL/SAT yönüne göre düzeltildi
+[33mc847b8a[m feat: bildirimlerde kar/zarar projeksiyonu ve yatırım tavsiyesi uyarısı eklendi
+[33m3cb7e81[m feat: formation_signals kayıt sistemi eklendi
+[33mf5e02f3[m feat: formation_signals sinyal kayıt sistemi tamamlandı
+[33mf5996b0[m feat: formation_signals tablosu ve sinyal kayıt sistemi eklendi
+[33mc162dfa[m fix: haber yoksa formasyon ve indikatör ağırlığı artırıldı
+[33m9c73935[m fix: R/R hesaplaması düzeltildi (min 1:1.5, ideal 1:2)
+[33mf91d90e[m chore: formation-engine yorumlar temizlendi
+[33m51ddab9[m feat: 9 yeni formasyon eklendi (OBO, TOBO, Canak, Canak-Kulp, Takozlar, Flamalar, Elmas)
+[33m800772f[m chore: redeploy tetikle
+[33mb470e2e[m debug: scan-firsat signal score logging eklendi
+[33m6486402[m fix: detectFormations scan-firsat icinde tanimlandi
+[33m1c3ae5f[m fix: vercel.json api/lib includeFiles eklendi
+[33m2b7e954[m fix: formation-engine api/lib klasörüne kopyalandı
+[33md448dbd[m feat: scan-firsat kaliteli formasyon motoruna geçirildi
+[33me583c5f[m feat: bildirim tiplerine quality_score eklendi
+[33m4ef05a1[m feat: formasyon kalite puanı sistemi + bildirimlere eklendi
+[33m519fdff[m fix: yolo-vision.ts dogru versiyon
+[33m0202eac[m fix: NotificationBell YOLO filtresi TypeScript uyumu
+[33m9b0fec5[m feat: YOLOv8 AI formasyon tespiti CandleChart'a entegre edildi
+[33m3601423[m feat: multi-timeframe grup destegi (50 varlik 3 gruba bolundu)
+[33m00bc97f[m feat: coklu zaman dilimi karsilastirmali yorum zil panelinde ve detay modalinda gosteriliyor
+[33m690adc1[m feat: coklu zaman dilimi karsilastirmali yorum eklendi
+[33mea7ff4a[m fix: hedef/stop yon dogrulamasi eklendi (kesin cozum)
+[33m19de905[m fix: scan-short-term timeout sorunu cozuldu (paralel isleme + varlik optimizasyonu)
+[33maec979e[m feat: 16 formasyon destegi eklendi (kama, bayrak, flama, fincan-kulp, simetrik ucgen)
+[33mcd90376[m feat: formasyon motoru komple yenilendi (8 formasyon, turkce isimler)
+[33me397840[m fix: formasyon neckline hesaplamasi duzeltildi (ikili dip/tepe)
+[33m52d9085[m feat: zil panelinde R/R ve yuzde gosterimi eklendi
+[33mbe17db8[m feat: kisa vadeli formasyon secimi backend entegrasyonu
+[33mb20bf93[m feat: kisa vadeli bildirimler icin tam sayfa eklendi
+[33m6329d9d[m feat: kisa vadeli bildirimler icin detay modali eklendi
+[33m5b989db[m fix: global kisa vadeli bildirim toggle butonu duzeltildi
+[33me17461f[m feat: global kisa vadeli bildirimler ve kullanici kontrolu eklendi
+[33m9e9ec90[m feat: kisa vadeli bildirimler icin ayri zil ikonu eklendi
+[33m7d3009f[m fix: scan-short-term tam self-contained
+[33ma90c05b[m fix: scan-short-term self-contained hale getirildi ve type hatalari giderildi
+[33ma9aed63[m feat: kisa vadeli premium tarama cron endpoint eklendi
+[33mc8c5127[m fix: kisa vadeli buton metni free uye icin guncellendi
+[33m245dcc6[m feat: kisa vadeli analiz free uye limiti ve limit modal eklendi
+[33m15e6eb9[m feat: onboarding tooltip turu (react-joyride) eklendi
+[33m0e86a53[m feat: kisa vadeli (20-30 mum) analiz ozelligi eklendi
+[33m0fe91f7[m fix: AI indicator tutarlilik kontrolu ve fallback guard eklendi
+[33m11ec186[m feat: onboarding sayfasi ve ilk giris yonlendirmesi eklendi
+[33mf14b8ea[m feat: admin paneline son giris (last_sign_in_at) sutunu eklendi
+[33m6908ca1[m feat: 5 hatali denemede 10 dakika giris kilidi eklendi
+[33m7b6c24d[m feat: email verification enabled
+[33m0ed5ed6[m feat: strong password validation in reset-password
+[33me3bf5e9[m feat: notification detail modal integration
+[33m56b6c72[m feat: password reset flow with toast import
+[33m7dc8d24[m fix: use Yahoo Finance for stocks instead of Stooq
+[33m118ec90[m fix: favorites box uses combinedFavorites (shows priority assets)
+[33m472c511[m fix: add combinedFavorites after isPriorityAsset (correct order)
+[33m038cb7c[m Revert "fix: show both favorites and priority assets in favorites box"
+[33me09c514[m fix: show both favorites and priority assets in favorites box
+[33mafae229[m fix: removeAllFavorites now deletes from Supabase
+[33mc6c27b1[m feat: frontend limit controls + limit reached modal
+[33md1fd2ef[m fix: move start-trial.ts to api root
+[33mf01f358[m fix: restore settings.tsx + start-trial endpoint
+[33m2b4a1e0[m feat: premium features card in settings
+[33mf6746b0[m feat: admin panel v2 - tier column + trial controls
+[33mdac8806[m feat: tier badge + trial start in settings
+[33m516ce65[m feat: tier system (admin/premium/trial/free) with MTF + Fear&Greed restrictions
+[33m63d9c63[m feat: user settings page with DND UI
+[33m517c14e[m fix: TS4111 - use bracket notation for index signature
+[33m19b3f8b[m fix: clean dnd-summary.ts at correct location
+[33m03ed934[m feat: DND system
+[33mc21bc34[m feat: 4-tier hybrid notification system + news quality filter
+[33m133c913[m feat: precomputed analysis cache (10x faster)
+[33me8203a7[m feat: fear & greed index for crypto notifications
+[33m7158177[m fix: MTF bonus - ignore neutral timeframes
+[33m3c45bcc[m fix: exact optional types in analyzeMultiTimeframe return
+[33meb9f7c1[m fix: MTF order
+[33m3798d6b[m feat: multi-timeframe (crypto + BIST)
+[33m1c06dd6[m fix: exact optional types for candles/price
+[33m8052bf9[m feat: show entry/target/stop/S-R in notification cards
+[33m2bba2e1[m feat: enriched engine with S/R + position calculator
+[33mb88a380[m test: disable cooldown
+[33ma0ed139[m feat: priority news depth (20 vs 10)
+[33m7f2813f[m feat: chunked scanning with limit/offset
+[33mb0c7606[m test: lower score thresholds for notification testing
+[33me6c9745[m feat: formation-first direction logic + relaxed indicator detection
+[33m3a0be21[m fix: rebuild BIST list in single line
+[33m7a22454[m fix: move helpers to src/lib with proper types
+[33m31b7827[m fix: move lib files to api root for Vercel bundling
+[33mada3be7[m fix: url null safety for NewsItem type
+[33m0efbcab[m fix: clean rewrite with proper lib imports
+[33m33abacc[m fix: update imports from _lib to lib in scan-firsat
+[33mfc55ac2[m fix: rename _lib to lib for Vercel bundling
+[33mb625656[m feat: AI commentary + signal score + RSS news layer
+[33mce42eb3[m Admin yonlendirme kaldirildi
+[33m49d1220[m Admin navigate duzeltildi
+[33m0569fb5[m Admin sayfasi basitlestirildi
+[33m64256fb[m Admin paneli eklendi
+[33m777ca64[m US listesi 25e dusuruldu
+[33mb65faa2[m BIST listesi 50'ye dusuruldu
+[33m03b3551[m Custom assets + paralel tarama motoru
+[33mee87063[m Gelismis tarama motoru eklendi
+[33m3add8cc[m PWA service worker ve push eklendi
+[33m5d6ed12[m vercel.json regions eklendi
+[33m3ed0a44[m eski binance-proxy route silindi
+[33m6e04db8[m index.tsx duzeltildi
+[33m99cad5d[m Binance proxy eklendi
+[33mf1d13d6[m TEST: Esik degeri dusuruldu
+[33m6a101b4[m Motor Supabase bildirim entegrasyonu
+[33m6a7a9ab[m OpenRouter ucretsiz router guncellemesi
+[33mc3b5289[m OpenRouter ucretsiz modelini guncelle
+[33mfdd91fc[m OpenRouter API endpoint duzeltmesi
+[33m342b0c4[m Vercel build hatalarini duzelt
+[33mfd83d50[m Temiz proje gecmisi

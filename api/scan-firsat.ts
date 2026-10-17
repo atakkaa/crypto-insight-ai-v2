@@ -1,8 +1,75 @@
-// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v11 (YOLO Entegre)
+// api/scan-firsat.ts — Gelişmiş Piyasa Tarama Motoru v12 (Render YOLO Entegre)
 import { RSI, MACD, EMA, BollingerBands, ADX } from "technicalindicators";
 import { createCanvas } from "@napi-rs/canvas";
-import { validateFormationWithYolo } from "./formation-engine.server";
-import type { FormationCandidate } from "../src/lib/formation-engine.server";
+
+// ==========================================================
+// YOLO ENTEGRASYONU (RENDER DIŞ SUNUCU)
+// ==========================================================
+async function validateWithRenderYolo(chartBase64: string, motorCandidate: any) {
+  const RENDER_URL = "https://ae-analiz-yolo.onrender.com"; // <-- BURAYI RENDER'DAN ALDIĞIN URL İLE DEĞİŞTİR
+  const API_KEY = process.env.YOLO_API_KEY || "ae_analiz_gizli_anahtar";
+
+  try {
+    // Base64'ü Buffer'a çevir
+    const base64Data = chartBase64.split(',')[1];
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    // FormData oluştur
+    const formData = new FormData();
+    const blob = new Blob([buffer], { type: 'image/png' });
+    formData.append('file', blob, 'chart.png');
+
+    const response = await fetch(`${RENDER_URL}/predict`, {
+      method: 'POST',
+      headers: { 'x-api-key': API_KEY },
+      body: formData
+    });
+
+    if (!response.ok) {
+      console.error("YOLO sunucu hatası:", response.status);
+      return { status: "confirmed", finalCandidate: motorCandidate }; // Hata olursa motorun kararına güven
+    }
+
+    const result = await response.json();
+    const detections = result.detections;
+
+    if (detections.length === 0) {
+      return { status: "rejected", finalCandidate: null }; // YOLO hiçbir şey bulamadı
+    }
+
+    const best = detections[0];
+    const yoloClassName = best.class_name;
+    const confidence = best.confidence;
+
+    if (confidence < 0.50) {
+      return { status: "rejected", finalCandidate: null }; // Güven düşük
+    }
+
+    // İsim eşleştirme (motorun uzun isimleri ile YOLO'nun kısa isimleri)
+    const isMatch = motorCandidate.name.includes(yoloClassName) ||
+                    (motorCandidate.name === "OBO (Omuz-Baş-Omuz)" && yoloClassName === "OBO") ||
+                    (motorCandidate.name === "TOBO (Ters Omuz-Baş-Omuz)" && yoloClassName === "TOBO");
+
+    if (isMatch) {
+      return { status: "confirmed", finalCandidate: motorCandidate }; // ONAY
+    } else {
+      const corrected = {
+        ...motorCandidate,
+        name: yoloClassName,
+        isCorrectedByYolo: true,
+        reasons: [
+          `YOLO görsel doğrulaması bu grafiğin aslında bir ${yoloClassName} olduğunu tespit etti.`,
+          `Orijinal motor tahmini: ${motorCandidate.name} (Reddedildi).`,
+          ...motorCandidate.reasons
+        ]
+      };
+      return { status: "corrected", finalCandidate: corrected }; // DÜZELTME
+    }
+  } catch (error) {
+    console.error("YOLO bağlantı hatası:", error);
+    return { status: "confirmed", finalCandidate: motorCandidate };
+  }
+}
 
 // ==========================================================
 // KALİTELİ FORMASYON MOTORU (Gömülü)
@@ -1158,9 +1225,9 @@ export default async function handler(request: RequestLike, response: ResponseLi
             lines: primary.lines ?? [], breakoutStatus: "kırılım yok",
             support: null, resistance: null, neckline: null, target: null, invalidation: null,
             reasons: [primary.description],
-          } as FormationCandidate;
+          };
 
-          const yoloResult = await validateFormationWithYolo(chartBase64, motorCandidate);
+          const yoloResult = await validateWithRenderYolo(chartBase64, motorCandidate);
 
           if (yoloResult.status === "rejected") {
             console.log(`❌ YOLO REDDETTİ: ${result.symbol} - ${primary.name}`);
