@@ -14,14 +14,18 @@ import scanShortTerm from './_lib/scan-short-term.js';
 
 export default async function handler(req: any, res: any) {
   const url = new URL(req.url, `http://${req.headers?.host || 'localhost'}`);
-  const path = url.pathname;
-
-  if (path.includes('/scan-firsat')) return scanFirsat(req, res);
-  if (path.includes('/check-signals')) return checkSignals(req, res);
-  if (path.includes('/alarms')) return alarms(req, res);
-  if (path.includes('/backtest')) return backtest(req, res);
   
-  if (path.includes('/binance-proxy')) {
+  // vercel.json'dan gelen originalPath parametresini al
+  const originalPath = url.searchParams.get('originalPath') || url.pathname;
+
+  // Gelen originalPath'e göre doğru fonksiyonu çağır
+  if (originalPath.includes('/scan-firsat')) return scanFirsat(req, res);
+  if (originalPath.includes('/check-signals')) return checkSignals(req, res);
+  if (originalPath.includes('/alarms')) return alarms(req, res);
+  if (originalPath.includes('/backtest')) return backtest(req, res);
+  
+  if (originalPath.includes('/binance-proxy')) {
+    // binance-proxy için orijinal path parametresini koru
     req.query = {
       path: url.searchParams.get('path'),
       ...Object.fromEntries(url.searchParams.entries())
@@ -29,12 +33,12 @@ export default async function handler(req: any, res: any) {
     return binanceProxy(req, res);
   }
   
-  if (path.includes('/dnd-summary')) return dndSummary(req, res);
-  if (path.includes('/formation-projection')) return formationProjection(req, res);
-  if (path.includes('/formation-stats')) return formationStats(req, res);
-  if (path.includes('/market-summary')) return marketSummary(req, res);
-  if (path.includes('/scan-multi-timeframe')) return scanMultiTimeframe(req, res);
-  if (path.includes('/scan-short-term')) return scanShortTerm(req, res);
+  if (originalPath.includes('/dnd-summary')) return dndSummary(req, res);
+  if (originalPath.includes('/formation-projection')) return formationProjection(req, res);
+  if (originalPath.includes('/formation-stats')) return formationStats(req, res);
+  if (originalPath.includes('/market-summary')) return marketSummary(req, res);
+  if (originalPath.includes('/scan-multi-timeframe')) return scanMultiTimeframe(req, res);
+  if (originalPath.includes('/scan-short-term')) return scanShortTerm(req, res);
 
   return res.status(404).json({ error: 'API rotası bulunamadı' });
 }
