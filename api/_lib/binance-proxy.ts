@@ -84,13 +84,8 @@ export default async function handler(
       return response.status(200).json(cached);
     }
 
-    // MEXC'e istek at
-    const mexcRes = await fetch(`${MEXC_ENDPOINT}${path}`, {
-      headers: {
-        "User-Agent": "FormasyonAI/1.0",
-        Accept: "application/json",
-      },
-    });
+     // MEXC'e istek at (header'ları kaldırdık, çünkü fetch/FormData uyumsuzluğuna neden olabiliyor)
+    const mexcRes = await fetch(`${MEXC_ENDPOINT}${path}`);
 
     if (!mexcRes.ok) {
       return response.status(mexcRes.status).json({
