@@ -788,7 +788,7 @@ async function getFearGreedIndex(): Promise<FearGreedResult> {
 async function getTopCryptoSymbols(limit = 100): Promise<string[]> {
   const cacheKey = `binance:top:${limit}`; const cached = await getFromCache<string[]>(cacheKey); if (cached && cached.length > 0) return cached;
   try {
-    const res = await fetch("https://api.binance.com/api/v3/exchangeInfo"); if (!res.ok) return [];
+    const res = await fetch("https://api.mexc.com/api/v3/exchangeInfo");
     const data = (await res.json()) as { symbols?: Array<{ symbol?: string; status?: string; quoteAsset?: string }> };
     const symbols = (data.symbols ?? []).filter((item) => item.status === "TRADING" && item.quoteAsset === "USDT" && typeof item.symbol === "string" && !item.symbol.includes("UP") && !item.symbol.includes("DOWN") && !item.symbol.includes("BULL") && !item.symbol.includes("BEAR")).map((item) => item.symbol as string).slice(0, limit);
     await setToCache(cacheKey, symbols, 60); return symbols;
