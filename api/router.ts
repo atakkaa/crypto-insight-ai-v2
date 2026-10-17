@@ -1,6 +1,5 @@
 // api/router.ts
 
-// _lib içindeki handler'ları import et
 import scanFirsat from './_lib/scan-firsat';
 import checkSignals from './_lib/check-signals';
 import alarms from './_lib/alarms';
