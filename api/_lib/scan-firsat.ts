@@ -733,7 +733,8 @@ async function getNewsForSymbol(market: string, symbol: string, isPriority = fal
 async function getCryptoCandles(symbol: string, interval = "1h"): Promise<Candle[]> {
   const cacheKey = `binance:${symbol}:${interval}`; const cached = await getFromCache<Candle[]>(cacheKey); if (cached && cached.length > 0) return cached;
   try {
-    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=200`;
+    const mexcInterval = interval === "1h" ? "60m" : interval;
+const url = `https://api.mexc.com/api/v3/klines?symbol=${symbol}&interval=${mexcInterval}&limit=200`;
     const res = await fetch(url); if (!res.ok) return [];
     const raw = (await res.json()) as unknown[][];
     const candles: Candle[] = raw.map((k) => ({ time: Number(k[0]), open: Number(k[1]), high: Number(k[2]), low: Number(k[3]), close: Number(k[4]), volume: Number(k[5]) }));
