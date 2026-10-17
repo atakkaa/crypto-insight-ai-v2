@@ -14,14 +14,26 @@ import scanMultiTimeframe from './_lib/scan-multi-timeframe';
 import scanShortTerm from './_lib/scan-short-term';
 
 export default async function handler(req: any, res: any) {
-  const path = req.url?.split('?')[0] ?? '';
+  // URL'yi ve path parametrelerini parse et
+  const url = new URL(req.url, `http://${req.headers?.host || 'localhost'}`);
+  const path = url.pathname;
 
   // Gelen URL yoluna göre doğru fonksiyonu çağır
   if (path.includes('/scan-firsat')) return scanFirsat(req, res);
   if (path.includes('/check-signals')) return checkSignals(req, res);
   if (path.includes('/alarms')) return alarms(req, res);
   if (path.includes('/backtest')) return backtest(req, res);
-  if (path.includes('/binance-proxy')) return binanceProxy(req, res);
+  
+  // binance-proxy için özel yönlendirme: query parametrelerini de aktar
+  if (path.includes('/binance-proxy')) {
+    // Vercel'in req.query objesini binance-proxy handler'ına uygun hale getir
+    req.query = {
+      path: url.searchParams.get('path'),
+      ...Object.fromEntries(url.searchParams.entries())
+    };
+    return binanceProxy(req, res);
+  }
+  
   if (path.includes('/dnd-summary')) return dndSummary(req, res);
   if (path.includes('/formation-projection')) return formationProjection(req, res);
   if (path.includes('/formation-stats')) return formationStats(req, res);

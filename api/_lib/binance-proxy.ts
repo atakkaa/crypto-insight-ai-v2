@@ -1,4 +1,4 @@
-// api/binance-proxy.ts
+// api/_lib/binance-proxy.ts
 
 type RequestLike = {
   method?: string;
@@ -12,14 +12,8 @@ type ResponseLike = {
   end: () => unknown;
 };
 
-const BINANCE_ENDPOINTS = [
-  "https://api.binance.com",
-  "https://api1.binance.com",
-  "https://api2.binance.com",
-  "https://api3.binance.com",
-  "https://api4.binance.com",
-  "https://data-api.binance.vision",
-];
+// Binance yerine MEXC kullanıyoruz (Vercel IP engelini aşmak için)
+const MEXC_ENDPOINT = "https://api.mexc.com";
 
 type CacheEntry = {
   data: unknown;
@@ -44,37 +38,6 @@ function setCache(key: string, data: unknown) {
     data,
     expiresAt: Date.now() + CACHE_TTL_MS,
   });
-}
-
-async function fetchBinance(path: string): Promise<Response> {
-  let lastError: Error | null = null;
-
-  for (const base of BINANCE_ENDPOINTS) {
-    try {
-      const res = await fetch(`${base}${path}`, {
-        headers: {
-          "User-Agent": "FormasyonAI/1.0",
-          Accept: "application/json",
-        },
-      });
-
-      if (res.ok) {
-        return res;
-      }
-
-      if (res.status === 429 || res.status >= 500) {
-        lastError = new Error(`Binance ${base} → ${res.status}`);
-        continue;
-      }
-
-      return res;
-    } catch (err) {
-      lastError = err as Error;
-      continue;
-    }
-  }
-
-  throw lastError ?? new Error("Tüm Binance endpoint'leri başarısız");
 }
 
 export default async function handler(
@@ -107,6 +70,7 @@ export default async function handler(
       });
     }
 
+    // Path'in /api/v3/ ile başladığından emin ol
     if (!path.startsWith("/api/v3/")) {
       return response.status(400).json({
         success: false,
@@ -120,16 +84,22 @@ export default async function handler(
       return response.status(200).json(cached);
     }
 
-    const binanceRes = await fetchBinance(path);
+    // MEXC'e istek at
+    const mexcRes = await fetch(`${MEXC_ENDPOINT}${path}`, {
+      headers: {
+        "User-Agent": "FormasyonAI/1.0",
+        Accept: "application/json",
+      },
+    });
 
-    if (!binanceRes.ok) {
-      return response.status(binanceRes.status).json({
+    if (!mexcRes.ok) {
+      return response.status(mexcRes.status).json({
         success: false,
-        error: `Binance hatası: ${binanceRes.status}`,
+        error: `MEXC hatası: ${mexcRes.status}`,
       });
     }
 
-    const data = (await binanceRes.json()) as unknown;
+    const data = (await mexcRes.json()) as unknown;
     setCache(path, data);
 
     response.setHeader("X-Cache", "MISS");
