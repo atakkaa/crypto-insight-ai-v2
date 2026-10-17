@@ -22,13 +22,5 @@ export default defineConfig({
       exclude: ["onnxruntime-web"],
     },
     assetsInclude: ["**/*.wasm"],
-    plugins: [
-      {
-        name: "force-close",
-        closeBundle() {
-          setTimeout(() => process.exit(0), 0);
-        },
-      },
-    ],
   },
 });
