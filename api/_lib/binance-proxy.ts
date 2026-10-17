@@ -70,11 +70,11 @@ export default async function handler(
       });
     }
 
-    // Path'in /api/v3/ ile başladığından emin ol
-    if (!path.startsWith("/api/v3/")) {
+    // MEXC bazı endpoint'lerde farklı yollar kullanabilir, kontrolü esnettik
+    if (!path.startsWith("/api/v3/") && !path.startsWith("/api/")) {
       return response.status(400).json({
         success: false,
-        error: "Sadece /api/v3/ path'leri desteklenir",
+        error: "Geçersiz path",
       });
     }
 
@@ -84,7 +84,7 @@ export default async function handler(
       return response.status(200).json(cached);
     }
 
-     // MEXC'e istek at (header'ları kaldırdık, çünkü fetch/FormData uyumsuzluğuna neden olabiliyor)
+    // MEXC'e istek at (header'ları kaldırdık, çünkü fetch/FormData uyumsuzluğuna neden olabiliyor)
     const mexcRes = await fetch(`${MEXC_ENDPOINT}${path}`);
 
     if (!mexcRes.ok) {

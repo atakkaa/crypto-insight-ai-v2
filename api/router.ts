@@ -14,7 +14,7 @@ import scanShortTerm from './_lib/scan-short-term.js';
 
 export default async function handler(req: any, res: any) {
   const url = new URL(req.url, `http://${req.headers?.host || 'localhost'}`);
-  
+
   // vercel.json'dan gelen originalPath parametresini al
   const originalPath = url.searchParams.get('originalPath') || url.pathname;
 
@@ -23,16 +23,15 @@ export default async function handler(req: any, res: any) {
   if (originalPath.includes('/check-signals')) return checkSignals(req, res);
   if (originalPath.includes('/alarms')) return alarms(req, res);
   if (originalPath.includes('/backtest')) return backtest(req, res);
-  
+
   if (originalPath.includes('/binance-proxy')) {
-    // binance-proxy için orijinal path parametresini koru
+    // Gelen tüm query parametrelerini (path dahil) binance-proxy'ye aktar
     req.query = {
-      path: url.searchParams.get('path'),
       ...Object.fromEntries(url.searchParams.entries())
     };
     return binanceProxy(req, res);
   }
-  
+
   if (originalPath.includes('/dnd-summary')) return dndSummary(req, res);
   if (originalPath.includes('/formation-projection')) return formationProjection(req, res);
   if (originalPath.includes('/formation-stats')) return formationStats(req, res);
