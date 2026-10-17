@@ -7,16 +7,17 @@ import { createCanvas } from "@napi-rs/canvas";
 // ==========================================================
 async function validateWithRenderYolo(chartBase64: string, motorCandidate: any) {
   const RENDER_URL = "https://ae-analiz-yolo.onrender.com"; // <-- BURAYI RENDER'DAN ALDIĞIN URL İLE DEĞİŞTİR
-  const API_KEY = process.env.YOLO_API_KEY || "ae_analiz_gizli_anahtar";
+  const API_KEY = process.env["YOLO_API_KEY"] || "ae_analiz_gizli_anahtar";
 
   try {
-    // Base64'ü Buffer'a çevir
     const base64Data = chartBase64.split(',')[1];
     const buffer = Buffer.from(base64Data, 'base64');
     
-    // FormData oluştur
+    // TypeScript hatasını çözmek için Buffer'ı Uint8Array'e çeviriyoruz
+    const uint8Array = new Uint8Array(buffer);
+    const blob = new Blob([uint8Array], { type: 'image/png' });
+    
     const formData = new FormData();
-    const blob = new Blob([buffer], { type: 'image/png' });
     formData.append('file', blob, 'chart.png');
 
     const response = await fetch(`${RENDER_URL}/predict`, {
@@ -538,11 +539,11 @@ function detectFormations(
 // ==========================================================
 
 const ENV = (globalThis as any).process?.env ?? {};
-const SUPABASE_URL = String(ENV.SUPABASE_URL ?? "");
-const SUPABASE_SERVICE_ROLE_KEY = String(ENV.SUPABASE_SERVICE_ROLE_KEY ?? "");
-const OPENROUTER_KEY = String(ENV.OPENROUTER_API_KEY ?? "");
-const OPENROUTER_MODEL = String(ENV.OPENROUTER_MODEL ?? "google/gemini-2.0-flash-exp:free");
-const FINNHUB_KEY = String(ENV.FINNHUB_API_KEY ?? "");
+const SUPABASE_URL = String(ENV["SUPABASE_URL"] ?? "");
+const SUPABASE_SERVICE_ROLE_KEY = String(ENV["SUPABASE_SERVICE_ROLE_KEY"] ?? "");
+const OPENROUTER_KEY = String(ENV["OPENROUTER_API_KEY"] ?? "");
+const OPENROUTER_MODEL = String(ENV["OPENROUTER_MODEL"] ?? "google/gemini-2.0-flash-exp:free");
+const FINNHUB_KEY = String(ENV["FINNHUB_API_KEY"] ?? "");
 
 // ==========================================================
 // TİPLER
